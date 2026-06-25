@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Acy</title>
+    <script>
+      // Apply the saved theme before first paint to avoid a flash.
+      try {
+        var s = JSON.parse(localStorage.getItem('acy-settings') || '{}');
+        var mode = s.themeMode || 'system';
+        var t =
+          mode === 'system'
+            ? matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light'
+            : mode;
+        document.documentElement.setAttribute('data-theme', t);
+        document.documentElement.setAttribute('data-accent', s.accent || 'purple');
+      } catch (e) {}
+    </script>
+    <script>
+      // Diagnostic: surface startup errors instead of a blank window.
+      (function () {
+        function show(label, detail) {
+          var pre = document.createElement('pre');
+          pre.style.cssText =
+            'position:fixed;inset:0;margin:0;padding:16px;white-space:pre-wrap;' +
+            'word-break:break-word;font:12px/1.5 monospace;color:#ff6b6b;' +
+            'background:#0c0c0d;z-index:2147483647;overflow:auto';
+          pre.textContent = label + '\n\n' + detail;
+          (document.body || document.documentElement).appendChild(pre);
+        }
+        window.addEventListener('error', function (e) {
+          show('Startup error', (e.message || e) + '\n' + (e.filename || '') + ':' + (e.lineno || '') + '\n\n' + ((e.error && e.error.stack) || ''));
+        });
+        window.addEventListener('unhandledrejection', function (e) {
+          var r = e.reason || {};
+          show('Unhandled rejection', (r.stack || r.message || String(r)));
+        });
+      })();
+    </script>
+    %sveltekit.head%
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">%sveltekit.body%</div>
+  </body>
+</html>

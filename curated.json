@@ -1,0 +1,157 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "browsers",
+      "title": "Browsers",
+      "apps": [
+        { "id": "Mozilla.Firefox", "source": "winget", "name": "Firefox", "homepage": "https://www.firefox.com/", "description": "Open-source web browser from Mozilla." },
+        { "id": "Brave.Brave", "source": "winget", "name": "Brave", "homepage": "https://brave.com/", "description": "Browser that blocks ads and trackers by default." },
+        { "id": "Google.Chrome", "source": "winget", "name": "Chrome", "homepage": "https://www.google.com/chrome/", "description": "Web browser from Google." },
+        { "id": "Zen-Team.Zen-Browser", "source": "winget", "name": "Zen Browser", "homepage": "https://zen-browser.app/", "description": "Calm, minimal Firefox-based browser." },
+        { "id": "ImputNet.Helium", "source": "winget", "name": "Helium", "homepage": "https://helium.computer/", "description": "Minimal, privacy-focused web browser." },
+        { "id": "Vivaldi.Vivaldi", "source": "winget", "name": "Vivaldi", "homepage": "https://vivaldi.com/", "description": "Highly customizable Chromium browser." },
+        { "id": "LibreWolf.LibreWolf", "source": "winget", "name": "LibreWolf", "homepage": "https://librewolf.net/", "description": "Privacy-hardened fork of Firefox." },
+        { "id": "Opera.OperaGX", "source": "winget", "name": "Opera GX", "homepage": "https://www.opera.com/gx", "description": "Opera browser variant aimed at gamers." },
+        { "id": "TorProject.TorBrowser", "source": "winget", "name": "Tor Browser", "homepage": "https://www.torproject.org/", "description": "Routes traffic over the Tor network for anonymity." }
+      ]
+    },
+    {
+      "id": "communication",
+      "title": "Communication",
+      "apps": [
+        { "id": "Discord.Discord", "source": "winget", "name": "Discord", "homepage": "https://discord.com/", "description": "Voice, video, and text chat." },
+        { "id": "Telegram.TelegramDesktop", "source": "winget", "name": "Telegram", "homepage": "https://telegram.org/", "description": "Cloud-based messaging app." },
+        { "id": "OpenWhisperSystems.Signal", "source": "winget", "name": "Signal", "homepage": "https://signal.org/", "description": "Encrypted private messenger." },
+        { "id": "Mozilla.Thunderbird", "source": "winget", "name": "Thunderbird", "homepage": "https://www.thunderbird.net/", "description": "Email client from Mozilla." },
+        { "id": "Element.Element", "source": "winget", "name": "Element", "homepage": "https://element.io/", "description": "Matrix client for secure chat." },
+        { "id": "SlackTechnologies.Slack", "source": "winget", "name": "Slack", "homepage": "https://slack.com/", "description": "Team messaging and channels." },
+        { "id": "Zoom.Zoom", "source": "winget", "name": "Zoom", "homepage": "https://zoom.us/", "description": "Video meetings and conferencing." },
+        { "id": "Proton.ProtonMail", "source": "winget", "name": "Proton Mail", "homepage": "https://proton.me/mail", "description": "Encrypted email from Proton." },
+        { "id": "Tutanota.Tutanota", "source": "winget", "name": "Tuta", "homepage": "https://tuta.com/", "description": "Encrypted email and calendar." }
+      ]
+    },
+    {
+      "id": "productivity",
+      "title": "Productivity",
+      "apps": [
+        { "id": "Obsidian.Obsidian", "source": "winget", "name": "Obsidian", "homepage": "https://obsidian.md/", "description": "Markdown notes with linking." },
+        { "id": "TheDocumentFoundation.LibreOffice", "source": "winget", "name": "LibreOffice", "homepage": "https://www.libreoffice.org/", "description": "Free and open-source office suite." },
+        { "id": "Joplin.Joplin", "source": "winget", "name": "Joplin", "homepage": "https://joplinapp.org/", "description": "Open-source note-taking with sync." },
+        { "id": "Notion.Notion", "source": "winget", "name": "Notion", "homepage": "https://www.notion.so/", "description": "Notes, docs, and workspace." },
+        { "id": "calibre.calibre", "source": "winget", "name": "calibre", "homepage": "https://calibre-ebook.com/", "description": "E-book library manager and converter." }
+      ]
+    },
+    {
+      "id": "dev",
+      "title": "Developer Tools",
+      "apps": [
+        { "id": "Git.Git", "source": "winget", "name": "Git", "homepage": "https://git-scm.com/", "description": "Distributed version control system." },
+        { "id": "Microsoft.VisualStudioCode", "source": "winget", "name": "VS Code", "homepage": "https://code.visualstudio.com/", "description": "Extensible code editor from Microsoft." },
+        { "id": "GitHub.GitHubDesktop", "source": "winget", "name": "GitHub Desktop", "homepage": "https://desktop.github.com/", "description": "Desktop client for GitHub repositories." },
+        { "id": "Microsoft.WindowsTerminal", "source": "winget", "name": "Windows Terminal", "homepage": "https://github.com/microsoft/terminal", "description": "Terminal for command-line shells and tools." },
+        { "id": "Python.Python.3.13", "source": "winget", "name": "Python", "homepage": "https://www.python.org/", "description": "Python language runtime and tools." },
+        { "id": "dbeaver.dbeaver", "source": "winget", "name": "DBeaver", "homepage": "https://dbeaver.io/", "description": "Universal database client." },
+        { "id": "ZedIndustries.Zed", "source": "winget", "name": "Zed", "homepage": "https://zed.dev/", "description": "Fast, collaborative code editor." },
+        { "id": "PuTTY.PuTTY", "source": "winget", "name": "PuTTY", "homepage": "https://www.putty.org/", "description": "SSH and telnet client." },
+        { "id": "WinSCP.WinSCP", "source": "winget", "name": "WinSCP", "homepage": "https://winscp.net/", "description": "SFTP, FTP, and SCP file transfer." },
+        { "id": "ElementLabs.LMStudio", "source": "winget", "name": "LM Studio", "homepage": "https://lmstudio.ai/", "description": "Run local LLMs on your machine." }
+      ]
+    },
+    {
+      "id": "security",
+      "title": "Privacy & Security",
+      "apps": [
+        { "id": "KeePassXCTeam.KeePassXC", "source": "winget", "name": "KeePassXC", "homepage": "https://keepassxc.org/", "description": "Offline password manager." },
+        { "id": "Bitwarden.Bitwarden", "source": "winget", "name": "Bitwarden", "homepage": "https://bitwarden.com/", "description": "Open-source password manager." },
+        { "id": "AgileBits.1Password", "source": "winget", "name": "1Password", "homepage": "https://1password.com/", "description": "Password manager." },
+        { "id": "Proton.ProtonPass", "source": "winget", "name": "Proton Pass", "homepage": "https://proton.me/pass", "description": "Password manager from Proton." },
+        { "id": "Proton.ProtonVPN", "source": "winget", "name": "Proton VPN", "homepage": "https://protonvpn.com/", "description": "VPN service from Proton." },
+        { "id": "MullvadVPN.MullvadVPN", "source": "winget", "name": "Mullvad VPN", "homepage": "https://mullvad.net/", "description": "Privacy-focused VPN." }
+      ]
+    },
+    {
+      "id": "remote",
+      "title": "Remote & Network",
+      "apps": [
+        { "id": "AnyDeskSoftwareGmbH.AnyDesk", "source": "winget", "name": "AnyDesk", "homepage": "https://anydesk.com/", "description": "Remote desktop access." },
+        { "id": "tailscale.tailscale", "source": "winget", "name": "Tailscale", "homepage": "https://tailscale.com/", "description": "Mesh VPN built on WireGuard." },
+        { "id": "ZeroTier.ZeroTierOne", "source": "winget", "name": "ZeroTier", "homepage": "https://www.zerotier.com/", "description": "Software-defined mesh networking." }
+      ]
+    },
+    {
+      "id": "media",
+      "title": "Media",
+      "apps": [
+        { "id": "VideoLAN.VLC", "source": "winget", "name": "VLC", "homepage": "https://www.videolan.org/vlc/", "description": "Media player that plays most audio and video formats." },
+        { "id": "Spotify.Spotify", "source": "winget", "name": "Spotify", "homepage": "https://www.spotify.com/", "description": "Music and podcast streaming app." },
+        { "id": "OBSProject.OBSStudio", "source": "winget", "name": "OBS Studio", "homepage": "https://obsproject.com/", "description": "Screen recording and live streaming software." },
+        { "id": "clsid2.mpc-hc", "source": "winget", "name": "MPC-HC", "homepage": "https://github.com/clsid2/mpc-hc", "icon": "https://mpc-hc.org/", "description": "Lightweight media player, the maintained MPC-HC fork." },
+        { "id": "Audacity.Audacity", "source": "winget", "name": "Audacity", "homepage": "https://www.audacityteam.org/", "description": "Audio recording and editing." },
+        { "id": "PeterPawlowski.foobar2000", "source": "winget", "name": "foobar2000", "homepage": "https://www.foobar2000.org/", "description": "Lightweight audio player." },
+        { "id": "HandBrake.HandBrake", "source": "winget", "name": "HandBrake", "homepage": "https://handbrake.fr/", "description": "Video transcoder." },
+        { "id": "Plex.Plex", "source": "winget", "name": "Plex", "homepage": "https://www.plex.tv/", "description": "Media player and streaming client." },
+        { "id": "shinchiro.mpv", "source": "winget", "name": "mpv", "homepage": "https://mpv.io/", "description": "Minimal, scriptable media player." }
+      ]
+    },
+    {
+      "id": "creative",
+      "title": "Creative",
+      "apps": [
+        { "id": "GIMP.GIMP", "source": "winget", "name": "GIMP", "homepage": "https://www.gimp.org/", "description": "Free and open-source image editor." },
+        { "id": "KDE.Krita", "source": "winget", "name": "Krita", "homepage": "https://krita.org/", "description": "Digital painting application." },
+        { "id": "BlenderFoundation.Blender", "source": "winget", "name": "Blender", "homepage": "https://www.blender.org/", "description": "3D modeling, animation, and rendering." },
+        { "id": "Inkscape.Inkscape", "source": "winget", "name": "Inkscape", "homepage": "https://inkscape.org/", "description": "Vector graphics editor." },
+        { "id": "dotPDN.PaintDotNet", "source": "winget", "name": "Paint.NET", "homepage": "https://www.getpaint.net/", "description": "Image and photo editor." }
+      ]
+    },
+    {
+      "id": "gaming",
+      "title": "Gaming",
+      "apps": [
+        { "id": "Valve.Steam", "source": "winget", "name": "Steam", "homepage": "https://store.steampowered.com/", "description": "Game store and launcher from Valve." },
+        { "id": "GOG.Galaxy", "source": "winget", "name": "GOG Galaxy", "homepage": "https://www.gog.com/galaxy", "description": "Launcher for GOG and other game libraries." },
+        { "id": "PrismLauncher.PrismLauncher", "source": "winget", "name": "Prism Launcher", "homepage": "https://prismlauncher.org/", "description": "Open-source Minecraft launcher." },
+        { "id": "EpicGames.EpicGamesLauncher", "source": "winget", "name": "Epic Games", "homepage": "https://store.epicgames.com/", "description": "Epic Games store and launcher." },
+        { "id": "HeroicGamesLauncher.HeroicGamesLauncher", "source": "winget", "name": "Heroic", "homepage": "https://heroicgameslauncher.com/", "description": "Launcher for Epic, GOG, and Amazon games." },
+        { "id": "Playnite.Playnite", "source": "winget", "name": "Playnite", "homepage": "https://playnite.link/", "description": "Unified game library manager." },
+        { "id": "Blizzard.BattleNet", "source": "winget", "name": "Battle.net", "homepage": "https://www.blizzard.com/", "description": "Blizzard game launcher." }
+      ]
+    },
+    {
+      "id": "utilities",
+      "title": "Utilities",
+      "apps": [
+        { "id": "7zip.7zip", "source": "winget", "name": "7-Zip", "homepage": "https://www.7-zip.org/", "description": "File archiver with a high compression ratio." },
+        { "id": "Notepad++.Notepad++", "source": "winget", "name": "Notepad++", "homepage": "https://notepad-plus-plus.org/", "description": "Source code and plain text editor." },
+        { "id": "ShareX.ShareX", "source": "winget", "name": "ShareX", "homepage": "https://getsharex.com/", "description": "Screen capture, recording, and sharing tool." },
+        { "id": "Microsoft.PowerToys", "source": "winget", "name": "PowerToys", "homepage": "https://github.com/microsoft/PowerToys", "description": "Set of power-user utilities for Windows." },
+        { "id": "voidtools.Everything", "source": "winget", "name": "Everything", "homepage": "https://www.voidtools.com/", "description": "Instant file search by name." },
+        { "id": "qBittorrent.qBittorrent", "source": "winget", "name": "qBittorrent", "homepage": "https://www.qbittorrent.org/", "description": "Open-source BitTorrent client." },
+        { "id": "AutoHotkey.AutoHotkey", "source": "winget", "name": "AutoHotkey", "homepage": "https://www.autohotkey.com/", "description": "Scripting and hotkey automation for Windows." },
+        { "id": "Files-Community.Files", "source": "winget", "name": "Files", "homepage": "https://files.community/", "description": "Modern file manager for Windows." },
+        { "id": "Rufus.Rufus", "source": "winget", "name": "Rufus", "homepage": "https://rufus.ie/", "description": "Create bootable USB drives." },
+        { "id": "AntibodySoftware.WizTree", "source": "winget", "name": "WizTree", "homepage": "https://www.diskanalyzer.com/", "description": "Fast disk space analyzer." },
+        { "id": "CrystalDewWorld.CrystalDiskInfo", "source": "winget", "name": "CrystalDiskInfo", "homepage": "https://crystalmark.info/", "description": "Drive health (S.M.A.R.T.) monitoring." },
+        { "id": "RevoUninstaller.RevoUninstaller", "source": "winget", "name": "Revo Uninstaller", "homepage": "https://www.revouninstaller.com/", "description": "Thorough app uninstaller." },
+        { "id": "File-New-Project.EarTrumpet", "source": "winget", "name": "EarTrumpet", "homepage": "https://eartrumpet.app/", "description": "Per-app volume control." },
+        { "id": "Voidstar.FilePilot", "source": "winget", "name": "File Pilot", "homepage": "https://filepilot.tech/", "description": "Fast, lightweight file manager." }
+      ]
+    },
+    {
+      "id": "scoop-picks",
+      "title": "Scoop Picks",
+      "apps": [
+        { "id": "neovim", "source": "scoop", "name": "Neovim", "homepage": "https://neovim.io/", "description": "Vim-based, extensible text editor." },
+        { "id": "ripgrep", "source": "scoop", "name": "ripgrep", "homepage": "https://github.com/BurntSushi/ripgrep", "description": "Recursive search tool that respects .gitignore." }
+      ]
+    },
+    {
+      "id": "choco-picks",
+      "title": "Chocolatey Picks",
+      "apps": [
+        { "id": "nodejs", "source": "choco", "name": "Node.js", "homepage": "https://nodejs.org/", "description": "JavaScript runtime built on V8." }
+      ]
+    }
+  ]
+}
