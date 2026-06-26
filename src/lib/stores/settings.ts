@@ -18,12 +18,22 @@ export const ACCENTS: { name: AccentName; label: string; color: string }[] = [
 export interface Settings {
   themeMode: ThemeMode;
   accent: AccentName;
-  /** Per-manager enable flag. A manager is only used when enabled AND available. */
+  /** Per-source enable flag. A manager is only used when enabled AND available. */
   managers: Record<Source, boolean>;
+  /** Preferred source for apps offered by several; null = decide each time. */
+  preferredSource: Source | null;
   /** Expand the raw command output by default in the install drawer. */
   showOutput: boolean;
   /** Fetch + cache app icons from the web (off by default). */
   downloadIcons: boolean;
+  /** Whether the first-run setup screen has been completed. */
+  setupComplete: boolean;
+  /** Closing the window hides to the tray instead of quitting (off by default). */
+  closeToTray: boolean;
+  /** Show a desktop notification when background checks find new updates. */
+  notifyUpdates: boolean;
+  /** Check installed apps / updates automatically when Acy starts. */
+  refreshOnStartup: boolean;
 }
 
 const KEY = 'acy-settings';
@@ -31,9 +41,14 @@ const KEY = 'acy-settings';
 const DEFAULTS: Settings = {
   themeMode: 'system',
   accent: 'purple',
-  managers: { winget: true, scoop: true, choco: true },
+  managers: { winget: true, scoop: true, choco: true, msstore: true, local: true },
+  preferredSource: null,
   showOutput: false,
-  downloadIcons: false
+  downloadIcons: false,
+  setupComplete: false,
+  closeToTray: false,
+  notifyUpdates: false,
+  refreshOnStartup: true
 };
 
 function load(): Settings {
@@ -75,10 +90,34 @@ export function setManagerEnabled(source: Source, enabled: boolean) {
   settings.update((s) => ({ ...s, managers: { ...s.managers, [source]: enabled } }));
 }
 
+export function setPreferredSource(source: Source | null) {
+  settings.update((s) => ({ ...s, preferredSource: source }));
+}
+
 export function setShowOutput(value: boolean) {
   settings.update((s) => ({ ...s, showOutput: value }));
 }
 
 export function setDownloadIcons(value: boolean) {
   settings.update((s) => ({ ...s, downloadIcons: value }));
+}
+
+export function setCloseToTray(value: boolean) {
+  settings.update((s) => ({ ...s, closeToTray: value }));
+}
+
+export function setNotifyUpdates(value: boolean) {
+  settings.update((s) => ({ ...s, notifyUpdates: value }));
+}
+
+export function setRefreshOnStartup(value: boolean) {
+  settings.update((s) => ({ ...s, refreshOnStartup: value }));
+}
+
+export function completeSetup() {
+  settings.update((s) => ({ ...s, setupComplete: true }));
+}
+
+export function restartSetup() {
+  settings.update((s) => ({ ...s, setupComplete: false }));
 }

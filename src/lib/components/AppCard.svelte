@@ -2,9 +2,9 @@
   import AppIcon from './AppIcon.svelte';
   import SourceBadge from './SourceBadge.svelte';
   import InstallButton from './InstallButton.svelte';
-  import type { Source } from '$lib/types';
-
-  type Variant = { source: Source; id: string };
+  import InstallSplitButton from './InstallSplitButton.svelte';
+  import { settings } from '$lib/stores/settings';
+  import type { Variant } from '$lib/types';
 
   let {
     name,
@@ -13,6 +13,7 @@
     installed = false,
     sub = null,
     homepage = null,
+    allowPick = false,
     onChanged
   }: {
     name: string;
@@ -21,6 +22,8 @@
     installed?: boolean;
     sub?: string | null;
     homepage?: string | null;
+    /** Let the user choose which manager to install from (curated cards). */
+    allowPick?: boolean;
     onChanged?: () => void;
   } = $props();
 
@@ -43,6 +46,8 @@
     </div>
     {#if installed}
       <span class="installed">Installed</span>
+    {:else if allowPick && variants.length > 1}
+      <InstallSplitButton {variants} {name} preferred={$settings.preferredSource} onDone={onChanged} />
     {:else}
       <InstallButton source={primary.source} id={primary.id} {name} onDone={onChanged} />
     {/if}

@@ -7,17 +7,48 @@ import { enabledSources, updatesCount } from './managers';
 // Installed page is instant. Each list reloads only when forced (Refresh, or
 // after an install/uninstall/update) or when the set of enabled sources
 // changes.
+//
+// The lists are also persisted to localStorage and hydrated on startup, so a
+// cold launch shows the last known installed apps (and curated install marks)
+// instantly while a fresh scan runs in the background — stale-while-revalidate.
+// We deliberately leave the in-memory signatures empty after hydrating, so the
+// first load() of the session always revalidates against the live managers.
+
+const INSTALLED_KEY = 'acy-installed-cache';
+const UPDATES_KEY = 'acy-updates-cache';
 
 function sig(sources: Source[]): string {
   return [...sources].sort().join(',');
 }
 
+function readCache(key: string): Package[] | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? (parsed as Package[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(key: string, value: Package[]): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // ignore quota / serialization errors — the cache is best-effort
+  }
+}
+
 // ---- Installed apps ----
 
-export const installed = writable<Package[]>([]);
+const cachedInstalled = readCache(INSTALLED_KEY);
+
+export const installed = writable<Package[]>(cachedInstalled ?? []);
 export const installedLoading = writable(false);
 export const installedError = writable<string | null>(null);
-export const installedReady = writable(false);
+export const installedReady = writable(cachedInstalled !== null);
 
 let installedSig = '';
 
@@ -30,7 +61,9 @@ export async function loadInstalled(force = false): Promise<void> {
   installedLoading.set(true);
   installedError.set(null);
   try {
-    installed.set(await api.listInstalled(sources));
+    const list = await api.listInstalled(sources);
+    installed.set(list);
+    writeCache(INSTALLED_KEY, list);
     installedSig = current;
     installedReady.set(true);
   } catch (e) {
@@ -42,12 +75,16 @@ export async function loadInstalled(force = false): Promise<void> {
 
 // ---- Available updates ----
 
-export const updates = writable<Package[]>([]);
+const cachedUpdates = readCache(UPDATES_KEY);
+
+export const updates = writable<Package[]>(cachedUpdates ?? []);
 export const updatesLoading = writable(false);
 export const updatesError = writable<string | null>(null);
-export const updatesReady = writable(false);
+export const updatesReady = writable(cachedUpdates !== null);
 
 let updatesSig = '';
+
+if (cachedUpdates) updatesCount.set(cachedUpdates.length);
 
 export async function loadUpdates(force = false): Promise<void> {
   const sources = get(enabledSources);
@@ -60,6 +97,7 @@ export async function loadUpdates(force = false): Promise<void> {
   try {
     const list = await api.listUpdates(sources);
     updates.set(list);
+    writeCache(UPDATES_KEY, list);
     updatesCount.set(list.length);
     updatesSig = current;
     updatesReady.set(true);

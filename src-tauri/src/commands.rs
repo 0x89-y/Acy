@@ -2,7 +2,10 @@ use crate::curated::{self, CuratedFile};
 use crate::model::{ManagerStatus, Package, SearchHit, Source};
 use crate::runner;
 use crate::sources::{self, merge};
+use crate::tray::TRAY_ID;
 use tauri::AppHandle;
+use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_notification::NotificationExt;
 use tokio::task::JoinSet;
 
 /// Event channel for streamed install/uninstall/upgrade output.
@@ -29,6 +32,12 @@ pub async fn detect_managers() -> Vec<ManagerStatus> {
 #[tauri::command]
 pub async fn get_curated(app: AppHandle) -> CuratedFile {
     curated::load(&app)
+}
+
+/// Persist an edited curated catalog to the per-user config dir.
+#[tauri::command]
+pub async fn save_curated(app: AppHandle, file: CuratedFile) -> Result<(), String> {
+    curated::save(&app, &file).map(|_| ()).map_err(|e| e.to_string())
 }
 
 /// Search the given managers and return merged, de-duplicated hits.
@@ -177,10 +186,54 @@ pub async fn bootstrap_manager(
                 "Install-Module Microsoft.WinGet.Client -Scope CurrentUser -Force -AllowClobber",
             ),
         ),
+        Source::Msstore => {
+            return Err("The Microsoft Store source is part of winget; install winget to use it.".into());
+        }
+        Source::Local => {
+            return Err("The local source has nothing to set up; pick an installer file instead.".into());
+        }
     };
     runner::stream(&app, &op_id, OP_EVENT, &program, &args)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// Reflect the available-update count in the tray tooltip, so it stays visible
+/// even when the window is hidden to the tray.
+#[tauri::command]
+pub async fn set_update_count(app: AppHandle, count: u32) {
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        let tip = match count {
+            0 => "Acy".to_string(),
+            1 => "Acy — 1 update available".to_string(),
+            n => format!("Acy — {n} updates available"),
+        };
+        let _ = tray.set_tooltip(Some(&tip));
+    }
+}
+
+/// Show a desktop notification (used for background update alerts when enabled).
+#[tauri::command]
+pub async fn notify(app: AppHandle, title: String, body: String) {
+    let _ = app.notification().builder().title(title).body(body).show();
+}
+
+/// Open a file picker for a local/network installer, returning the chosen path
+/// (or null if cancelled). Used by the "local" install source.
+#[tauri::command]
+pub async fn pick_installer(app: AppHandle) -> Option<String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .add_filter("Installer", &["exe", "msi"])
+        .pick_file(move |path| {
+            let _ = tx.send(path);
+        });
+    rx.await
+        .ok()
+        .flatten()
+        .and_then(|fp| fp.into_path().ok())
+        .map(|p| p.to_string_lossy().into_owned())
 }
 
 /// Cached or freshly-fetched icon (base64 data URL) for a package, or null.

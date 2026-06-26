@@ -1,11 +1,17 @@
 // Mirrors the serialized shapes from the Rust core (all camelCase).
 
-export type Source = 'winget' | 'scoop' | 'choco';
+/** Real package managers (searchable, listable, detectable). */
+export type Manager = 'winget' | 'scoop' | 'choco' | 'msstore';
+
+/** Any install source, including the file-based "local" one. */
+export type Source = Manager | 'local';
 
 export const SOURCE_LABELS: Record<Source, string> = {
   winget: 'winget',
   scoop: 'scoop',
-  choco: 'choco'
+  choco: 'choco',
+  msstore: 'msstore',
+  local: 'local'
 };
 
 export interface Package {
@@ -35,6 +41,12 @@ export interface ManagerStatus {
   detail: string | null;
 }
 
+/** One installable option for an app: a manager plus its package id. */
+export interface Variant {
+  source: Source;
+  id: string;
+}
+
 export interface CuratedApp {
   id: string;
   source: Source;
@@ -42,6 +54,10 @@ export interface CuratedApp {
   description: string | null;
   homepage: string | null;
   icon: string | null;
+  /** Other managers the same app is available from (besides the primary source/id). */
+  alternates: Variant[];
+  /** True when the user added this app; built-in apps come from the bundled catalog. */
+  custom: boolean;
 }
 
 export interface CuratedCategory {

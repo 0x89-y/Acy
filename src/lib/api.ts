@@ -15,6 +15,8 @@ export const detectManagers = () => invoke<ManagerStatus[]>('detect_managers');
 
 export const getCurated = () => invoke<CuratedFile>('get_curated');
 
+export const saveCurated = (file: CuratedFile) => invoke<void>('save_curated', { file });
+
 export const search = (query: string, sources: Source[]) =>
   invoke<SearchHit[]>('search', { query, sources });
 
@@ -43,6 +45,15 @@ export const upgradeAll = (source: Source, opId: string) =>
 
 export const bootstrapManager = (source: Source, opId: string) =>
   invoke<number>('bootstrap_manager', { source, opId });
+
+// ---- Tray / notifications ----
+
+export const setUpdateCount = (count: number) => invoke<void>('set_update_count', { count });
+
+export const notify = (title: string, body: string) => invoke<void>('notify', { title, body });
+
+/** Open a file picker for a local installer; resolves to the path or null. */
+export const pickInstaller = () => invoke<string | null>('pick_installer');
 
 // ---- Live output from streamed operations ----
 

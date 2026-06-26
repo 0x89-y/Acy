@@ -3,6 +3,8 @@ use async_trait::async_trait;
 use std::collections::BTreeMap;
 
 pub mod choco;
+pub mod local;
+pub mod msstore;
 pub mod scoop;
 pub mod winget;
 
@@ -35,14 +37,18 @@ pub fn for_source(source: Source) -> Box<dyn PackageSource> {
         Source::Winget => Box::new(winget::Winget),
         Source::Scoop => Box::new(scoop::Scoop),
         Source::Choco => Box::new(choco::Choco),
+        Source::Msstore => Box::new(msstore::Msstore),
+        Source::Local => Box::new(local::Local),
     }
 }
 
+// `all()` intentionally omits `Local`: it is never searched, listed, or detected.
 pub fn all() -> Vec<Box<dyn PackageSource>> {
     vec![
         Box::new(winget::Winget),
         Box::new(scoop::Scoop),
         Box::new(choco::Choco),
+        Box::new(msstore::Msstore),
     ]
 }
 

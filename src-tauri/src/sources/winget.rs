@@ -313,7 +313,7 @@ fn sanitize(out: &str) -> Vec<String> {
 /// header above it, find columns by case-insensitive label, and read the
 /// single-token fields (Id / Version / Available) as the first whitespace token
 /// at the column offset.
-fn parse_table(out: &str) -> Vec<std::collections::HashMap<String, String>> {
+pub(super) fn parse_table(out: &str) -> Vec<std::collections::HashMap<String, String>> {
     let lines = sanitize(out);
 
     let sep = lines.iter().position(|l| {
@@ -387,7 +387,7 @@ fn parse_table(out: &str) -> Vec<std::collections::HashMap<String, String>> {
 }
 
 /// Parse `winget show` key/value output into a single package.
-fn parse_show(out: &str, id: &str) -> Option<Package> {
+pub(super) fn parse_show(out: &str, id: &str) -> Option<Package> {
     let mut pkg = Package::new(id, id, Source::Winget);
     let mut found = false;
     for line in sanitize(out) {

@@ -28,6 +28,8 @@
   --winget: #2563eb;
   --scoop: #16a34a;
   --choco: #92531f;
+  --msstore: #7c3aed;
+  --local: #64748b;
 }
 
 [data-theme='dark'] {
@@ -54,6 +56,8 @@
   --winget: #6aa3fb;
   --scoop: #4ade80;
   --choco: #cf9a64;
+  --msstore: #a78bfa;
+  --local: #94a3b8;
 }
 
 /* Accent presets. Light values here; dark variants (higher specificity) below. */
@@ -109,6 +113,18 @@
 
 * {
   box-sizing: border-box;
+}
+
+/* Respect the OS "reduce motion" setting: near-instant transitions/animations. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 html,

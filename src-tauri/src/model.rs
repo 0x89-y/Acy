@@ -7,6 +7,11 @@ pub enum Source {
     Winget,
     Scoop,
     Choco,
+    /// Microsoft Store apps, reached through winget's `msstore` source.
+    Msstore,
+    /// A local/network installer file the user points at (.exe / .msi). Not a
+    /// package manager: no search, list, or updates.
+    Local,
 }
 
 impl Source {
@@ -16,6 +21,8 @@ impl Source {
             Source::Winget => 0,
             Source::Scoop => 1,
             Source::Choco => 2,
+            Source::Msstore => 3,
+            Source::Local => 4,
         }
     }
 }

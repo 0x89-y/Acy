@@ -35,6 +35,8 @@ fn source_key(source: Source) -> &'static str {
         Source::Winget => "winget",
         Source::Scoop => "scoop",
         Source::Choco => "choco",
+        Source::Msstore => "msstore",
+        Source::Local => "local",
     }
 }
 
