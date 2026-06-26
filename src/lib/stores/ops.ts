@@ -1,5 +1,13 @@
 import { writable, get } from 'svelte/store';
 import { onOpLog } from '$lib/api';
+import { logActivity, type ActivityAction } from './activity';
+import type { Source } from '$lib/types';
+
+export interface ActivityMeta {
+  action: ActivityAction;
+  name: string;
+  source?: Source;
+}
 
 export type OpState = 'queued' | 'running' | 'done' | 'error';
 
@@ -17,6 +25,7 @@ interface Job {
   run: (opId: string) => Promise<number>;
   verify?: () => Promise<boolean>;
   resolve: (ok: boolean) => void;
+  meta?: ActivityMeta;
 }
 
 export const ops = writable<Op[]>([]);
@@ -86,6 +95,7 @@ async function work() {
       ok = false;
     }
 
+    if (job.meta) logActivity({ ...job.meta, ok });
     job.resolve(ok);
     if (ok) scheduleDismiss(job.id);
   }
@@ -96,13 +106,14 @@ export async function enqueue(
   title: string,
   run: (opId: string) => Promise<number>,
   verify?: () => Promise<boolean>,
-  detail?: string
+  detail?: string,
+  meta?: ActivityMeta
 ): Promise<boolean> {
   await ensureListener();
   const id = newId();
   ops.update((list) => [...list, { id, title, state: 'queued', lines: [], detail }]);
   return new Promise<boolean>((resolve) => {
-    queue.push({ id, run, verify, resolve });
+    queue.push({ id, run, verify, resolve, meta });
     work();
   });
 }

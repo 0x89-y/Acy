@@ -5,6 +5,7 @@
   import AppIcon from '$lib/components/AppIcon.svelte';
   import SourceBadge from '$lib/components/SourceBadge.svelte';
   import InstallButton from '$lib/components/InstallButton.svelte';
+  import InstallSplitButton from '$lib/components/InstallSplitButton.svelte';
   import * as api from '$lib/api';
   import {
     installed as installedStore,
@@ -15,7 +16,8 @@
     refreshLibrary
   } from '$lib/stores/library';
   import { curated as curatedStore, loadCurated } from '$lib/stores/curated';
-  import type { Package, Source } from '$lib/types';
+  import { settings } from '$lib/stores/settings';
+  import type { Package, Source, Variant } from '$lib/types';
 
   let source = $derived($page.params.source as Source);
   let id = $derived(decodeURIComponent($page.params.id ?? ''));
@@ -33,15 +35,28 @@
   });
   let curatedKnown = $derived($curatedStore !== null);
 
+  let variants = $derived.by<Variant[]>(() => {
+    if (!curatedApp) return [{ source, id }];
+    const seen = new Set<Source>();
+    const out: Variant[] = [];
+    for (const v of [{ source: curatedApp.source, id: curatedApp.id }, ...curatedApp.alternates]) {
+      if ($settings.managers[v.source] === false || seen.has(v.source)) continue;
+      seen.add(v.source);
+      out.push(v);
+    }
+    return out.length > 0 ? out : [{ source, id }];
+  });
+
   let info = $state<Package | null>(null);
   let loadingInfo = $state(false);
 
-  let installedPkg = $derived(
-    $installedStore.find((p) => p.source === source && p.id.toLowerCase() === idLower) ?? null
-  );
-  let updatePkg = $derived(
-    $updatesStore.find((p) => p.source === source && p.id.toLowerCase() === idLower) ?? null
-  );
+  function findPkg(list: Package[], v: Variant) {
+    return list.find((p) => p.source === v.source && p.id.toLowerCase() === v.id.toLowerCase());
+  }
+  let installedVariant = $derived(variants.find((v) => findPkg($installedStore, v)) ?? null);
+  let updateVariant = $derived(variants.find((v) => findPkg($updatesStore, v)) ?? null);
+  let installedPkg = $derived(installedVariant ? findPkg($installedStore, installedVariant) ?? null : null);
+  let updatePkg = $derived(updateVariant ? findPkg($updatesStore, updateVariant) ?? null : null);
 
   let name = $derived(curatedApp?.name ?? info?.name ?? installedPkg?.name ?? id);
   let homepage = $derived(curatedApp?.homepage ?? info?.homepage ?? null);
@@ -95,19 +110,35 @@
     <div class="title">
       <h1>{name}</h1>
       <div class="meta">
-        <SourceBadge {source} />
+        {#each variants as v (v.source)}<SourceBadge source={v.source} />{/each}
         <span class="mono id">{id}</span>
         {#if publisher}<span class="muted">· {publisher}</span>{/if}
       </div>
       <div class="actions">
         {#if $installedReady}
-          {#if updatable}
-            <InstallButton {source} {id} {name} kind="update" onDone={onChanged} />
+          {#if updatable && updateVariant}
+            <InstallButton
+              source={updateVariant.source}
+              id={updateVariant.id}
+              {name}
+              kind="update"
+              onDone={onChanged}
+            />
           {/if}
-          {#if isInstalled}
-            <InstallButton {source} {id} {name} kind="uninstall" onDone={onChanged} />
-          {:else}
-            <InstallButton {source} {id} {name} kind="install" onDone={onChanged} />
+          {#if isInstalled && installedVariant}
+            <InstallButton
+              source={installedVariant.source}
+              id={installedVariant.id}
+              {name}
+              kind="uninstall"
+              onDone={onChanged}
+            />
+          {:else if !isInstalled}
+            {#if variants.length > 1}
+              <InstallSplitButton {variants} {name} preferred={$settings.preferredSource} onDone={onChanged} />
+            {:else}
+              <InstallButton {source} {id} {name} kind="install" onDone={onChanged} />
+            {/if}
           {/if}
         {:else}
           <span class="muted small">Checking status…</span>

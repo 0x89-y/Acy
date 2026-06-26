@@ -13,6 +13,8 @@ export const detectManagers = () => invoke<ManagerStatus[]>('detect_managers');
 
 export const getCurated = () => invoke<CuratedFile>('get_curated');
 
+export const saveCurated = (file: CuratedFile) => invoke<void>('save_curated', { file });
+
 export const search = (query: string, sources: Source[]) =>
   invoke<SearchHit[]>('search', { query, sources });
 
@@ -39,6 +41,12 @@ export const upgradeAll = (source: Source, opId: string) =>
 
 export const bootstrapManager = (source: Source, opId: string) =>
   invoke<number>('bootstrap_manager', { source, opId });
+
+export const setUpdateCount = (count: number) => invoke<void>('set_update_count', { count });
+
+export const notify = (title: string, body: string) => invoke<void>('notify', { title, body });
+
+export const pickInstaller = () => invoke<string | null>('pick_installer');
 
 export function onOpLog(cb: (line: LogLine) => void): Promise<UnlistenFn> {
   return listen<LogLine>('op-log', (event) => cb(event.payload));

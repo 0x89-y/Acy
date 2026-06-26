@@ -18,8 +18,13 @@ export interface Settings {
   themeMode: ThemeMode;
   accent: AccentName;
   managers: Record<Source, boolean>;
+  preferredSource: Source | null;
   showOutput: boolean;
   downloadIcons: boolean;
+  setupComplete: boolean;
+  closeToTray: boolean;
+  notifyUpdates: boolean;
+  refreshOnStartup: boolean;
 }
 
 const KEY = 'acy-settings';
@@ -27,9 +32,14 @@ const KEY = 'acy-settings';
 const DEFAULTS: Settings = {
   themeMode: 'system',
   accent: 'purple',
-  managers: { winget: true, scoop: true, choco: true },
+  managers: { winget: true, scoop: true, choco: true, msstore: true, local: true },
+  preferredSource: null,
   showOutput: false,
-  downloadIcons: false
+  downloadIcons: false,
+  setupComplete: false,
+  closeToTray: false,
+  notifyUpdates: false,
+  refreshOnStartup: true
 };
 
 function load(): Settings {
@@ -70,10 +80,34 @@ export function setManagerEnabled(source: Source, enabled: boolean) {
   settings.update((s) => ({ ...s, managers: { ...s.managers, [source]: enabled } }));
 }
 
+export function setPreferredSource(source: Source | null) {
+  settings.update((s) => ({ ...s, preferredSource: source }));
+}
+
 export function setShowOutput(value: boolean) {
   settings.update((s) => ({ ...s, showOutput: value }));
 }
 
 export function setDownloadIcons(value: boolean) {
   settings.update((s) => ({ ...s, downloadIcons: value }));
+}
+
+export function setCloseToTray(value: boolean) {
+  settings.update((s) => ({ ...s, closeToTray: value }));
+}
+
+export function setNotifyUpdates(value: boolean) {
+  settings.update((s) => ({ ...s, notifyUpdates: value }));
+}
+
+export function setRefreshOnStartup(value: boolean) {
+  settings.update((s) => ({ ...s, refreshOnStartup: value }));
+}
+
+export function completeSetup() {
+  settings.update((s) => ({ ...s, setupComplete: true }));
+}
+
+export function restartSetup() {
+  settings.update((s) => ({ ...s, setupComplete: false }));
 }

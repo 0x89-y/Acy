@@ -290,7 +290,7 @@ fn sanitize(out: &str) -> Vec<String> {
         .collect()
 }
 
-fn parse_table(out: &str) -> Vec<std::collections::HashMap<String, String>> {
+pub(super) fn parse_table(out: &str) -> Vec<std::collections::HashMap<String, String>> {
     let lines = sanitize(out);
 
     let sep = lines.iter().position(|l| {
@@ -362,7 +362,7 @@ fn parse_table(out: &str) -> Vec<std::collections::HashMap<String, String>> {
     rows
 }
 
-fn parse_show(out: &str, id: &str) -> Option<Package> {
+pub(super) fn parse_show(out: &str, id: &str) -> Option<Package> {
     let mut pkg = Package::new(id, id, Source::Winget);
     let mut found = false;
     for line in sanitize(out) {

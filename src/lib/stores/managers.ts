@@ -1,9 +1,9 @@
 import { writable, derived } from 'svelte/store';
 import { detectManagers } from '$lib/api';
-import type { ManagerStatus, Source } from '$lib/types';
+import type { ManagerStatus, Manager } from '$lib/types';
 import { settings } from './settings';
 
-const ALL_SOURCES: Source[] = ['winget', 'scoop', 'choco'];
+const ALL_SOURCES: Manager[] = ['winget', 'scoop', 'choco', 'msstore'];
 
 export const managers = writable<ManagerStatus[]>([]);
 export const updatesCount = writable<number>(0);

@@ -24,4 +24,10 @@
   .choco {
     color: var(--choco);
   }
+  .msstore {
+    color: var(--msstore);
+  }
+  .local {
+    color: var(--local);
+  }
 </style>

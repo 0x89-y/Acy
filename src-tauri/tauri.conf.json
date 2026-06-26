@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Acy",
-  "version": "0.1.0",
-  "identifier": "one.eveo.acy",
+  "version": "0.3.0",
+  "identifier": "acy",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",

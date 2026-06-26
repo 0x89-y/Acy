@@ -1,10 +1,14 @@
 
-export type Source = 'winget' | 'scoop' | 'choco';
+export type Manager = 'winget' | 'scoop' | 'choco' | 'msstore';
+
+export type Source = Manager | 'local';
 
 export const SOURCE_LABELS: Record<Source, string> = {
   winget: 'winget',
   scoop: 'scoop',
-  choco: 'choco'
+  choco: 'choco',
+  msstore: 'msstore',
+  local: 'local'
 };
 
 export interface Package {
@@ -34,6 +38,11 @@ export interface ManagerStatus {
   detail: string | null;
 }
 
+export interface Variant {
+  source: Source;
+  id: string;
+}
+
 export interface CuratedApp {
   id: string;
   source: Source;
@@ -41,6 +50,8 @@ export interface CuratedApp {
   description: string | null;
   homepage: string | null;
   icon: string | null;
+  alternates: Variant[];
+  custom: boolean;
 }
 
 export interface CuratedCategory {

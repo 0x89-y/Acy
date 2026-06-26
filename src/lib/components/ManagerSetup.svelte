@@ -8,13 +8,18 @@
   const names: Record<Source, string> = {
     winget: 'winget',
     scoop: 'Scoop',
-    choco: 'Chocolatey'
+    choco: 'Chocolatey',
+    msstore: 'Microsoft Store',
+    local: 'Local file'
   };
 
   let busy = $state<Source | null>(null);
   let issues = $derived(
     $managers.filter(
-      (m) => $settings.managers[m.source] !== false && (!m.available || m.needsSetup)
+      (m) =>
+        m.source !== 'local' &&
+        $settings.managers[m.source] !== false &&
+        (!m.available || m.needsSetup)
     )
   );
 

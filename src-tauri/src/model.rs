@@ -6,6 +6,8 @@ pub enum Source {
     Winget,
     Scoop,
     Choco,
+    Msstore,
+    Local,
 }
 
 impl Source {
@@ -14,6 +16,8 @@ impl Source {
             Source::Winget => 0,
             Source::Scoop => 1,
             Source::Choco => 2,
+            Source::Msstore => 3,
+            Source::Local => 4,
         }
     }
 }
