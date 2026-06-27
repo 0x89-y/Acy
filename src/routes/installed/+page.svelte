@@ -11,6 +11,7 @@
     installedError,
     updatesError,
     installedReady,
+    lastChecked,
     loadInstalled,
     loadUpdates,
     refreshLibrary
@@ -59,10 +60,24 @@
       .filter((g) => g.items.length > 0)
   );
 
+  let now = $state(Date.now());
+
   onMount(() => {
     loadInstalled();
     loadUpdates();
+    const tick = setInterval(() => (now = Date.now()), 30_000);
+    return () => clearInterval(tick);
   });
+
+  function ago(at: number, ref: number): string {
+    const secs = Math.max(0, Math.round((ref - at) / 1000));
+    if (secs < 60) return 'just now';
+    const mins = Math.round(secs / 60);
+    if (mins < 60) return `${mins} min ago`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return `${hrs} hr ago`;
+    return `${Math.round(hrs / 24)} d ago`;
+  }
 
   async function updateAll(source: Source) {
     updatingAll = source;
@@ -89,6 +104,9 @@
 
 <div class="head">
   <h1>Installed</h1>
+  {#if $lastChecked}
+    <span class="checked muted">Checked {ago($lastChecked, now)}</span>
+  {/if}
   <button class="btn btn-ghost" onclick={() => refreshLibrary()} disabled={loading}>
     {loading ? 'Refreshing…' : 'Refresh'}
   </button>
@@ -231,8 +249,14 @@
   .head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 12px;
     margin-bottom: 22px;
+  }
+  .head h1 {
+    flex: 1;
+  }
+  .checked {
+    font-size: 0.8rem;
   }
   .block {
     margin-bottom: 30px;

@@ -25,6 +25,7 @@ export interface Settings {
   closeToTray: boolean;
   notifyUpdates: boolean;
   refreshOnStartup: boolean;
+  autoCheckUpdates: boolean;
 }
 
 const KEY = 'acy-settings';
@@ -39,7 +40,8 @@ const DEFAULTS: Settings = {
   setupComplete: false,
   closeToTray: false,
   notifyUpdates: false,
-  refreshOnStartup: true
+  refreshOnStartup: true,
+  autoCheckUpdates: false
 };
 
 function load(): Settings {
@@ -102,6 +104,10 @@ export function setNotifyUpdates(value: boolean) {
 
 export function setRefreshOnStartup(value: boolean) {
   settings.update((s) => ({ ...s, refreshOnStartup: value }));
+}
+
+export function setAutoCheckUpdates(value: boolean) {
+  settings.update((s) => ({ ...s, autoCheckUpdates: value }));
 }
 
 export function completeSetup() {

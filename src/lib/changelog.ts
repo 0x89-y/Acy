@@ -7,6 +7,27 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.4.1',
+    date: '2026-06-27',
+    changes: [
+      'Update checks now ask before downloading, instead of installing automatically.',
+      'Clearer update status: "up to date" is green and an available version is highlighted.',
+      'New opt-in setting to check for updates on startup and periodically in the background (off by default).'
+    ]
+  },
+  {
+    version: '0.4.0',
+    date: '2026-06-27',
+    changes: [
+      'Acy can update itself — Settings → Software updates → Check for updates.',
+      'Install from a local or network .exe/.msi: add "local" as a per-app source (toggleable, and selectable as your preferred source).',
+      'Scoop buckets: add buckets like extras right from Settings, so Scoop apps that need them install cleanly.',
+      'Failed installs and updates can be retried from the toast, with a hint when administrator rights are needed.',
+      'The Installed page shows when it was last checked, and a setting lets you skip the update check on startup.',
+      'Tidier curated catalog editor: collapsible categories/apps and a single unified sources list per app.'
+    ]
+  },
+  {
     version: '0.3.0',
     date: '2026-06-26',
     changes: [

@@ -206,6 +206,56 @@ pub async fn notify(app: AppHandle, title: String, body: String) {
     let _ = app.notification().builder().title(title).body(body).show();
 }
 
+fn first_tokens(out: &str) -> Vec<String> {
+    let lines: Vec<&str> = out.lines().collect();
+    let body = match lines.iter().position(|l| l.trim_start().starts_with("----")) {
+        Some(i) => &lines[i + 1..],
+        None => &lines[..],
+    };
+    body.iter()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .filter_map(|l| l.split_whitespace().next())
+        .filter(|t| *t != "Name")
+        .map(|t| t.to_string())
+        .collect()
+}
+
+#[tauri::command]
+pub async fn scoop_buckets() -> Vec<String> {
+    let out = runner::capture("powershell", &runner::ps_args("scoop bucket list"))
+        .await
+        .unwrap_or_default();
+    first_tokens(&out)
+}
+
+#[tauri::command]
+pub async fn scoop_known_buckets() -> Vec<String> {
+    let out = runner::capture("powershell", &runner::ps_args("scoop bucket known"))
+        .await
+        .unwrap_or_default();
+    out.lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty() && !l.contains(char::is_whitespace))
+        .map(|l| l.to_string())
+        .collect()
+}
+
+#[tauri::command]
+pub async fn add_scoop_bucket(app: AppHandle, name: String, op_id: String) -> Result<i32, String> {
+    if name.is_empty()
+        || !name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    {
+        return Err("invalid bucket name".into());
+    }
+    let script = format!("scoop bucket add {name}");
+    runner::stream(&app, &op_id, OP_EVENT, "powershell", &runner::ps_args(&script))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn pick_installer(app: AppHandle) -> Option<String> {
     let (tx, rx) = tokio::sync::oneshot::channel();

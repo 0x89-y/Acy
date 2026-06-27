@@ -16,6 +16,7 @@
   import { loadUpdates } from '$lib/stores/library';
   import { settings } from '$lib/stores/settings';
   import { initTray } from '$lib/stores/tray';
+  import { initAppUpdater } from '$lib/stores/updater';
   import '$lib/stores/theme';
 
   let { children } = $props();
@@ -24,6 +25,7 @@
 
   onMount(() => {
     initTray();
+    initAppUpdater();
     (async () => {
       await loadManagers();
       if (get(settings).refreshOnStartup) loadUpdates();

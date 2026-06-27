@@ -48,6 +48,13 @@ export const notify = (title: string, body: string) => invoke<void>('notify', { 
 
 export const pickInstaller = () => invoke<string | null>('pick_installer');
 
+export const scoopBuckets = () => invoke<string[]>('scoop_buckets');
+
+export const scoopKnownBuckets = () => invoke<string[]>('scoop_known_buckets');
+
+export const addScoopBucket = (name: string, opId: string) =>
+  invoke<number>('add_scoop_bucket', { name, opId });
+
 export function onOpLog(cb: (line: LogLine) => void): Promise<UnlistenFn> {
   return listen<LogLine>('op-log', (event) => cb(event.payload));
 }

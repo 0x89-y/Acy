@@ -5,6 +5,7 @@ import { enabledSources, updatesCount } from './managers';
 
 const INSTALLED_KEY = 'acy-installed-cache';
 const UPDATES_KEY = 'acy-updates-cache';
+const CHECKED_KEY = 'acy-last-checked';
 
 function sig(sources: Source[]): string {
   return [...sources].sort().join(',');
@@ -36,6 +37,13 @@ export const installedLoading = writable(false);
 export const installedError = writable<string | null>(null);
 export const installedReady = writable(cachedInstalled !== null);
 
+function readChecked(): number | null {
+  if (typeof localStorage === 'undefined') return null;
+  const raw = Number(localStorage.getItem(CHECKED_KEY));
+  return Number.isFinite(raw) && raw > 0 ? raw : null;
+}
+export const lastChecked = writable<number | null>(readChecked());
+
 let installedSig = '';
 
 export async function loadInstalled(force = false): Promise<void> {
@@ -52,6 +60,9 @@ export async function loadInstalled(force = false): Promise<void> {
     writeCache(INSTALLED_KEY, list);
     installedSig = current;
     installedReady.set(true);
+    const now = Date.now();
+    lastChecked.set(now);
+    if (typeof localStorage !== 'undefined') localStorage.setItem(CHECKED_KEY, String(now));
   } catch (e) {
     installedError.set(String(e));
   } finally {

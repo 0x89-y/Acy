@@ -1,8 +1,8 @@
 <script lang="ts">
   import { get } from 'svelte/store';
-  import { dismiss, type Op, type OpState } from '$lib/stores/ops';
+  import { dismiss, retry, type Op, type OpState } from '$lib/stores/ops';
   import { settings } from '$lib/stores/settings';
-  import { X, ChevronDown, ChevronRight } from '@lucide/svelte';
+  import { X, ChevronDown, ChevronRight, RotateCw, ShieldAlert } from '@lucide/svelte';
 
   let { op }: { op: Op } = $props();
 
@@ -17,6 +17,10 @@
   };
 
   let lastLine = $derived(op.lines.filter((l) => l.trim()).at(-1) ?? '');
+
+  const ADMIN_RE =
+    /(access is denied|administrator|requires elevation|elevat|run as admin|0x80070005)/i;
+  let needsAdmin = $derived(op.state === 'error' && op.lines.some((l) => ADMIN_RE.test(l)));
 
   $effect(() => {
     if (op.state === 'error') expanded = true;
@@ -65,6 +69,20 @@
       </button>
     {/if}
   </div>
+
+  {#if op.state === 'error'}
+    <div class="err-actions">
+      {#if needsAdmin}
+        <span class="admin">
+          <ShieldAlert size={13} /> Needs administrator — relaunch Acy as admin, then retry.
+        </span>
+      {/if}
+      <div class="spacer"></div>
+      <button class="retry" onclick={() => retry(op.id)}>
+        <RotateCw size={13} /> Retry
+      </button>
+    </div>
+  {/if}
 
   {#if expanded}
     <div class="body mono" bind:this={body}>
@@ -229,5 +247,39 @@
   .line {
     white-space: pre-wrap;
     word-break: break-word;
+  }
+
+  .err-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 12px 10px;
+  }
+  .err-actions .spacer {
+    flex: 1;
+  }
+  .admin {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.74rem;
+    color: var(--warning);
+    min-width: 0;
+  }
+  .retry {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    padding: 5px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+  .retry:hover {
+    background: var(--surface-hover);
   }
 </style>

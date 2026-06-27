@@ -34,6 +34,9 @@ const queue: Job[] = [];
 let working = false;
 let listening = false;
 
+type EnqueueArgs = Parameters<typeof enqueue>;
+const retryable = new Map<string, EnqueueArgs>();
+
 const DISMISS_MS = 6000;
 
 function updateOp(id: string, patch: (op: Op) => Op) {
@@ -42,6 +45,14 @@ function updateOp(id: string, patch: (op: Op) => Op) {
 
 export function dismiss(id: string) {
   ops.update((list) => list.filter((op) => op.id !== id));
+  retryable.delete(id);
+}
+
+export function retry(id: string) {
+  const args = retryable.get(id);
+  if (!args) return;
+  dismiss(id);
+  void enqueue(...args);
 }
 
 async function ensureListener() {
@@ -112,6 +123,7 @@ export async function enqueue(
   await ensureListener();
   const id = newId();
   ops.update((list) => [...list, { id, title, state: 'queued', lines: [], detail }]);
+  retryable.set(id, [title, run, verify, detail, meta]);
   return new Promise<boolean>((resolve) => {
     queue.push({ id, run, verify, resolve, meta });
     work();
