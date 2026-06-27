@@ -12,7 +12,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
             tray::create(app.handle())?;
             Ok(())
         })
@@ -34,6 +38,9 @@ pub fn run() {
             commands::set_update_count,
             commands::notify,
             commands::pick_installer,
+            commands::scoop_buckets,
+            commands::scoop_known_buckets,
+            commands::add_scoop_bucket,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

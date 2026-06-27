@@ -1,0 +1,11 @@
+{
+  "version": "0.3.0",
+  "notes": "Describe what changed in this release.",
+  "pub_date": "2026-06-26T00:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "PASTE_THE_CONTENTS_OF_THE_-setup.exe.sig_FILE_HERE",
+      "url": "https://0x89-y.xyz/acy/Acy-windows-x64-setup.exe"
+    }
+  }
+}

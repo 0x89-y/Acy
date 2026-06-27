@@ -3,6 +3,14 @@
   import { getVersion } from '@tauri-apps/api/app';
   import { Sun, Moon, Monitor } from '@lucide/svelte';
   import {
+    updaterPhase,
+    updaterVersion,
+    updaterError,
+    checkForUpdate,
+    installUpdate,
+    backgroundCheck
+  } from '$lib/stores/updater';
+  import {
     settings,
     setThemeMode,
     setAccent,
@@ -13,6 +21,7 @@
     setCloseToTray,
     setNotifyUpdates,
     setRefreshOnStartup,
+    setAutoCheckUpdates,
     restartSetup,
     ACCENTS,
     type ThemeMode
@@ -96,6 +105,41 @@
     await enqueue(`Set up ${names[source]}`, (opId) => api.bootstrapManager(source, opId));
     busy = null;
     loadManagers(true);
+  }
+
+  // ---- Scoop buckets ----
+  let buckets = $state<string[] | null>(null);
+  let knownBuckets = $state<string[]>([]);
+  let bucketBusy = $state<string | null>(null);
+  let scoopAvailable = $derived(statusOf('scoop')?.available ?? false);
+
+  async function loadBuckets() {
+    try {
+      const [b, k] = await Promise.all([api.scoopBuckets(), api.scoopKnownBuckets()]);
+      buckets = b;
+      knownBuckets = k;
+    } catch {
+      buckets = [];
+    }
+  }
+
+  // Load buckets once Scoop is known to be available.
+  $effect(() => {
+    if (scoopAvailable && buckets === null) loadBuckets();
+  });
+
+  async function addBucket(name: string) {
+    bucketBusy = name;
+    await enqueue(`Add Scoop bucket: ${name}`, (opId) => api.addScoopBucket(name, opId));
+    bucketBusy = null;
+    loadBuckets();
+  }
+
+  // App self-update is driven by the updater store (see imports). Enabling
+  // auto-check kicks off an immediate background check.
+  function onAutoCheckToggle(on: boolean) {
+    setAutoCheckUpdates(on);
+    if (on) backgroundCheck();
   }
 </script>
 
@@ -187,6 +231,34 @@
   </div>
 </section>
 
+{#if scoopAvailable}
+  <section class="group">
+    <h2>Scoop buckets</h2>
+    <p class="muted hint">
+      Buckets are app catalogs for Scoop. Some apps (e.g. Firefox, VLC) live in the
+      <span class="mono">extras</span> bucket and won't install via Scoop until it's added.
+    </p>
+    {#if buckets === null}
+      <p class="muted">Loading…</p>
+    {:else}
+      <div class="buckets">
+        {#each buckets as b (b)}<span class="chip">{b}</span>{/each}
+        {#if buckets.length === 0}<span class="muted">No buckets added.</span>{/if}
+      </div>
+      {@const addable = knownBuckets.filter((k) => !(buckets ?? []).includes(k))}
+      {#if addable.length > 0}
+        <div class="bucket-add">
+          {#each addable as k (k)}
+            <button class="btn" onclick={() => addBucket(k)} disabled={bucketBusy !== null}>
+              {bucketBusy === k ? 'Adding…' : `+ ${k}`}
+            </button>
+          {/each}
+        </div>
+      {/if}
+    {/if}
+  </section>
+{/if}
+
 <section class="group">
   <h2>App icons</h2>
   <label class="toggle-row card">
@@ -277,6 +349,48 @@
       <span class="slider"></span>
     </span>
   </label>
+</section>
+
+<section class="group">
+  <h2>Software updates</h2>
+  <p class="muted hint">Acy <span class="mono">v{appVersion || '…'}</span>.</p>
+
+  <label class="toggle-row card">
+    <span class="toggle-text">
+      <span class="toggle-title">Automatically check for updates</span>
+      <span class="toggle-sub muted">
+        On startup and periodically in the background. You'll be asked before anything downloads.
+      </span>
+    </span>
+    <span class="switch">
+      <input
+        type="checkbox"
+        checked={$settings.autoCheckUpdates}
+        onchange={(e) => onAutoCheckToggle(e.currentTarget.checked)}
+      />
+      <span class="slider"></span>
+    </span>
+  </label>
+
+  <div class="upd">
+    {#if $updaterPhase === 'available'}
+      <button class="btn btn-accent" onclick={installUpdate}>
+        Download &amp; install v{$updaterVersion}
+      </button>
+      <p class="upd-msg accent">Version {$updaterVersion} is available.</p>
+    {:else if $updaterPhase === 'downloading'}
+      <button class="btn" disabled>Downloading…</button>
+    {:else}
+      <button class="btn" onclick={checkForUpdate} disabled={$updaterPhase === 'checking'}>
+        {$updaterPhase === 'checking' ? 'Checking…' : 'Check for updates'}
+      </button>
+      {#if $updaterPhase === 'uptodate'}
+        <p class="upd-msg ok">You're on the latest version.</p>
+      {:else if $updaterPhase === 'error'}
+        <p class="upd-msg err">Update check failed: {$updaterError}</p>
+      {/if}
+    {/if}
+  </div>
 </section>
 
 <section class="group">
@@ -436,6 +550,51 @@
   }
   .pref .hint {
     margin: 8px 0 0;
+  }
+  .buckets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .buckets .chip {
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-pill);
+    padding: 2px 10px;
+  }
+  .bucket-add {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .bucket-add .btn {
+    font-size: 0.82rem;
+    padding: 6px 12px;
+  }
+  .upd {
+    margin-top: 12px;
+  }
+  .upd-msg {
+    font-size: 0.84rem;
+    margin: 10px 0 0;
+  }
+  .upd-msg.ok {
+    color: var(--success);
+    font-weight: 500;
+  }
+  .upd-msg.accent {
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .upd-msg.err {
+    color: var(--danger);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    white-space: pre-wrap;
   }
   .accents {
     display: flex;

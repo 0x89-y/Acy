@@ -55,6 +55,15 @@ export const notify = (title: string, body: string) => invoke<void>('notify', { 
 /** Open a file picker for a local installer; resolves to the path or null. */
 export const pickInstaller = () => invoke<string | null>('pick_installer');
 
+// ---- Scoop buckets ----
+
+export const scoopBuckets = () => invoke<string[]>('scoop_buckets');
+
+export const scoopKnownBuckets = () => invoke<string[]>('scoop_known_buckets');
+
+export const addScoopBucket = (name: string, opId: string) =>
+  invoke<number>('add_scoop_bucket', { name, opId });
+
 // ---- Live output from streamed operations ----
 
 export function onOpLog(cb: (line: LogLine) => void): Promise<UnlistenFn> {

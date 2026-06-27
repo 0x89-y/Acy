@@ -16,6 +16,7 @@
   import { loadUpdates } from '$lib/stores/library';
   import { settings } from '$lib/stores/settings';
   import { initTray } from '$lib/stores/tray';
+  import { initAppUpdater } from '$lib/stores/updater';
   import '$lib/stores/theme'; // applies data-theme reactively from settings
 
   let { children } = $props();
@@ -25,6 +26,7 @@
 
   onMount(() => {
     initTray();
+    initAppUpdater();
     // Detect managers first so the update check runs against the right sources,
     // then keep the nav badge current with a periodic background refresh. The
     // initial check is skipped when the user turns off startup refresh.
