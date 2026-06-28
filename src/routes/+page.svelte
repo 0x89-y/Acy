@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
-  import { Search } from '@lucide/svelte';
+  import { Search, X } from '@lucide/svelte';
   import AppCard from '$lib/components/AppCard.svelte';
   import ManagerSetup from '$lib/components/ManagerSetup.svelte';
   import * as api from '$lib/api';
@@ -9,6 +9,7 @@
   import { enabledSources, managers } from '$lib/stores/managers';
   import { settings } from '$lib/stores/settings';
   import { installedKeys, loadInstalled } from '$lib/stores/library';
+  import { runOp } from '$lib/install';
 
   function curatedVariants(app: CuratedApp, managers: Record<Source, boolean>): Variant[] {
     const seen = new Set<Source>();
@@ -93,8 +94,111 @@
     return `${source}:${id.toLowerCase()}`;
   }
 
+  const RECENT_KEY = 'acy-recent-searches';
+  function loadRecent(): string[] {
+    try {
+      const r = localStorage.getItem(RECENT_KEY);
+      const v = r ? JSON.parse(r) : [];
+      return Array.isArray(v) ? v.slice(0, 6) : [];
+    } catch {
+      return [];
+    }
+  }
+  let recent = $state<string[]>(loadRecent());
+  let searchFocused = $state(false);
+  let showRecent = $derived(searchFocused && !trimmed && recent.length > 0);
+  function recordSearch(q: string) {
+    recent = [q, ...recent.filter((r) => r.toLowerCase() !== q.toLowerCase())].slice(0, 6);
+    try {
+      localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+    } catch {
+    }
+  }
+  function useRecent(q: string) {
+    query = q;
+    searchInput?.focus();
+    runSearch();
+  }
+
+  let selectMode = $state(false);
+  let installing = $state(false);
+  let selectedApps = $state<Map<string, { name: string; variants: Variant[] }>>(new Map());
+  function appKey(app: CuratedApp) {
+    return `${app.source}:${app.id}`;
+  }
+  function chosenVariant(vs: Variant[]): Variant {
+    return (
+      ($settings.preferredSource && vs.find((v) => v.source === $settings.preferredSource)) || vs[0]
+    );
+  }
+  function toggleSelectApp(app: CuratedApp) {
+    const vs = curatedVariants(app, $settings.managers);
+    if (vs.length === 0) return;
+    const k = appKey(app);
+    const next = new Map(selectedApps);
+    if (next.has(k)) next.delete(k);
+    else next.set(k, { name: app.name ?? app.id, variants: vs });
+    selectedApps = next;
+  }
+  function exitSelect() {
+    selectMode = false;
+    selectedApps = new Map();
+  }
+  async function installSelected() {
+    installing = true;
+    for (const entry of selectedApps.values()) {
+      const v = chosenVariant(entry.variants);
+      await runOp('install', v.source, v.id, entry.name);
+    }
+    installing = false;
+    exitSelect();
+    loadInstalled(true);
+  }
+
+  let resultsEl = $state<HTMLElement | null>(null);
+  function resultCards(): HTMLElement[] {
+    return resultsEl ? Array.from(resultsEl.querySelectorAll<HTMLElement>('a.main')) : [];
+  }
+  function onResultsKey(e: KeyboardEvent) {
+    if (!showSearch || !e.key.startsWith('Arrow')) return;
+    const active = document.activeElement as HTMLElement | null;
+    const inInput = active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA';
+    const items = resultCards();
+    if (items.length === 0) return;
+    if (inInput) {
+      if (e.key === 'ArrowDown' && active === searchInput) {
+        e.preventDefault();
+        items[0].focus();
+      }
+      return;
+    }
+    let cols = items.length;
+    if (items.length > 1) {
+      const top0 = items[0].offsetTop;
+      const firstWrap = items.findIndex((it) => it.offsetTop !== top0);
+      cols = firstWrap === -1 ? items.length : Math.max(1, firstWrap);
+    }
+    const idx = items.indexOf(active as HTMLElement);
+    if (idx === -1) {
+      e.preventDefault();
+      items[0].focus();
+      return;
+    }
+    let next = idx;
+    if (e.key === 'ArrowRight') next++;
+    else if (e.key === 'ArrowLeft') next--;
+    else if (e.key === 'ArrowDown') next += cols;
+    else if (e.key === 'ArrowUp') next -= cols;
+    next = Math.max(0, Math.min(items.length - 1, next));
+    if (next !== idx) {
+      e.preventDefault();
+      items[next].focus();
+    }
+  }
+
   onMount(() => {
     window.addEventListener('keydown', onShortcut);
+    window.addEventListener('keydown', onResultsKey);
 
     (async () => {
       try {
@@ -107,7 +211,10 @@
       loadInstalled();
     })();
 
-    return () => window.removeEventListener('keydown', onShortcut);
+    return () => {
+      window.removeEventListener('keydown', onShortcut);
+      window.removeEventListener('keydown', onResultsKey);
+    };
   });
 
   function onShortcut(e: KeyboardEvent) {
@@ -137,6 +244,7 @@
     try {
       results = await api.search(q, get(enabledSources));
       searchedQuery = q;
+      recordSearch(q);
     } catch (e) {
       searchError = String(e);
       results = [];
@@ -160,16 +268,60 @@
       placeholder="Search curated apps…"
       bind:value={query}
       oninput={onInput}
-      onkeydown={(e) => e.key === 'Enter' && runSearch()}
+      onfocus={() => (searchFocused = true)}
+      onblur={() => setTimeout(() => (searchFocused = false), 120)}
+      onkeydown={(e) => {
+        if (e.key === 'Enter') runSearch();
+        else if (e.key === 'Escape') {
+          if (query) query = '';
+          else searchInput?.blur();
+        }
+      }}
     />
-    <kbd class="kbd">Ctrl K</kbd>
+    {#if query}
+      <button class="clear" onclick={() => { query = ''; searchInput?.focus(); }} aria-label="Clear search">
+        <X size={15} />
+      </button>
+    {:else}
+      <kbd class="kbd">Ctrl K</kbd>
+    {/if}
   </div>
   <button class="btn btn-accent search-btn" onclick={runSearch} disabled={!showSearch || searching}>
     {searching ? 'Searching…' : 'Search managers'}
   </button>
 </div>
 
+{#if showRecent}
+  <div class="recents">
+    <span class="recents-label muted">Recent</span>
+    {#each recent as r (r)}
+      <button class="recent" onmousedown={(e) => e.preventDefault()} onclick={() => useRecent(r)}>
+        {r}
+      </button>
+    {/each}
+  </div>
+{/if}
+
+{#if !loadingCurated && !noManagers}
+  <div class="discover-bar">
+    <button class="btn btn-ghost sel-toggle" onclick={() => (selectMode ? exitSelect() : (selectMode = true))}>
+      {selectMode ? 'Cancel selection' : 'Select multiple'}
+    </button>
+  </div>
+{/if}
+
+{#if selectMode && selectedApps.size > 0}
+  <div class="sel-bar">
+    <span class="sel-count">{selectedApps.size} selected</span>
+    <div class="sel-spacer"></div>
+    <button class="btn btn-accent" onclick={installSelected} disabled={installing}>
+      {installing ? 'Installing…' : `Install ${selectedApps.size}`}
+    </button>
+  </div>
+{/if}
+
 {#if showSearch}
+  <div bind:this={resultsEl}>
   {#if curatedMatches.length > 0}
     <section class="res-section">
       <h2 class="res-head">From your list</h2>
@@ -184,6 +336,10 @@
             sub={app.id}
             homepage={app.icon ?? app.homepage}
             allowPick
+            highlight={trimmed}
+            selectable={selectMode}
+            selected={selectedApps.has(appKey(app))}
+            onToggleSelect={() => toggleSelectApp(app)}
             onChanged={() => loadInstalled(true)}
           />
         {/each}
@@ -206,6 +362,7 @@
               description={hit.description}
               variants={hit.variants.map((v) => ({ source: v.source, id: v.id }))}
               installed={hitInstalled(hit)}
+              highlight={trimmed}
               onChanged={() => loadInstalled(true)}
             />
           {/each}
@@ -228,8 +385,22 @@
       </button>
     </div>
   {/if}
+  </div>
 {:else if loadingCurated}
-  <p class="muted">Loading…</p>
+  <div class="grid">
+    {#each Array(8) as _, i (i)}
+      <div class="card sk-card">
+        <div class="sk-top">
+          <div class="skeleton sk-icon"></div>
+          <div class="sk-lines">
+            <div class="skeleton sk-line lg"></div>
+            <div class="skeleton sk-line sm"></div>
+          </div>
+        </div>
+        <div class="skeleton sk-line full"></div>
+      </div>
+    {/each}
+  </div>
 {:else if noManagers}
   <div class="empty card">
     <h2>No package managers found</h2>
@@ -261,6 +432,9 @@
             sub={app.id}
             homepage={app.icon ?? app.homepage}
             allowPick
+            selectable={selectMode}
+            selected={selectedApps.has(appKey(app))}
+            onToggleSelect={() => toggleSelectApp(app)}
             onChanged={() => loadInstalled(true)}
           />
         {/each}
@@ -310,6 +484,22 @@
     padding: 2px 7px;
     flex-shrink: 0;
   }
+  .clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 4px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    line-height: 0;
+  }
+  .clear:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+  }
   .search-btn {
     flex-shrink: 0;
     white-space: nowrap;
@@ -320,6 +510,57 @@
     align-items: flex-start;
     gap: 10px;
     padding: 8px 0 4px;
+  }
+  .recents {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: -14px 0 18px;
+  }
+  .recents-label {
+    font-size: 0.78rem;
+  }
+  .recent {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    padding: 4px 12px;
+    border-radius: var(--radius-pill);
+    font-size: 0.82rem;
+  }
+  .recent:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-strong);
+  }
+  .discover-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin: -10px 0 16px;
+  }
+  .sel-toggle {
+    font-size: 0.85rem;
+  }
+  .sel-bar {
+    position: sticky;
+    top: 64px;
+    z-index: 15;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    margin-bottom: 18px;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+  }
+  .sel-count {
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .sel-spacer {
+    flex: 1;
   }
   .empty {
     padding: 40px 32px;
@@ -335,6 +576,42 @@
     font-size: 0.92rem;
     margin: 0 auto 20px;
     max-width: 420px;
+  }
+  .sk-card {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .sk-top {
+    display: flex;
+    gap: 12px;
+  }
+  .sk-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+  }
+  .sk-lines {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    justify-content: center;
+  }
+  .sk-line {
+    height: 11px;
+  }
+  .sk-line.lg {
+    width: 62%;
+  }
+  .sk-line.sm {
+    width: 40%;
+  }
+  .sk-line.full {
+    width: 100%;
+    height: 9px;
   }
   .cat {
     margin-bottom: 30px;

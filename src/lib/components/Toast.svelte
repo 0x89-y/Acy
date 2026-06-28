@@ -2,9 +2,18 @@
   import { get } from 'svelte/store';
   import { dismiss, retry, type Op, type OpState } from '$lib/stores/ops';
   import { settings } from '$lib/stores/settings';
-  import { X, ChevronDown, ChevronRight, RotateCw, ShieldAlert } from '@lucide/svelte';
+  import { copyText } from '$lib/clipboard';
+  import { X, ChevronDown, ChevronRight, RotateCw, ShieldAlert, Copy, Check } from '@lucide/svelte';
 
   let { op }: { op: Op } = $props();
+
+  let copied = $state(false);
+  async function copyOutput() {
+    if (await copyText(op.lines.join('\n'))) {
+      copied = true;
+      setTimeout(() => (copied = false), 1200);
+    }
+  }
 
   let expanded = $state(get(settings).showOutput);
   let body: HTMLDivElement | null = $state(null);
@@ -62,6 +71,12 @@
         Something went wrong
       {/if}
     </span>
+    {#if op.lines.length > 0}
+      <button class="toggle" onclick={copyOutput} title="Copy output">
+        {#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+    {/if}
     {#if op.lines.length > 0 || op.state === 'running'}
       <button class="toggle" onclick={() => (expanded = !expanded)}>
         {#if expanded}<ChevronDown size={14} />{:else}<ChevronRight size={14} />{/if}

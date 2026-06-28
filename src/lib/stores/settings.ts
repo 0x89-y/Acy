@@ -5,6 +5,8 @@ export type ThemeMode = 'light' | 'dark' | 'system';
 
 export type AccentName = 'purple' | 'blue' | 'green' | 'pink' | 'orange' | 'teal';
 
+export type SettingsTab = 'general' | 'sources' | 'updates' | 'about';
+
 export const ACCENTS: { name: AccentName; label: string; color: string }[] = [
   { name: 'purple', label: 'Purple', color: '#7c3aed' },
   { name: 'blue', label: 'Blue', color: '#2563eb' },
@@ -26,6 +28,9 @@ export interface Settings {
   notifyUpdates: boolean;
   refreshOnStartup: boolean;
   autoCheckUpdates: boolean;
+  installedSort: 'name' | 'source';
+  installedGroup: boolean;
+  settingsTab: SettingsTab;
 }
 
 const KEY = 'acy-settings';
@@ -41,7 +46,10 @@ const DEFAULTS: Settings = {
   closeToTray: false,
   notifyUpdates: false,
   refreshOnStartup: true,
-  autoCheckUpdates: false
+  autoCheckUpdates: false,
+  installedSort: 'name',
+  installedGroup: false,
+  settingsTab: 'general'
 };
 
 function load(): Settings {
@@ -108,6 +116,18 @@ export function setRefreshOnStartup(value: boolean) {
 
 export function setAutoCheckUpdates(value: boolean) {
   settings.update((s) => ({ ...s, autoCheckUpdates: value }));
+}
+
+export function setInstalledSort(value: Settings['installedSort']) {
+  settings.update((s) => ({ ...s, installedSort: value }));
+}
+
+export function setInstalledGroup(value: boolean) {
+  settings.update((s) => ({ ...s, installedGroup: value }));
+}
+
+export function setSettingsTab(value: SettingsTab) {
+  settings.update((s) => ({ ...s, settingsTab: value }));
 }
 
 export function completeSetup() {

@@ -8,8 +8,10 @@
 
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
+  import { goto } from '$app/navigation';
   import Nav from '$lib/components/Nav.svelte';
   import OpStack from '$lib/components/OpStack.svelte';
+  import ContextMenu from '$lib/components/ContextMenu.svelte';
   import ResizeHandles from '$lib/components/ResizeHandles.svelte';
   import Setup from '$lib/components/Setup.svelte';
   import { loadManagers } from '$lib/stores/managers';
@@ -23,15 +25,28 @@
 
   const UPDATE_POLL_MS = 30 * 60 * 1000;
 
+  function onKey(e: KeyboardEvent) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    const dest = e.key === '1' ? '/' : e.key === '2' ? '/installed' : e.key === '3' ? '/settings' : null;
+    if (dest) {
+      e.preventDefault();
+      goto(dest);
+    }
+  }
+
   onMount(() => {
     initTray();
     initAppUpdater();
+    window.addEventListener('keydown', onKey);
     (async () => {
       await loadManagers();
       if (get(settings).refreshOnStartup) loadUpdates();
     })();
     const timer = setInterval(() => loadUpdates(true), UPDATE_POLL_MS);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('keydown', onKey);
+    };
   });
 </script>
 
@@ -44,6 +59,7 @@
   </main>
 {/if}
 <OpStack />
+<ContextMenu />
 <ResizeHandles />
 
 <style>

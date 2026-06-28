@@ -10,6 +10,21 @@ export const VERBS: Record<InstallKind, string> = {
   uninstall: 'Uninstall'
 };
 
+export function installCommand(source: Source, id: string): string | null {
+  switch (source) {
+    case 'winget':
+      return `winget install --id ${id} -e`;
+    case 'scoop':
+      return `scoop install ${id}`;
+    case 'choco':
+      return `choco install ${id}`;
+    case 'msstore':
+      return `winget install --id ${id} --source msstore`;
+    default:
+      return null;
+  }
+}
+
 export async function runOp(
   kind: InstallKind,
   source: Source,

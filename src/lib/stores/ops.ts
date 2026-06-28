@@ -48,6 +48,16 @@ export function dismiss(id: string) {
   retryable.delete(id);
 }
 
+export function dismissAll() {
+  let removed: string[] = [];
+  ops.update((list) => {
+    const keep = list.filter((op) => op.state === 'running' || op.state === 'queued');
+    removed = list.filter((op) => !keep.includes(op)).map((op) => op.id);
+    return keep;
+  });
+  for (const id of removed) retryable.delete(id);
+}
+
 export function retry(id: string) {
   const args = retryable.get(id);
   if (!args) return;
