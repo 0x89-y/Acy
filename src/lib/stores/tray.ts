@@ -1,8 +1,11 @@
-import { get } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import * as api from '$lib/api';
 import { updatesCount } from './managers';
 import { settings } from './settings';
+
+/** When true, the "minimize to tray?" prompt is shown (CloseToTrayPrompt). */
+export const closePromptOpen = writable(false);
 
 // Wires the running app to the system tray:
 //  - the close (✕) button hides to the tray instead of quitting, when enabled;
@@ -21,10 +24,16 @@ export async function initTray() {
   try {
     const win = getCurrentWindow();
     await win.onCloseRequested((event) => {
-      if (get(settings).closeToTray) {
+      const s = get(settings);
+      if (s.closeToTray) {
         event.preventDefault();
         void win.hide();
+      } else if (s.askCloseToTray) {
+        // Promote the feature: ask once rather than quitting immediately.
+        event.preventDefault();
+        closePromptOpen.set(true);
       }
+      // Otherwise let the close proceed (quit).
     });
   } catch (e) {
     console.error('tray close handler init failed', e);

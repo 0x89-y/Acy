@@ -7,6 +7,8 @@ export type AccentName = 'purple' | 'blue' | 'green' | 'pink' | 'orange' | 'teal
 
 export type SettingsTab = 'general' | 'sources' | 'updates' | 'about';
 
+export type ViewMode = 'grid' | 'list';
+
 /** Accent presets, with a representative swatch color for the picker. */
 export const ACCENTS: { name: AccentName; label: string; color: string }[] = [
   { name: 'purple', label: 'Purple', color: '#7c3aed' },
@@ -32,6 +34,8 @@ export interface Settings {
   setupComplete: boolean;
   /** Closing the window hides to the tray instead of quitting (off by default). */
   closeToTray: boolean;
+  /** Offer "minimize to tray?" when closing while closeToTray is off. */
+  askCloseToTray: boolean;
   /** Show a desktop notification when background checks find new updates. */
   notifyUpdates: boolean;
   /** Check installed apps / updates automatically when Acy starts. */
@@ -42,6 +46,8 @@ export interface Settings {
   installedSort: 'name' | 'source';
   installedGroup: boolean;
   settingsTab: SettingsTab;
+  discoverView: ViewMode;
+  installedView: ViewMode;
 }
 
 const KEY = 'acy-settings';
@@ -55,12 +61,15 @@ const DEFAULTS: Settings = {
   downloadIcons: false,
   setupComplete: false,
   closeToTray: false,
+  askCloseToTray: true,
   notifyUpdates: false,
   refreshOnStartup: true,
   autoCheckUpdates: false,
   installedSort: 'name',
   installedGroup: false,
-  settingsTab: 'general'
+  settingsTab: 'general',
+  discoverView: 'grid',
+  installedView: 'list'
 };
 
 function load(): Settings {
@@ -118,6 +127,10 @@ export function setCloseToTray(value: boolean) {
   settings.update((s) => ({ ...s, closeToTray: value }));
 }
 
+export function setAskCloseToTray(value: boolean) {
+  settings.update((s) => ({ ...s, askCloseToTray: value }));
+}
+
 export function setNotifyUpdates(value: boolean) {
   settings.update((s) => ({ ...s, notifyUpdates: value }));
 }
@@ -140,6 +153,14 @@ export function setInstalledGroup(value: boolean) {
 
 export function setSettingsTab(value: SettingsTab) {
   settings.update((s) => ({ ...s, settingsTab: value }));
+}
+
+export function setDiscoverView(value: ViewMode) {
+  settings.update((s) => ({ ...s, discoverView: value }));
+}
+
+export function setInstalledView(value: ViewMode) {
+  settings.update((s) => ({ ...s, installedView: value }));
 }
 
 export function completeSetup() {

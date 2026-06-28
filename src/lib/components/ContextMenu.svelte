@@ -6,12 +6,23 @@
     closeContextMenu();
     it.onSelect();
   }
+
+  // Suppress the default WebView right-click menu (Back / Reload / Save as / …)
+  // everywhere except inside editable fields, which keep their copy/paste menu.
+  // Card/row right-clicks stop propagation, so this only fires for empty areas.
+  function onWindowContextMenu(e: MouseEvent) {
+    closeContextMenu();
+    const t = e.target as HTMLElement | null;
+    if (!t?.closest('input, textarea, [contenteditable="true"]')) {
+      e.preventDefault();
+    }
+  }
 </script>
 
 <svelte:window
   onclick={closeContextMenu}
   onscroll={closeContextMenu}
-  oncontextmenu={closeContextMenu}
+  oncontextmenu={onWindowContextMenu}
   onkeydown={(e) => e.key === 'Escape' && closeContextMenu()}
 />
 

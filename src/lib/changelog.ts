@@ -10,6 +10,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.5.1',
+    date: '2026-06-28',
+    changes: [
+      'Switch between grid and list view on Discover and Installed; your choice is remembered per page.',
+      'Closing with "close to tray" off now offers to minimize to the tray instead, with a "don\'t ask again" option.',
+      'An in-app banner now appears when an Acy update is found, so background update checks are visible.',
+      'Restyled the multi-select checkboxes to match the rest of the UI.',
+      'The default right-click menu no longer appears on empty areas (text fields keep copy/paste).'
+    ]
+  },
+  {
     version: '0.5.0',
     date: '2026-06-28',
     changes: [
