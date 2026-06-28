@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { openUrl } from '@tauri-apps/plugin-opener';
+  import { Check } from '@lucide/svelte';
   import AppIcon from './AppIcon.svelte';
   import SourceBadge from './SourceBadge.svelte';
   import InstallButton from './InstallButton.svelte';
@@ -22,6 +23,7 @@
     selectable = false,
     selected = false,
     highlight = '',
+    layout = 'grid',
     onToggleSelect,
     onChanged
   }: {
@@ -32,6 +34,7 @@
     sub?: string | null;
     homepage?: string | null;
     allowPick?: boolean;
+    layout?: 'grid' | 'list';
     selectable?: boolean;
     selected?: boolean;
     highlight?: string;
@@ -83,7 +86,13 @@
   }
 </script>
 
-<div class="card app-card" class:selected={selectable && selected} oncontextmenu={onCtx} role="group">
+<div
+  class="card app-card"
+  class:list={layout === 'list'}
+  class:selected={selectable && selected}
+  oncontextmenu={onCtx}
+  role="group"
+>
   <a
     class="main"
     {href}
@@ -95,9 +104,12 @@
     }}
   >
     {#if selectable}
-      <span class="sel-check"><input type="checkbox" checked={selected} tabindex="-1" /></span>
+      <span class="acheck sel-check">
+        <input type="checkbox" checked={selected} tabindex="-1" />
+        <span class="box"><Check size={13} /></span>
+      </span>
     {/if}
-    <AppIcon {name} source={primary.source} id={primary.id} {homepage} />
+    <AppIcon {name} source={primary.source} id={primary.id} {homepage} size={layout === 'list' ? 34 : 44} />
     <div class="meta">
       <div class="name">
         {#each nameParts as p, i (i)}{#if p.hit}<mark>{p.t}</mark>{:else}{p.t}{/if}{/each}
@@ -137,6 +149,24 @@
   .app-card.selected {
     border-color: var(--accent);
   }
+  .app-card.list {
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 14px;
+  }
+  .app-card.list .main {
+    flex: 1;
+    align-items: center;
+  }
+  .app-card.list .desc {
+    display: none;
+  }
+  .app-card.list .foot {
+    margin-top: 0;
+    flex-shrink: 0;
+    gap: 12px;
+  }
   .main {
     display: flex;
     gap: 12px;
@@ -146,15 +176,7 @@
     align-items: flex-start;
   }
   .sel-check {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
     padding-top: 2px;
-  }
-  .sel-check input {
-    width: 17px;
-    height: 17px;
-    accent-color: var(--accent);
   }
   .meta {
     min-width: 0;

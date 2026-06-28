@@ -6,12 +6,20 @@
     closeContextMenu();
     it.onSelect();
   }
+
+  function onWindowContextMenu(e: MouseEvent) {
+    closeContextMenu();
+    const t = e.target as HTMLElement | null;
+    if (!t?.closest('input, textarea, [contenteditable="true"]')) {
+      e.preventDefault();
+    }
+  }
 </script>
 
 <svelte:window
   onclick={closeContextMenu}
   onscroll={closeContextMenu}
-  oncontextmenu={closeContextMenu}
+  oncontextmenu={onWindowContextMenu}
   onkeydown={(e) => e.key === 'Escape' && closeContextMenu()}
 />
 

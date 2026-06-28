@@ -8,7 +8,12 @@
   import { runOp } from '$lib/install';
   import { copyText } from '$lib/clipboard';
   import { openContextMenu } from '$lib/stores/contextMenu';
-  import { settings, setInstalledSort, setInstalledGroup } from '$lib/stores/settings';
+  import {
+    settings,
+    setInstalledSort,
+    setInstalledGroup,
+    setInstalledView
+  } from '$lib/stores/settings';
   import {
     installed,
     updates,
@@ -22,9 +27,11 @@
     loadUpdates,
     refreshLibrary
   } from '$lib/stores/library';
+  import { Check } from '@lucide/svelte';
   import InstallButton from '$lib/components/InstallButton.svelte';
   import AppIcon from '$lib/components/AppIcon.svelte';
   import SourceBadge from '$lib/components/SourceBadge.svelte';
+  import ViewToggle from '$lib/components/ViewToggle.svelte';
 
   let updatingAll = $state<Source | null>(null);
   let updatingEverything = $state(false);
@@ -281,8 +288,9 @@
         </div>
       {/if}
       <div class="toolbar">
-        <label class="selall">
+        <label class="selall acheck">
           <input type="checkbox" checked={allVisibleSelected} onchange={toggleAll} />
+          <span class="box"><Check size={13} /></span>
           Select all
         </label>
         <input class="filter" placeholder="Filter installed…" bind:value={filter} />
@@ -307,6 +315,8 @@
             <span class="slider"></span>
           </span>
         </label>
+        <div class="tb-spacer"></div>
+        <ViewToggle value={$settings.installedView} onChange={setInstalledView} />
       </div>
 
       {#if sorted.length === 0}
@@ -317,7 +327,7 @@
             <SourceBadge source={g.source} />
             <span class="count soft">{g.items.length}</span>
           </div>
-          <div class="list">
+          <div class={$settings.installedView === 'grid' ? 'grid-rows' : 'list'}>
             {#each g.items as p (p.source + p.id)}
               <div
                 class="row card"
@@ -325,12 +335,13 @@
                 oncontextmenu={(e) => rowMenu(e, p)}
                 role="group"
               >
-                <label class="sel">
+                <label class="acheck sel">
                   <input
                     type="checkbox"
                     checked={selected.has(selKey(p))}
                     onchange={() => toggleSel(selKey(p))}
                   />
+                  <span class="box"><Check size={13} /></span>
                 </label>
                 <AppIcon name={p.name} size={36} source={p.source} id={p.id} homepage={p.homepage} />
                 <div class="info">
@@ -349,7 +360,7 @@
           </div>
         {/each}
       {:else}
-        <div class="list">
+        <div class={$settings.installedView === 'grid' ? 'grid-rows' : 'list'}>
           {#each sorted as p (p.source + p.id)}
             <div
               class="row card"
@@ -357,12 +368,13 @@
               oncontextmenu={(e) => rowMenu(e, p)}
               role="group"
             >
-              <label class="sel">
+              <label class="acheck sel">
                 <input
                   type="checkbox"
                   checked={selected.has(selKey(p))}
                   onchange={() => toggleSel(selKey(p))}
                 />
+                <span class="box"><Check size={13} /></span>
               </label>
               <AppIcon name={p.name} size={36} source={p.source} id={p.id} homepage={p.homepage} />
               <div class="info">
@@ -530,6 +542,14 @@
     flex-direction: column;
     gap: 8px;
   }
+  .grid-rows {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 8px;
+  }
+  .tb-spacer {
+    flex: 1;
+  }
   .row {
     display: flex;
     align-items: center;
@@ -596,18 +616,6 @@
     font-size: 0.86rem;
     color: var(--text-muted);
     white-space: nowrap;
-  }
-  .selall input,
-  .sel input {
-    width: 16px;
-    height: 16px;
-    accent-color: var(--accent);
-    cursor: pointer;
-  }
-  .sel {
-    display: inline-flex;
-    align-items: center;
-    flex-shrink: 0;
   }
   .row.selected {
     border-color: var(--accent);

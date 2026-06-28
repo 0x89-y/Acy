@@ -7,6 +7,8 @@ export type AccentName = 'purple' | 'blue' | 'green' | 'pink' | 'orange' | 'teal
 
 export type SettingsTab = 'general' | 'sources' | 'updates' | 'about';
 
+export type ViewMode = 'grid' | 'list';
+
 export const ACCENTS: { name: AccentName; label: string; color: string }[] = [
   { name: 'purple', label: 'Purple', color: '#7c3aed' },
   { name: 'blue', label: 'Blue', color: '#2563eb' },
@@ -25,12 +27,15 @@ export interface Settings {
   downloadIcons: boolean;
   setupComplete: boolean;
   closeToTray: boolean;
+  askCloseToTray: boolean;
   notifyUpdates: boolean;
   refreshOnStartup: boolean;
   autoCheckUpdates: boolean;
   installedSort: 'name' | 'source';
   installedGroup: boolean;
   settingsTab: SettingsTab;
+  discoverView: ViewMode;
+  installedView: ViewMode;
 }
 
 const KEY = 'acy-settings';
@@ -44,12 +49,15 @@ const DEFAULTS: Settings = {
   downloadIcons: false,
   setupComplete: false,
   closeToTray: false,
+  askCloseToTray: true,
   notifyUpdates: false,
   refreshOnStartup: true,
   autoCheckUpdates: false,
   installedSort: 'name',
   installedGroup: false,
-  settingsTab: 'general'
+  settingsTab: 'general',
+  discoverView: 'grid',
+  installedView: 'list'
 };
 
 function load(): Settings {
@@ -106,6 +114,10 @@ export function setCloseToTray(value: boolean) {
   settings.update((s) => ({ ...s, closeToTray: value }));
 }
 
+export function setAskCloseToTray(value: boolean) {
+  settings.update((s) => ({ ...s, askCloseToTray: value }));
+}
+
 export function setNotifyUpdates(value: boolean) {
   settings.update((s) => ({ ...s, notifyUpdates: value }));
 }
@@ -128,6 +140,14 @@ export function setInstalledGroup(value: boolean) {
 
 export function setSettingsTab(value: SettingsTab) {
   settings.update((s) => ({ ...s, settingsTab: value }));
+}
+
+export function setDiscoverView(value: ViewMode) {
+  settings.update((s) => ({ ...s, discoverView: value }));
+}
+
+export function setInstalledView(value: ViewMode) {
+  settings.update((s) => ({ ...s, installedView: value }));
 }
 
 export function completeSetup() {

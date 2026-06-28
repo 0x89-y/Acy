@@ -4,10 +4,11 @@
   import { Search, X } from '@lucide/svelte';
   import AppCard from '$lib/components/AppCard.svelte';
   import ManagerSetup from '$lib/components/ManagerSetup.svelte';
+  import ViewToggle from '$lib/components/ViewToggle.svelte';
   import * as api from '$lib/api';
   import type { CuratedApp, CuratedFile, SearchHit, Source, Variant } from '$lib/types';
   import { enabledSources, managers } from '$lib/stores/managers';
-  import { settings } from '$lib/stores/settings';
+  import { settings, setDiscoverView } from '$lib/stores/settings';
   import { installedKeys, loadInstalled } from '$lib/stores/library';
   import { runOp } from '$lib/install';
 
@@ -39,6 +40,7 @@
   let searchedQuery = $state('');
   let trimmed = $derived(query.trim());
   let showSearch = $derived(trimmed.length > 0);
+  let gridClass = $derived($settings.discoverView === 'list' ? 'list-flow' : 'grid');
   let searchedCurrent = $derived(showSearch && searchedQuery === trimmed);
 
   const COLLAPSED = 4;
@@ -304,6 +306,7 @@
 
 {#if !loadingCurated && !noManagers}
   <div class="discover-bar">
+    <ViewToggle value={$settings.discoverView} onChange={setDiscoverView} />
     <button class="btn btn-ghost sel-toggle" onclick={() => (selectMode ? exitSelect() : (selectMode = true))}>
       {selectMode ? 'Cancel selection' : 'Select multiple'}
     </button>
@@ -325,7 +328,7 @@
   {#if curatedMatches.length > 0}
     <section class="res-section">
       <h2 class="res-head">From your list</h2>
-      <div class="grid">
+      <div class={gridClass}>
         {#each curatedMatches as app (app.source + app.id)}
           {@const vs = curatedVariants(app, $settings.managers)}
           <AppCard
@@ -336,6 +339,7 @@
             sub={app.id}
             homepage={app.icon ?? app.homepage}
             allowPick
+            layout={$settings.discoverView}
             highlight={trimmed}
             selectable={selectMode}
             selected={selectedApps.has(appKey(app))}
@@ -355,13 +359,14 @@
     {#if managerResults.length > 0}
       <section class="res-section">
         <h2 class="res-head">From package managers</h2>
-        <div class="grid">
+        <div class={gridClass}>
           {#each managerResults as hit (hit.name + hit.variants[0].id)}
             <AppCard
               name={hit.name}
               description={hit.description}
               variants={hit.variants.map((v) => ({ source: v.source, id: v.id }))}
               installed={hitInstalled(hit)}
+              layout={$settings.discoverView}
               highlight={trimmed}
               onChanged={() => loadInstalled(true)}
             />
@@ -421,7 +426,7 @@
           </button>
         {/if}
       </div>
-      <div class="grid">
+      <div class={gridClass}>
         {#each expanded[cat.id] ? cat.apps : cat.apps.slice(0, COLLAPSED) as app (app.source + app.id)}
           {@const vs = curatedVariants(app, $settings.managers)}
           <AppCard
@@ -432,6 +437,7 @@
             sub={app.id}
             homepage={app.icon ?? app.homepage}
             allowPick
+            layout={$settings.discoverView}
             selectable={selectMode}
             selected={selectedApps.has(appKey(app))}
             onToggleSelect={() => toggleSelectApp(app)}
@@ -535,8 +541,15 @@
   }
   .discover-bar {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
     margin: -10px 0 16px;
+  }
+  .list-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
   .sel-toggle {
     font-size: 0.85rem;

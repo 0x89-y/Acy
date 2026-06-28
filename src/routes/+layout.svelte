@@ -11,7 +11,9 @@
   import { goto } from '$app/navigation';
   import Nav from '$lib/components/Nav.svelte';
   import OpStack from '$lib/components/OpStack.svelte';
+  import AppUpdateToast from '$lib/components/AppUpdateToast.svelte';
   import ContextMenu from '$lib/components/ContextMenu.svelte';
+  import CloseToTrayPrompt from '$lib/components/CloseToTrayPrompt.svelte';
   import ResizeHandles from '$lib/components/ResizeHandles.svelte';
   import Setup from '$lib/components/Setup.svelte';
   import { loadManagers } from '$lib/stores/managers';
@@ -59,7 +61,9 @@
   </main>
 {/if}
 <OpStack />
+<AppUpdateToast />
 <ContextMenu />
+<CloseToTrayPrompt />
 <ResizeHandles />
 
 <style>

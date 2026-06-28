@@ -1,8 +1,10 @@
-import { get } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import * as api from '$lib/api';
 import { updatesCount } from './managers';
 import { settings } from './settings';
+
+export const closePromptOpen = writable(false);
 
 let started = false;
 let lastNotified = 0;
@@ -14,9 +16,13 @@ export async function initTray() {
   try {
     const win = getCurrentWindow();
     await win.onCloseRequested((event) => {
-      if (get(settings).closeToTray) {
+      const s = get(settings);
+      if (s.closeToTray) {
         event.preventDefault();
         void win.hide();
+      } else if (s.askCloseToTray) {
+        event.preventDefault();
+        closePromptOpen.set(true);
       }
     });
   } catch (e) {

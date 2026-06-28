@@ -259,3 +259,42 @@ button {
     background-position: 0 0;
   }
 }
+
+.acheck {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.acheck input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+
+.acheck .box {
+  width: 19px;
+  height: 19px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.acheck:hover .box {
+  border-color: var(--accent);
+}
+
+.acheck input:checked + .box {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
