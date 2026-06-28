@@ -1,6 +1,17 @@
-import { enqueue } from '$lib/stores/ops';
+import { enqueue, notice } from '$lib/stores/ops';
 import * as api from '$lib/api';
 import type { Source } from '$lib/types';
+
+/** Show a single summary toast after a batch install/uninstall/update. */
+export function summarizeBatch(
+  total: number,
+  ok: number,
+  verb: 'installed' | 'removed' | 'updated'
+) {
+  const fail = total - ok;
+  if (fail === 0) notice(`${ok} ${ok === 1 ? 'app' : 'apps'} ${verb}.`, 'ok');
+  else notice(`${ok} ${verb}, ${fail} failed.`, ok > 0 ? 'warn' : 'error');
+}
 
 // Shared install/update/uninstall action used by InstallButton and the
 // multi-source split button, so the verify + activity-logging behaviour lives in

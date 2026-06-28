@@ -8,7 +8,26 @@ mod tray;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let mut builder = tauri::Builder::default()
+    use tauri::Manager;
+
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default();
+
+    // Single instance: a second launch focuses the running window (which may be
+    // hidden in the tray) instead of opening another copy. Must be the first
+    // plugin registered. Desktop only.
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+                let _ = win.unminimize();
+                let _ = win.set_focus();
+            }
+        }));
+    }
+
+    builder = builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
@@ -50,6 +69,9 @@ pub fn run() {
             commands::scoop_buckets,
             commands::scoop_known_buckets,
             commands::add_scoop_bucket,
+            commands::winget_update_sources,
+            commands::scoop_update,
+            commands::scoop_cleanup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

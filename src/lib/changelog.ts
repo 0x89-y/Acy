@@ -10,6 +10,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.5.2',
+    date: '2026-06-28',
+    changes: [
+      'Launching Acy again now focuses the running window (even from the tray) instead of opening a second copy.',
+      'Press ? to see all keyboard shortcuts.',
+      'Multi-select install or uninstall now shows a single summary (e.g. "5 apps installed").',
+      'New Maintenance actions in Settings: update winget sources, update Scoop, and clean up old Scoop versions.'
+    ]
+  },
+  {
     version: '0.5.1',
     date: '2026-06-28',
     changes: [

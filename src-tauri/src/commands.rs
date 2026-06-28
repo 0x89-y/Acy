@@ -273,6 +273,36 @@ pub async fn add_scoop_bucket(app: AppHandle, name: String, op_id: String) -> Re
         .map_err(|e| e.to_string())
 }
 
+/// Refresh winget's package sources (`winget source update`). Streams output.
+#[tauri::command]
+pub async fn winget_update_sources(app: AppHandle, op_id: String) -> Result<i32, String> {
+    runner::stream(
+        &app,
+        &op_id,
+        OP_EVENT,
+        "winget",
+        &["source".to_string(), "update".to_string()],
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Update Scoop itself and its buckets (`scoop update`). Streams output.
+#[tauri::command]
+pub async fn scoop_update(app: AppHandle, op_id: String) -> Result<i32, String> {
+    runner::stream(&app, &op_id, OP_EVENT, "powershell", &runner::ps_args("scoop update"))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Remove outdated Scoop app versions (`scoop cleanup *`). Streams output.
+#[tauri::command]
+pub async fn scoop_cleanup(app: AppHandle, op_id: String) -> Result<i32, String> {
+    runner::stream(&app, &op_id, OP_EVENT, "powershell", &runner::ps_args("scoop cleanup *"))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Open a file picker for a local/network installer, returning the chosen path
 /// (or null if cancelled). Used by the "local" install source.
 #[tauri::command]

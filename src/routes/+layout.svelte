@@ -14,6 +14,7 @@
   import AppUpdateToast from '$lib/components/AppUpdateToast.svelte';
   import ContextMenu from '$lib/components/ContextMenu.svelte';
   import CloseToTrayPrompt from '$lib/components/CloseToTrayPrompt.svelte';
+  import ShortcutsHelp, { toggleShortcuts } from '$lib/components/ShortcutsHelp.svelte';
   import ResizeHandles from '$lib/components/ResizeHandles.svelte';
   import Setup from '$lib/components/Setup.svelte';
   import { loadManagers } from '$lib/stores/managers';
@@ -28,8 +29,18 @@
   /** How often to re-check for available updates while the app is open. */
   const UPDATE_POLL_MS = 30 * 60 * 1000;
 
-  // Ctrl/⌘ + 1/2/3 jump between the main pages.
+  function isTyping(e: KeyboardEvent) {
+    const t = e.target as HTMLElement | null;
+    return t?.tagName === 'INPUT' || t?.tagName === 'TEXTAREA' || t?.isContentEditable === true;
+  }
+
+  // ? opens the shortcuts help; Ctrl/⌘ + 1/2/3 jump between the main pages.
   function onKey(e: KeyboardEvent) {
+    if (e.key === '?' && !isTyping(e)) {
+      e.preventDefault();
+      toggleShortcuts();
+      return;
+    }
     if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
     const dest = e.key === '1' ? '/' : e.key === '2' ? '/installed' : e.key === '3' ? '/settings' : null;
     if (dest) {
@@ -69,6 +80,7 @@
 <AppUpdateToast />
 <ContextMenu />
 <CloseToTrayPrompt />
+<ShortcutsHelp />
 <ResizeHandles />
 
 <style>

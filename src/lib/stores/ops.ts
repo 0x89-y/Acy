@@ -33,6 +33,20 @@ interface Job {
 /** All operations currently shown as toasts (queued, running, or finished). */
 export const ops = writable<Op[]>([]);
 
+/** Lightweight summary toasts (e.g. "5 apps installed"), auto-dismissed. */
+export type Notice = { id: string; message: string; kind: 'ok' | 'warn' | 'error' };
+export const notices = writable<Notice[]>([]);
+
+export function notice(message: string, kind: Notice['kind'] = 'ok') {
+  const id = newId();
+  notices.update((list) => [...list, { id, message, kind }]);
+  setTimeout(() => notices.update((list) => list.filter((n) => n.id !== id)), 6000);
+}
+
+export function dismissNotice(id: string) {
+  notices.update((list) => list.filter((n) => n.id !== id));
+}
+
 const queue: Job[] = [];
 let working = false;
 let listening = false;
