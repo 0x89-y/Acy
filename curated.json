@@ -45,7 +45,9 @@
         { "id": "ONLYOFFICE.DesktopEditors", "source": "winget", "name": "ONLYOFFICE", "homepage": "https://www.onlyoffice.com/", "description": "MS Office-compatible office suite.", "alternates": [{ "source": "scoop", "id": "onlyoffice-desktopeditors" }, { "source": "choco", "id": "onlyoffice" }] },
         { "id": "Anki.Anki", "source": "winget", "name": "Anki", "homepage": "https://apps.ankiweb.net/", "description": "Spaced-repetition flashcards.", "alternates": [{ "source": "scoop", "id": "anki" }, { "source": "choco", "id": "anki" }] },
         { "id": "Logseq.Logseq", "source": "winget", "name": "Logseq", "homepage": "https://logseq.com/", "description": "Privacy-first outliner and knowledge base.", "alternates": [{ "source": "scoop", "id": "logseq" }, { "source": "choco", "id": "logseq" }] },
-        { "id": "StandardNotes.StandardNotes", "source": "winget", "name": "Standard Notes", "homepage": "https://standardnotes.com/", "description": "Encrypted, private notes.", "alternates": [{ "source": "scoop", "id": "standardnotes" }] }
+        { "id": "StandardNotes.StandardNotes", "source": "winget", "name": "Standard Notes", "homepage": "https://standardnotes.com/", "description": "Encrypted, private notes.", "alternates": [{ "source": "scoop", "id": "standardnotes" }] },
+        { "id": "Nextcloud.NextcloudDesktop", "source": "winget", "name": "Nextcloud", "homepage": "https://nextcloud.com/", "description": "Sync client for self-hosted Nextcloud storage.", "alternates": [{ "source": "scoop", "id": "nextcloud" }, { "source": "choco", "id": "nextcloud-client" }] },
+        { "id": "Kingsoft.WPSOffice", "source": "winget", "name": "WPS Office", "homepage": "https://www.wps.com/", "description": "MS Office-compatible office suite.", "alternates": [{ "source": "scoop", "id": "wpsoffice" }, { "source": "choco", "id": "wps-office-free" }, { "source": "msstore", "id": "9NSGM705MQWC" }] }
       ]
     },
     {
@@ -65,7 +67,9 @@
         { "id": "Neovim.Neovim", "source": "winget", "name": "Neovim", "homepage": "https://neovim.io/", "description": "Vim-based, extensible text editor.", "alternates": [{ "source": "scoop", "id": "neovim" }, { "source": "choco", "id": "neovim" }] },
         { "id": "GoLang.Go", "source": "winget", "name": "Go", "homepage": "https://go.dev/", "description": "Go language runtime and tools.", "alternates": [{ "source": "scoop", "id": "go" }, { "source": "choco", "id": "golang" }] },
         { "id": "JanDeDobbeleer.OhMyPosh", "source": "winget", "name": "Oh My Posh", "homepage": "https://ohmyposh.dev/", "description": "Prompt theme engine for any shell.", "alternates": [{ "source": "scoop", "id": "oh-my-posh" }, { "source": "choco", "id": "oh-my-posh" }] },
-        { "id": "Anysphere.Cursor", "source": "winget", "name": "Cursor", "homepage": "https://cursor.com/", "description": "AI-first code editor." }
+        { "id": "Anysphere.Cursor", "source": "winget", "name": "Cursor", "homepage": "https://cursor.com/", "description": "AI-first code editor." },
+        { "id": "SublimeHQ.SublimeText.4", "source": "winget", "name": "Sublime Text", "homepage": "https://www.sublimetext.com/", "description": "Fast, lightweight code and text editor.", "alternates": [{ "source": "scoop", "id": "sublime-text" }, { "source": "choco", "id": "sublimetext4" }] },
+        { "id": "Ollama.Ollama", "source": "winget", "name": "Ollama", "homepage": "https://ollama.com/", "description": "Run large language models locally.", "alternates": [{ "source": "scoop", "id": "ollama" }, { "source": "choco", "id": "Ollama" }] }
       ]
     },
     {
@@ -80,7 +84,10 @@
         { "id": "MullvadVPN.MullvadVPN", "source": "winget", "name": "Mullvad VPN", "homepage": "https://mullvad.net/", "description": "Privacy-focused VPN." },
         { "id": "Cryptomator.Cryptomator", "source": "winget", "name": "Cryptomator", "homepage": "https://cryptomator.org/", "description": "Client-side encryption for cloud storage.", "alternates": [{ "source": "scoop", "id": "cryptomator" }, { "source": "choco", "id": "cryptomator" }] },
         { "id": "IDRIX.VeraCrypt", "source": "winget", "name": "VeraCrypt", "homepage": "https://www.veracrypt.fr/", "description": "Disk encryption software.", "alternates": [{ "source": "choco", "id": "veracrypt" }] },
-        { "id": "Malwarebytes.Malwarebytes", "source": "winget", "name": "Malwarebytes", "homepage": "https://www.malwarebytes.com/", "description": "Anti-malware protection and removal.", "alternates": [{ "source": "choco", "id": "malwarebytes" }] }
+        { "id": "Malwarebytes.Malwarebytes", "source": "winget", "name": "Malwarebytes", "homepage": "https://www.malwarebytes.com/", "description": "Anti-malware protection and removal.", "alternates": [{ "source": "choco", "id": "malwarebytes" }] },
+        { "id": "WiresharkFoundation.Wireshark", "source": "winget", "name": "Wireshark", "homepage": "https://www.wireshark.org/", "description": "Network protocol analyzer and packet capture.", "alternates": [{ "source": "scoop", "id": "wireshark" }, { "source": "choco", "id": "wireshark" }] },
+        { "id": "GnuPG.Gpg4win", "source": "winget", "name": "Gpg4win", "homepage": "https://www.gpg4win.org/", "description": "GnuPG encryption and signing for Windows.", "alternates": [{ "source": "scoop", "id": "gpg4win" }, { "source": "choco", "id": "Gpg4win" }] },
+        { "id": "GlassWire.GlassWire", "source": "winget", "name": "GlassWire", "homepage": "https://www.glasswire.com/", "description": "Network monitor and firewall.", "alternates": [{ "source": "choco", "id": "glasswire" }] }
       ]
     },
     {
@@ -119,7 +126,9 @@
         { "id": "Inkscape.Inkscape", "source": "winget", "name": "Inkscape", "homepage": "https://inkscape.org/", "description": "Vector graphics editor.", "alternates": [{ "source": "scoop", "id": "inkscape" }, { "source": "choco", "id": "InkScape" }] },
         { "id": "dotPDN.PaintDotNet", "source": "winget", "name": "Paint.NET", "homepage": "https://www.getpaint.net/", "description": "Image and photo editor.", "alternates": [{ "source": "scoop", "id": "paint.net" }, { "source": "choco", "id": "paint.net" }] },
         { "id": "Figma.Figma", "source": "winget", "name": "Figma", "homepage": "https://www.figma.com/", "description": "Collaborative interface design tool." },
-        { "id": "KDE.Kdenlive", "source": "winget", "name": "Kdenlive", "homepage": "https://kdenlive.org/", "description": "Open-source video editor.", "alternates": [{ "source": "scoop", "id": "kdenlive" }, { "source": "choco", "id": "kdenlive" }] }
+        { "id": "KDE.Kdenlive", "source": "winget", "name": "Kdenlive", "homepage": "https://kdenlive.org/", "description": "Open-source video editor.", "alternates": [{ "source": "scoop", "id": "kdenlive" }, { "source": "choco", "id": "kdenlive" }] },
+        { "id": "darktable.darktable", "source": "winget", "name": "darktable", "homepage": "https://www.darktable.org/", "description": "RAW photo workflow and editor.", "alternates": [{ "source": "scoop", "id": "darktable" }, { "source": "choco", "id": "darktable" }] },
+        { "id": "GodotEngine.GodotEngine", "source": "winget", "name": "Godot", "homepage": "https://godotengine.org/", "description": "Open-source 2D and 3D game engine.", "alternates": [{ "source": "scoop", "id": "godot" }, { "source": "choco", "id": "godot" }] }
       ]
     },
     {
@@ -137,7 +146,9 @@
         { "id": "Ubisoft.Connect", "source": "winget", "name": "Ubisoft Connect", "homepage": "https://www.ubisoft.com/ubisoft-connect", "description": "Ubisoft game launcher." },
         { "id": "ItchIo.Itch", "source": "winget", "name": "itch.io", "homepage": "https://itch.io/", "description": "Indie game store and launcher." },
         { "id": "MoonlightGameStreamingProject.Moonlight", "source": "winget", "name": "Moonlight", "homepage": "https://moonlight-stream.org/", "description": "Game streaming client for NVIDIA GameStream/Sunshine." },
-        { "id": "Libretro.RetroArch", "source": "winget", "name": "RetroArch", "homepage": "https://www.retroarch.com/", "description": "Frontend for emulators and game engines.", "alternates": [{ "source": "scoop", "id": "retroarch" }, { "source": "choco", "id": "retroarch" }] }
+        { "id": "Libretro.RetroArch", "source": "winget", "name": "RetroArch", "homepage": "https://www.retroarch.com/", "description": "Frontend for emulators and game engines.", "alternates": [{ "source": "scoop", "id": "retroarch" }, { "source": "choco", "id": "retroarch" }] },
+        { "id": "LizardByte.Sunshine", "source": "winget", "name": "Sunshine", "homepage": "https://app.lizardbyte.dev/Sunshine/", "description": "Self-hosted game-stream host for Moonlight.", "alternates": [{ "source": "scoop", "id": "sunshine" }, { "source": "choco", "id": "sunshine" }] },
+        { "id": "Nexus-Mods.Vortex", "source": "winget", "name": "Vortex", "homepage": "https://www.nexusmods.com/about/vortex/", "description": "Mod manager for games from Nexus Mods.", "alternates": [{ "source": "choco", "id": "vortex" }] }
       ]
     },
     {
@@ -164,7 +175,11 @@
         { "id": "LocalSend.LocalSend", "source": "winget", "name": "LocalSend", "homepage": "https://localsend.org/", "description": "Share files over the local network.", "alternates": [{ "source": "scoop", "id": "localsend" }, { "source": "choco", "id": "localsend" }] },
         { "id": "WinDirStat.WinDirStat", "source": "winget", "name": "WinDirStat", "homepage": "https://windirstat.net/", "description": "Disk usage statistics and visualization.", "alternates": [{ "source": "scoop", "id": "windirstat" }, { "source": "choco", "id": "windirstat" }] },
         { "id": "Syncthing.Syncthing", "source": "winget", "name": "Syncthing", "homepage": "https://syncthing.net/", "description": "Continuous, peer-to-peer file synchronization.", "alternates": [{ "source": "scoop", "id": "syncthing" }, { "source": "choco", "id": "syncthing" }] },
-        { "id": "CPUID.CPU-Z", "source": "winget", "name": "CPU-Z", "homepage": "https://www.cpuid.com/softwares/cpu-z.html", "description": "CPU and system hardware information.", "alternates": [{ "source": "scoop", "id": "cpu-z" }, { "source": "choco", "id": "cpu-z" }] }
+        { "id": "CPUID.CPU-Z", "source": "winget", "name": "CPU-Z", "homepage": "https://www.cpuid.com/softwares/cpu-z.html", "description": "CPU and system hardware information.", "alternates": [{ "source": "scoop", "id": "cpu-z" }, { "source": "choco", "id": "cpu-z" }] },
+        { "id": "RARLab.WinRAR", "source": "winget", "name": "WinRAR", "homepage": "https://www.win-rar.com/", "description": "Archiver for RAR and ZIP files.", "alternates": [{ "source": "scoop", "id": "winrar" }, { "source": "choco", "id": "winrar" }] },
+        { "id": "M2Team.NanaZip", "source": "winget", "name": "NanaZip", "homepage": "https://github.com/M2Team/NanaZip", "description": "Modern fork of 7-Zip for Windows 11.", "alternates": [{ "source": "scoop", "id": "nanazip" }, { "source": "choco", "id": "nanazip" }, { "source": "msstore", "id": "9N8G7TSCL18R" }] },
+        { "id": "REALiX.HWiNFO", "source": "winget", "name": "HWiNFO", "homepage": "https://www.hwinfo.com/", "description": "In-depth hardware monitoring and reporting.", "alternates": [{ "source": "scoop", "id": "hwinfo" }, { "source": "choco", "id": "hwinfo" }] },
+        { "id": "TechPowerUp.GPU-Z", "source": "winget", "name": "GPU-Z", "homepage": "https://www.techpowerup.com/gpuz/", "description": "Graphics card information and monitoring.", "alternates": [{ "source": "scoop", "id": "gpu-z" }, { "source": "choco", "id": "gpu-z" }] }
       ]
     }
   ]

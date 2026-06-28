@@ -53,6 +53,17 @@ export function dismiss(id: string) {
   retryable.delete(id);
 }
 
+/** Dismiss all finished (done/error) toasts; running/queued ones stay. */
+export function dismissAll() {
+  let removed: string[] = [];
+  ops.update((list) => {
+    const keep = list.filter((op) => op.state === 'running' || op.state === 'queued');
+    removed = list.filter((op) => !keep.includes(op)).map((op) => op.id);
+    return keep;
+  });
+  for (const id of removed) retryable.delete(id);
+}
+
 /** Re-run a finished (usually failed) op as a fresh op, dropping the old toast. */
 export function retry(id: string) {
   const args = retryable.get(id);

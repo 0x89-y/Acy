@@ -8,8 +8,10 @@
 
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
+  import { goto } from '$app/navigation';
   import Nav from '$lib/components/Nav.svelte';
   import OpStack from '$lib/components/OpStack.svelte';
+  import ContextMenu from '$lib/components/ContextMenu.svelte';
   import ResizeHandles from '$lib/components/ResizeHandles.svelte';
   import Setup from '$lib/components/Setup.svelte';
   import { loadManagers } from '$lib/stores/managers';
@@ -24,9 +26,20 @@
   /** How often to re-check for available updates while the app is open. */
   const UPDATE_POLL_MS = 30 * 60 * 1000;
 
+  // Ctrl/⌘ + 1/2/3 jump between the main pages.
+  function onKey(e: KeyboardEvent) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    const dest = e.key === '1' ? '/' : e.key === '2' ? '/installed' : e.key === '3' ? '/settings' : null;
+    if (dest) {
+      e.preventDefault();
+      goto(dest);
+    }
+  }
+
   onMount(() => {
     initTray();
     initAppUpdater();
+    window.addEventListener('keydown', onKey);
     // Detect managers first so the update check runs against the right sources,
     // then keep the nav badge current with a periodic background refresh. The
     // initial check is skipped when the user turns off startup refresh.
@@ -35,7 +48,10 @@
       if (get(settings).refreshOnStartup) loadUpdates();
     })();
     const timer = setInterval(() => loadUpdates(true), UPDATE_POLL_MS);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('keydown', onKey);
+    };
   });
 </script>
 
@@ -48,6 +64,7 @@
   </main>
 {/if}
 <OpStack />
+<ContextMenu />
 <ResizeHandles />
 
 <style>

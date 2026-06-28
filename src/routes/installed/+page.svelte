@@ -1,8 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { goto } from '$app/navigation';
+  import { openUrl } from '@tauri-apps/plugin-opener';
   import * as api from '$lib/api';
-  import type { Source } from '$lib/types';
+  import type { Source, Package } from '$lib/types';
   import { enqueue } from '$lib/stores/ops';
+  import { runOp } from '$lib/install';
+  import { copyText } from '$lib/clipboard';
+  import { openContextMenu } from '$lib/stores/contextMenu';
+  import { settings, setInstalledSort, setInstalledGroup } from '$lib/stores/settings';
   import {
     installed,
     updates,
@@ -23,10 +29,8 @@
   let updatingAll = $state<Source | null>(null);
   let updatingEverything = $state(false);
 
-  // Filter / sort / grouping for the "All installed" list.
+  // Filter is transient; sort + grouping persist via settings.
   let filter = $state('');
-  let sortBy = $state<'name' | 'source'>('name');
-  let groupByManager = $state(false);
 
   let loading = $derived($installedLoading || $updatesLoading);
   let error = $derived($installedError ?? $updatesError);
@@ -49,7 +53,7 @@
   );
   let sorted = $derived(
     [...filtered].sort((a, b) => {
-      if (sortBy === 'source' && a.source !== b.source) {
+      if ($settings.installedSort === 'source' && a.source !== b.source) {
         return sourceOrder.indexOf(a.source) - sourceOrder.indexOf(b.source);
       }
       return a.name.localeCompare(b.name);
@@ -105,6 +109,80 @@
     }
     updatingEverything = false;
   }
+
+  // ---- Multi-select uninstall ----
+  function selKey(p: Package) {
+    return `${p.source}:${p.id}`;
+  }
+  let selected = $state<Set<string>>(new Set());
+  let selectedCount = $derived(selected.size);
+  let allVisibleSelected = $derived(
+    sorted.length > 0 && sorted.every((p) => selected.has(selKey(p)))
+  );
+
+  function toggleSel(k: string) {
+    const next = new Set(selected);
+    if (next.has(k)) next.delete(k);
+    else next.add(k);
+    selected = next;
+  }
+  function toggleAll() {
+    const next = new Set(selected);
+    if (allVisibleSelected) {
+      for (const p of sorted) next.delete(selKey(p));
+    } else {
+      for (const p of sorted) next.add(selKey(p));
+    }
+    selected = next;
+  }
+  function clearSel() {
+    selected = new Set();
+  }
+
+  // Batch uninstall: one confirm for the whole selection, then run sequentially.
+  let removing = $state(false);
+  let confirmingBatch = $state(false);
+  let batchTimer: ReturnType<typeof setTimeout> | undefined;
+  onDestroy(() => clearTimeout(batchTimer));
+
+  function batchClick() {
+    if (!confirmingBatch) {
+      confirmingBatch = true;
+      clearTimeout(batchTimer);
+      batchTimer = setTimeout(() => (confirmingBatch = false), 3500);
+      return;
+    }
+    clearTimeout(batchTimer);
+    confirmingBatch = false;
+    uninstallSelected();
+  }
+
+  async function uninstallSelected() {
+    removing = true;
+    const targets = $installed.filter((p) => selected.has(selKey(p)));
+    for (const p of targets) {
+      await runOp('uninstall', p.source, p.id, p.name);
+    }
+    removing = false;
+    clearSel();
+    refreshLibrary();
+  }
+
+  async function uninstallOne(p: Package) {
+    await runOp('uninstall', p.source, p.id, p.name);
+    refreshLibrary();
+  }
+  function rowMenu(e: MouseEvent, p: Package) {
+    openContextMenu(e, [
+      { label: 'Uninstall', danger: true, onSelect: () => uninstallOne(p) },
+      {
+        label: 'Open details',
+        onSelect: () => goto(`/app/${p.source}/${encodeURIComponent(p.id)}`)
+      },
+      { label: 'Copy id', onSelect: () => copyText(p.id) },
+      ...(p.homepage ? [{ label: 'Open homepage', onSelect: () => openUrl(p.homepage!) }] : [])
+    ]);
+  }
 </script>
 
 <div class="head">
@@ -118,7 +196,17 @@
 </div>
 
 {#if loading && !$installedReady}
-  <p class="muted">Loading installed apps…</p>
+  <div class="list">
+    {#each Array(6) as _, i (i)}
+      <div class="row card">
+        <div class="skeleton sk-icon"></div>
+        <div class="sk-lines">
+          <div class="skeleton sk-line lg"></div>
+          <div class="skeleton sk-line sm"></div>
+        </div>
+      </div>
+    {/each}
+  </div>
 {:else if error}
   <p class="error">{error}</p>
 {:else}
@@ -180,11 +268,37 @@
     {#if $installed.length === 0}
       <p class="muted">Nothing reported by the enabled managers.</p>
     {:else}
+      {#if selectedCount > 0}
+        <div class="sel-bar">
+          <span class="sel-count">{selectedCount} selected</span>
+          <div class="sel-spacer"></div>
+          <button class="btn btn-ghost" onclick={clearSel} disabled={removing}>Clear</button>
+          <button
+            class="btn"
+            class:confirm={confirmingBatch}
+            onclick={batchClick}
+            disabled={removing}
+          >
+            {removing
+              ? 'Removing…'
+              : confirmingBatch
+                ? `Confirm remove ${selectedCount}?`
+                : `Uninstall ${selectedCount}`}
+          </button>
+        </div>
+      {/if}
       <div class="toolbar">
+        <label class="selall">
+          <input type="checkbox" checked={allVisibleSelected} onchange={toggleAll} />
+          Select all
+        </label>
         <input class="filter" placeholder="Filter installed…" bind:value={filter} />
         <label class="sort">
           Sort
-          <select bind:value={sortBy}>
+          <select
+            value={$settings.installedSort}
+            onchange={(e) => setInstalledSort(e.currentTarget.value as 'name' | 'source')}
+          >
             <option value="name">Name</option>
             <option value="source">Manager</option>
           </select>
@@ -192,7 +306,11 @@
         <label class="group-toggle">
           Group by manager
           <span class="switch">
-            <input type="checkbox" bind:checked={groupByManager} />
+            <input
+              type="checkbox"
+              checked={$settings.installedGroup}
+              onchange={(e) => setInstalledGroup(e.currentTarget.checked)}
+            />
             <span class="slider"></span>
           </span>
         </label>
@@ -200,7 +318,7 @@
 
       {#if sorted.length === 0}
         <p class="muted">No installed apps match “{filter}”.</p>
-      {:else if groupByManager}
+      {:else if $settings.installedGroup}
         {#each grouped as g (g.source)}
           <div class="group-head">
             <SourceBadge source={g.source} />
@@ -208,7 +326,19 @@
           </div>
           <div class="list">
             {#each g.items as p (p.source + p.id)}
-              <div class="row card">
+              <div
+                class="row card"
+                class:selected={selected.has(selKey(p))}
+                oncontextmenu={(e) => rowMenu(e, p)}
+                role="group"
+              >
+                <label class="sel">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(selKey(p))}
+                    onchange={() => toggleSel(selKey(p))}
+                  />
+                </label>
                 <AppIcon name={p.name} size={36} source={p.source} id={p.id} homepage={p.homepage} />
                 <div class="info">
                   <a class="name" href={`/app/${p.source}/${encodeURIComponent(p.id)}`}>{p.name}</a>
@@ -228,7 +358,19 @@
       {:else}
         <div class="list">
           {#each sorted as p (p.source + p.id)}
-            <div class="row card">
+            <div
+              class="row card"
+              class:selected={selected.has(selKey(p))}
+              oncontextmenu={(e) => rowMenu(e, p)}
+              role="group"
+            >
+              <label class="sel">
+                <input
+                  type="checkbox"
+                  checked={selected.has(selKey(p))}
+                  onchange={() => toggleSel(selKey(p))}
+                />
+              </label>
               <AppIcon name={p.name} size={36} source={p.source} id={p.id} homepage={p.homepage} />
               <div class="info">
                 <a class="name" href={`/app/${p.source}/${encodeURIComponent(p.id)}`}>{p.name}</a>
@@ -427,5 +569,75 @@
     font-family: var(--font-mono);
     font-size: 0.85rem;
     white-space: pre-wrap;
+  }
+  .sel-bar {
+    position: sticky;
+    top: 64px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+  }
+  .sel-count {
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .sel-spacer {
+    flex: 1;
+  }
+  .sel-bar .confirm {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+  }
+  .selall {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.86rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .selall input,
+  .sel input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .sel {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .row.selected {
+    border-color: var(--accent);
+  }
+  .sk-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+  }
+  .sk-lines {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .sk-line {
+    height: 11px;
+  }
+  .sk-line.lg {
+    width: 45%;
+  }
+  .sk-line.sm {
+    width: 30%;
   }
 </style>

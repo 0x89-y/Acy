@@ -14,6 +14,22 @@ export const VERBS: Record<InstallKind, string> = {
   uninstall: 'Uninstall'
 };
 
+/** The shell command to install a package from a given manager, or null (local). */
+export function installCommand(source: Source, id: string): string | null {
+  switch (source) {
+    case 'winget':
+      return `winget install --id ${id} -e`;
+    case 'scoop':
+      return `scoop install ${id}`;
+    case 'choco':
+      return `choco install ${id}`;
+    case 'msstore':
+      return `winget install --id ${id} --source msstore`;
+    default:
+      return null; // local has no command line
+  }
+}
+
 /**
  * Queue an install/update/uninstall and resolve true on success. Trusts the
  * resulting installed/update state over the process exit code, since some

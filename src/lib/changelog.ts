@@ -10,6 +10,27 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.5.0',
+    date: '2026-06-28',
+    changes: [
+      'Set up a machine fast: multi-select install on Discover and multi-select uninstall on Installed, in one click.',
+      'Right-click menus on app cards and installed rows (install/uninstall, open details, copy id, open homepage).',
+      'Copy an install command or package id from an app, and copy command output from any toast.',
+      'Search upgrades: a clear button and Esc, recent searches, highlighted matches, and arrow-key navigation of results.',
+      'Keyboard shortcuts: Ctrl+1/2/3 switch pages and Esc goes back.',
+      'Uninstalling now asks to confirm, and Acy remembers its window size and position.',
+      'Polish: loading skeletons, a Clear-all for toasts, and Installed sort/grouping and the Settings tab now stick.',
+      'More curated apps.'
+    ]
+  },
+  {
+    version: '0.4.2',
+    date: '2026-06-27',
+    changes: [
+      'Settings are reorganized into tabs (General, Sources, Updates, About) with a sidebar, instead of one long scroll.'
+    ]
+  },
+  {
     version: '0.4.1',
     date: '2026-06-27',
     changes: [

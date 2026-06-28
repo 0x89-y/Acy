@@ -1,11 +1,13 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { openUrl } from '@tauri-apps/plugin-opener';
-  import { ExternalLink, ArrowLeft } from '@lucide/svelte';
+  import { ExternalLink, ArrowLeft, Copy, Check } from '@lucide/svelte';
   import AppIcon from '$lib/components/AppIcon.svelte';
   import SourceBadge from '$lib/components/SourceBadge.svelte';
   import InstallButton from '$lib/components/InstallButton.svelte';
   import InstallSplitButton from '$lib/components/InstallSplitButton.svelte';
+  import { copyText } from '$lib/clipboard';
+  import { installCommand } from '$lib/install';
   import * as api from '$lib/api';
   import {
     installed as installedStore,
@@ -107,7 +109,27 @@
   function onChanged() {
     refreshLibrary();
   }
+
+  // Copy-to-clipboard helpers (install command + package id), with brief feedback.
+  let cmd = $derived(installCommand(source, id));
+  let cmdCopied = $state(false);
+  let idCopied = $state(false);
+
+  async function copyCmd() {
+    if (cmd && (await copyText(cmd))) {
+      cmdCopied = true;
+      setTimeout(() => (cmdCopied = false), 1200);
+    }
+  }
+  async function copyId() {
+    if (await copyText(id)) {
+      idCopied = true;
+      setTimeout(() => (idCopied = false), 1200);
+    }
+  }
 </script>
+
+<svelte:window onkeydown={(e) => e.key === 'Escape' && history.back()} />
 
 <a class="back" href="/"><ArrowLeft size={16} /> Back</a>
 
@@ -157,6 +179,14 @@
             <ExternalLink size={15} /> Website
           </button>
         {/if}
+        {#if cmd}
+          <button class="btn btn-ghost" onclick={copyCmd} title={cmd}>
+            {#if cmdCopied}<Check size={15} /> Copied{:else}<Copy size={15} /> Copy command{/if}
+          </button>
+        {/if}
+        <button class="btn btn-ghost" onclick={copyId} title="Copy package id">
+          {#if idCopied}<Check size={15} /> Copied{:else}<Copy size={15} /> Copy id{/if}
+        </button>
       </div>
     </div>
   </div>

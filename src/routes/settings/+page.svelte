@@ -22,9 +22,11 @@
     setNotifyUpdates,
     setRefreshOnStartup,
     setAutoCheckUpdates,
+    setSettingsTab,
     restartSetup,
     ACCENTS,
-    type ThemeMode
+    type ThemeMode,
+    type SettingsTab
   } from '$lib/stores/settings';
   import { managers, loadManagers } from '$lib/stores/managers';
   import { clearIconCache } from '$lib/stores/icons';
@@ -141,333 +143,365 @@
     setAutoCheckUpdates(on);
     if (on) backgroundCheck();
   }
+
+  const tabs: { id: SettingsTab; label: string }[] = [
+    { id: 'general', label: 'General' },
+    { id: 'sources', label: 'Sources' },
+    { id: 'updates', label: 'Updates' },
+    { id: 'about', label: 'About' }
+  ];
+  let activeTab = $derived($settings.settingsTab);
 </script>
 
 <h1>Settings</h1>
 
-<section class="group">
-  <h2>Appearance</h2>
-  <div class="field">
-    <span class="field-label">Theme</span>
-    <div class="seg">
-      {#each modes as m (m.value)}
-        {@const Icon = m.icon}
-        <button
-          class="seg-btn"
-          class:on={$settings.themeMode === m.value}
-          onclick={() => setThemeMode(m.value)}
-        >
-          <Icon size={16} />
-          {m.label}
-        </button>
-      {/each}
-    </div>
-  </div>
-  <div class="field">
-    <span class="field-label">Accent</span>
-    <div class="accents">
-      {#each ACCENTS as a (a.name)}
-        <button
-          class="swatch"
-          class:on={$settings.accent === a.name}
-          style="--sw:{a.color}"
-          onclick={() => setAccent(a.name)}
-          title={a.label}
-          aria-label={a.label}
-        ></button>
-      {/each}
-    </div>
-  </div>
-</section>
+<div class="settings-layout">
+  <nav class="side" aria-label="Settings sections">
+    {#each tabs as t (t.id)}
+      <button class="side-link" class:active={activeTab === t.id} onclick={() => setSettingsTab(t.id)}>
+        {t.label}
+      </button>
+    {/each}
+  </nav>
 
-<section class="group">
-  <h2>Package managers</h2>
-  <p class="muted hint">
-    Turn managers on or off. A disabled manager is skipped in search, installed apps, and updates.
-  </p>
-  <div class="field pref">
-    <span class="field-label">Preferred source</span>
-    <select
-      class="pref-select"
-      value={$settings.preferredSource ?? ''}
-      onchange={(e) => setPreferredSource((e.currentTarget.value || null) as Source | null)}
-    >
-      <option value="">No preference (choose each time)</option>
-      {#each allManagers as s (s)}
-        <option value={s}>{names[s]}</option>
-      {/each}
-    </select>
-    <p class="muted hint">
-      For apps offered by several managers, the Install button uses this one when available; you can
-      still pick another from its menu.
-    </p>
-  </div>
-  <div class="list">
-    {#each allManagers as s (s)}
-      {@const st = statusOf(s)}
-      {@const isLocal = s === 'local'}
-      <div class="row card">
-        <div class="info">
-          <span class="name">{names[s]}</span>
-          <span class="state mono" class:ok={isLocal || st?.available} class:off={!isLocal && !st?.available}>
-            {isLocal ? 'install from a file' : st?.available ? 'available' : 'not installed'}
-          </span>
+  <div class="panes">
+    {#if activeTab === 'general'}
+      <section class="group">
+        <h2>Appearance</h2>
+        <div class="field">
+          <span class="field-label">Theme</span>
+          <div class="seg">
+            {#each modes as m (m.value)}
+              {@const Icon = m.icon}
+              <button
+                class="seg-btn"
+                class:on={$settings.themeMode === m.value}
+                onclick={() => setThemeMode(m.value)}
+              >
+                <Icon size={16} />
+                {m.label}
+              </button>
+            {/each}
+          </div>
         </div>
-        {#if !isLocal && st && !st.available}
-          <button class="btn" onclick={() => install(s)} disabled={busy === s}>
-            {busy === s ? 'Working…' : 'Install'}
+        <div class="field">
+          <span class="field-label">Accent</span>
+          <div class="accents">
+            {#each ACCENTS as a (a.name)}
+              <button
+                class="swatch"
+                class:on={$settings.accent === a.name}
+                style="--sw:{a.color}"
+                onclick={() => setAccent(a.name)}
+                title={a.label}
+                aria-label={a.label}
+              ></button>
+            {/each}
+          </div>
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>Installs</h2>
+        <label class="toggle-row card">
+          <span class="toggle-text">
+            <span class="toggle-title">Show command output while installing</span>
+          </span>
+          <span class="switch">
+            <input
+              type="checkbox"
+              checked={$settings.showOutput}
+              onchange={(e) => setShowOutput(e.currentTarget.checked)}
+            />
+            <span class="slider"></span>
+          </span>
+        </label>
+        <label class="toggle-row card">
+          <span class="toggle-text">
+            <span class="toggle-title">Check for updates on startup</span>
+            <span class="toggle-sub muted">
+              Refresh installed apps and available updates automatically when Acy starts. Turn off
+              for a faster launch; you can still refresh manually on the Installed page.
+            </span>
+          </span>
+          <span class="switch">
+            <input
+              type="checkbox"
+              checked={$settings.refreshOnStartup}
+              onchange={(e) => setRefreshOnStartup(e.currentTarget.checked)}
+            />
+            <span class="slider"></span>
+          </span>
+        </label>
+      </section>
+
+      <section class="group">
+        <h2>Tray &amp; notifications</h2>
+        <label class="toggle-row card">
+          <span class="toggle-text">
+            <span class="toggle-title">Close to tray instead of quitting</span>
+            <span class="toggle-sub muted">
+              Acy keeps running in the system tray after you close the window and checks for updates
+              in the background. Quit from the tray icon's menu.
+            </span>
+          </span>
+          <span class="switch">
+            <input
+              type="checkbox"
+              checked={$settings.closeToTray}
+              onchange={(e) => setCloseToTray(e.currentTarget.checked)}
+            />
+            <span class="slider"></span>
+          </span>
+        </label>
+        <label class="toggle-row card">
+          <span class="toggle-text">
+            <span class="toggle-title">Notify when new updates are found</span>
+          </span>
+          <span class="switch">
+            <input
+              type="checkbox"
+              checked={$settings.notifyUpdates}
+              onchange={(e) => setNotifyUpdates(e.currentTarget.checked)}
+            />
+            <span class="slider"></span>
+          </span>
+        </label>
+      </section>
+
+      <section class="group">
+        <h2>First-run setup</h2>
+        <p class="muted hint">Show the welcome setup screen again to reconfigure from scratch.</p>
+        <button class="btn" onclick={restartSetup}>Run setup again</button>
+      </section>
+    {:else if activeTab === 'sources'}
+      <section class="group">
+        <h2>Package managers</h2>
+        <p class="muted hint">
+          Turn managers on or off. A disabled manager is skipped in search, installed apps, and
+          updates.
+        </p>
+        <div class="field pref">
+          <span class="field-label">Preferred source</span>
+          <select
+            class="pref-select"
+            value={$settings.preferredSource ?? ''}
+            onchange={(e) => setPreferredSource((e.currentTarget.value || null) as Source | null)}
+          >
+            <option value="">No preference (choose each time)</option>
+            {#each allManagers as s (s)}
+              <option value={s}>{names[s]}</option>
+            {/each}
+          </select>
+          <p class="muted hint">
+            For apps offered by several managers, the Install button uses this one when available;
+            you can still pick another from its menu.
+          </p>
+        </div>
+        <div class="list">
+          {#each allManagers as s (s)}
+            {@const st = statusOf(s)}
+            {@const isLocal = s === 'local'}
+            <div class="row card">
+              <div class="info">
+                <span class="name">{names[s]}</span>
+                <span
+                  class="state mono"
+                  class:ok={isLocal || st?.available}
+                  class:off={!isLocal && !st?.available}
+                >
+                  {isLocal ? 'install from a file' : st?.available ? 'available' : 'not installed'}
+                </span>
+              </div>
+              {#if !isLocal && st && !st.available}
+                <button class="btn" onclick={() => install(s)} disabled={busy === s}>
+                  {busy === s ? 'Working…' : 'Install'}
+                </button>
+              {/if}
+              <label class="switch" title="Enable {names[s]}">
+                <input
+                  type="checkbox"
+                  checked={$settings.managers[s] !== false}
+                  onchange={(e) => setManagerEnabled(s, e.currentTarget.checked)}
+                />
+                <span class="slider"></span>
+              </label>
+            </div>
+          {/each}
+        </div>
+      </section>
+
+      {#if scoopAvailable}
+        <section class="group">
+          <h2>Scoop buckets</h2>
+          <p class="muted hint">
+            Buckets are app catalogs for Scoop. Some apps (e.g. Firefox, VLC) live in the
+            <span class="mono">extras</span> bucket and won't install via Scoop until it's added.
+          </p>
+          {#if buckets === null}
+            <p class="muted">Loading…</p>
+          {:else}
+            <div class="buckets">
+              {#each buckets as b (b)}<span class="chip">{b}</span>{/each}
+              {#if buckets.length === 0}<span class="muted">No buckets added.</span>{/if}
+            </div>
+            {@const addable = knownBuckets.filter((k) => !(buckets ?? []).includes(k))}
+            {#if addable.length > 0}
+              <div class="bucket-add">
+                {#each addable as k (k)}
+                  <button class="btn" onclick={() => addBucket(k)} disabled={bucketBusy !== null}>
+                    {bucketBusy === k ? 'Adding…' : `+ ${k}`}
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          {/if}
+        </section>
+      {/if}
+
+      <section class="group">
+        <h2>App icons</h2>
+        <label class="toggle-row card">
+          <span class="toggle-text">
+            <span class="toggle-title">Download &amp; cache app icons</span>
+            <span class="toggle-sub muted">
+              Off by default. Icons are fetched from each app's website as you browse and stored on
+              disk, so they load instantly next time. Apps without a known website keep the lettered
+              tile.
+            </span>
+          </span>
+          <span class="switch">
+            <input
+              type="checkbox"
+              checked={$settings.downloadIcons}
+              onchange={(e) => setDownloadIcons(e.currentTarget.checked)}
+            />
+            <span class="slider"></span>
+          </span>
+        </label>
+        <button class="btn" onclick={clearIcons} disabled={clearing}>
+          {clearing ? 'Clearing…' : 'Clear icon cache'}
+        </button>
+      </section>
+
+      <section class="group">
+        <h2>Curated catalog</h2>
+        <p class="muted hint">Edit the categories and apps shown on the Discover home page.</p>
+        <a class="btn" href="/curated">Open catalog editor</a>
+      </section>
+    {:else if activeTab === 'updates'}
+      <section class="group">
+        <h2>Software updates</h2>
+        <p class="muted hint">Acy <span class="mono">v{appVersion || '…'}</span>.</p>
+
+        <label class="toggle-row card">
+          <span class="toggle-text">
+            <span class="toggle-title">Automatically check for updates</span>
+            <span class="toggle-sub muted">
+              On startup and periodically in the background. You'll be asked before anything
+              downloads.
+            </span>
+          </span>
+          <span class="switch">
+            <input
+              type="checkbox"
+              checked={$settings.autoCheckUpdates}
+              onchange={(e) => onAutoCheckToggle(e.currentTarget.checked)}
+            />
+            <span class="slider"></span>
+          </span>
+        </label>
+
+        <div class="upd">
+          {#if $updaterPhase === 'available'}
+            <button class="btn btn-accent" onclick={installUpdate}>
+              Download &amp; install v{$updaterVersion}
+            </button>
+            <p class="upd-msg accent">Version {$updaterVersion} is available.</p>
+          {:else if $updaterPhase === 'downloading'}
+            <button class="btn" disabled>Downloading…</button>
+          {:else}
+            <button class="btn" onclick={checkForUpdate} disabled={$updaterPhase === 'checking'}>
+              {$updaterPhase === 'checking' ? 'Checking…' : 'Check for updates'}
+            </button>
+            {#if $updaterPhase === 'uptodate'}
+              <p class="upd-msg ok">You're on the latest version.</p>
+            {:else if $updaterPhase === 'error'}
+              <p class="upd-msg err">Update check failed: {$updaterError}</p>
+            {/if}
+          {/if}
+        </div>
+      </section>
+    {:else if activeTab === 'about'}
+      <section class="group">
+        <h2>About</h2>
+        <p class="about muted">Acy <span class="mono">v{appVersion || '…'}</span></p>
+        <p class="about muted">License: <span class="mono">MIT</span></p>
+        <p class="about">
+          <a class="link" href="https://github.com/0x89-y" target="_blank" rel="noreferrer noopener">
+            github.com/0x89-y
+          </a>
+        </p>
+      </section>
+
+      <section class="group">
+        <h2>What's new</h2>
+        <div class="log">
+          {#each shownReleases as rel (rel.version)}
+            <div class="rel">
+              <div class="rel-head">
+                <span class="mono rel-ver">v{rel.version}</span>
+                <span class="mono muted rel-date">{rel.date}</span>
+              </div>
+              <ul class="rel-list">
+                {#each rel.changes as c (c)}
+                  <li>{c}</li>
+                {/each}
+              </ul>
+            </div>
+          {/each}
+        </div>
+        {#if olderCount > 0}
+          <button class="btn btn-ghost" onclick={() => (showAllChanges = !showAllChanges)}>
+            {showAllChanges
+              ? 'Show less'
+              : `Show ${olderCount} older release${olderCount === 1 ? '' : 's'}`}
           </button>
         {/if}
-        <label class="switch" title="Enable {names[s]}">
-          <input
-            type="checkbox"
-            checked={$settings.managers[s] !== false}
-            onchange={(e) => setManagerEnabled(s, e.currentTarget.checked)}
-          />
-          <span class="slider"></span>
-        </label>
-      </div>
-    {/each}
-  </div>
-</section>
+      </section>
 
-{#if scoopAvailable}
-  <section class="group">
-    <h2>Scoop buckets</h2>
-    <p class="muted hint">
-      Buckets are app catalogs for Scoop. Some apps (e.g. Firefox, VLC) live in the
-      <span class="mono">extras</span> bucket and won't install via Scoop until it's added.
-    </p>
-    {#if buckets === null}
-      <p class="muted">Loading…</p>
-    {:else}
-      <div class="buckets">
-        {#each buckets as b (b)}<span class="chip">{b}</span>{/each}
-        {#if buckets.length === 0}<span class="muted">No buckets added.</span>{/if}
-      </div>
-      {@const addable = knownBuckets.filter((k) => !(buckets ?? []).includes(k))}
-      {#if addable.length > 0}
-        <div class="bucket-add">
-          {#each addable as k (k)}
-            <button class="btn" onclick={() => addBucket(k)} disabled={bucketBusy !== null}>
-              {bucketBusy === k ? 'Adding…' : `+ ${k}`}
-            </button>
-          {/each}
-        </div>
-      {/if}
-    {/if}
-  </section>
-{/if}
+      <section class="group">
+        <h2>Activity</h2>
+        {#if $activity.length === 0}
+          <p class="muted hint">Your installs, updates, and removals will show up here.</p>
+        {:else}
+          <div class="log">
+            {#each shownActivity as a (a.id)}
+              <div class="log-row">
+                <span class="log-dot" class:ok={a.ok} class:bad={!a.ok}></span>
+                <span class="log-txt">
+                  <strong>{actionLabel[a.action]}</strong>
+                  {a.name}
+                  {#if a.source}<span class="mono muted log-src">{a.source}</span>{/if}
+                </span>
+                <span class="log-time mono muted">{when(a.at)}</span>
+              </div>
+            {/each}
+          </div>
+          <div class="log-actions">
+            {#if $activity.length > ACTIVITY_PREVIEW}
+              <button class="btn btn-ghost" onclick={() => (showAllActivity = !showAllActivity)}>
+                {showAllActivity ? 'Show less' : `Show all ${$activity.length}`}
+              </button>
+            {/if}
+            <button class="btn btn-ghost" onclick={clearActivity}>Clear activity</button>
+          </div>
+        {/if}
+      </section>
 
-<section class="group">
-  <h2>App icons</h2>
-  <label class="toggle-row card">
-    <span class="toggle-text">
-      <span class="toggle-title">Download &amp; cache app icons</span>
-      <span class="toggle-sub muted">
-        Off by default. Icons are fetched from each app's website as you browse and stored on
-        disk, so they load instantly next time. Apps without a known website keep the lettered tile.
-      </span>
-    </span>
-    <span class="switch">
-      <input
-        type="checkbox"
-        checked={$settings.downloadIcons}
-        onchange={(e) => setDownloadIcons(e.currentTarget.checked)}
-      />
-      <span class="slider"></span>
-    </span>
-  </label>
-  <button class="btn" onclick={clearIcons} disabled={clearing}>
-    {clearing ? 'Clearing…' : 'Clear icon cache'}
-  </button>
-</section>
-
-<section class="group">
-  <h2>Installs</h2>
-  <label class="toggle-row card">
-    <span class="toggle-text">
-      <span class="toggle-title">Show command output while installing</span>
-    </span>
-    <span class="switch">
-      <input
-        type="checkbox"
-        checked={$settings.showOutput}
-        onchange={(e) => setShowOutput(e.currentTarget.checked)}
-      />
-      <span class="slider"></span>
-    </span>
-  </label>
-  <label class="toggle-row card">
-    <span class="toggle-text">
-      <span class="toggle-title">Check for updates on startup</span>
-      <span class="toggle-sub muted">
-        Refresh installed apps and available updates automatically when Acy starts. Turn off for a
-        faster launch; you can still refresh manually on the Installed page.
-      </span>
-    </span>
-    <span class="switch">
-      <input
-        type="checkbox"
-        checked={$settings.refreshOnStartup}
-        onchange={(e) => setRefreshOnStartup(e.currentTarget.checked)}
-      />
-      <span class="slider"></span>
-    </span>
-  </label>
-</section>
-
-<section class="group">
-  <h2>Tray &amp; notifications</h2>
-  <label class="toggle-row card">
-    <span class="toggle-text">
-      <span class="toggle-title">Close to tray instead of quitting</span>
-      <span class="toggle-sub muted">
-        Acy keeps running in the system tray after you close the window and checks for updates in
-        the background. Quit from the tray icon's menu.
-      </span>
-    </span>
-    <span class="switch">
-      <input
-        type="checkbox"
-        checked={$settings.closeToTray}
-        onchange={(e) => setCloseToTray(e.currentTarget.checked)}
-      />
-      <span class="slider"></span>
-    </span>
-  </label>
-  <label class="toggle-row card">
-    <span class="toggle-text">
-      <span class="toggle-title">Notify when new updates are found</span>
-    </span>
-    <span class="switch">
-      <input
-        type="checkbox"
-        checked={$settings.notifyUpdates}
-        onchange={(e) => setNotifyUpdates(e.currentTarget.checked)}
-      />
-      <span class="slider"></span>
-    </span>
-  </label>
-</section>
-
-<section class="group">
-  <h2>Software updates</h2>
-  <p class="muted hint">Acy <span class="mono">v{appVersion || '…'}</span>.</p>
-
-  <label class="toggle-row card">
-    <span class="toggle-text">
-      <span class="toggle-title">Automatically check for updates</span>
-      <span class="toggle-sub muted">
-        On startup and periodically in the background. You'll be asked before anything downloads.
-      </span>
-    </span>
-    <span class="switch">
-      <input
-        type="checkbox"
-        checked={$settings.autoCheckUpdates}
-        onchange={(e) => onAutoCheckToggle(e.currentTarget.checked)}
-      />
-      <span class="slider"></span>
-    </span>
-  </label>
-
-  <div class="upd">
-    {#if $updaterPhase === 'available'}
-      <button class="btn btn-accent" onclick={installUpdate}>
-        Download &amp; install v{$updaterVersion}
-      </button>
-      <p class="upd-msg accent">Version {$updaterVersion} is available.</p>
-    {:else if $updaterPhase === 'downloading'}
-      <button class="btn" disabled>Downloading…</button>
-    {:else}
-      <button class="btn" onclick={checkForUpdate} disabled={$updaterPhase === 'checking'}>
-        {$updaterPhase === 'checking' ? 'Checking…' : 'Check for updates'}
-      </button>
-      {#if $updaterPhase === 'uptodate'}
-        <p class="upd-msg ok">You're on the latest version.</p>
-      {:else if $updaterPhase === 'error'}
-        <p class="upd-msg err">Update check failed: {$updaterError}</p>
-      {/if}
     {/if}
   </div>
-</section>
-
-<section class="group">
-  <h2>Curated catalog</h2>
-  <p class="muted hint">Edit the categories and apps shown on the Discover home page.</p>
-  <a class="btn" href="/curated">Open catalog editor</a>
-</section>
-
-<section class="group">
-  <h2>First-run setup</h2>
-  <p class="muted hint">Show the welcome setup screen again to reconfigure from scratch.</p>
-  <button class="btn" onclick={restartSetup}>Run setup again</button>
-</section>
-
-<section class="group">
-  <h2>Activity</h2>
-  {#if $activity.length === 0}
-    <p class="muted hint">Your installs, updates, and removals will show up here.</p>
-  {:else}
-    <div class="log">
-      {#each shownActivity as a (a.id)}
-        <div class="log-row">
-          <span class="log-dot" class:ok={a.ok} class:bad={!a.ok}></span>
-          <span class="log-txt">
-            <strong>{actionLabel[a.action]}</strong>
-            {a.name}
-            {#if a.source}<span class="mono muted log-src">{a.source}</span>{/if}
-          </span>
-          <span class="log-time mono muted">{when(a.at)}</span>
-        </div>
-      {/each}
-    </div>
-    <div class="log-actions">
-      {#if $activity.length > ACTIVITY_PREVIEW}
-        <button class="btn btn-ghost" onclick={() => (showAllActivity = !showAllActivity)}>
-          {showAllActivity ? 'Show less' : `Show all ${$activity.length}`}
-        </button>
-      {/if}
-      <button class="btn btn-ghost" onclick={clearActivity}>Clear activity</button>
-    </div>
-  {/if}
-</section>
-
-<section class="group">
-  <h2>What's new</h2>
-  <div class="log">
-    {#each shownReleases as rel (rel.version)}
-      <div class="rel">
-        <div class="rel-head">
-          <span class="mono rel-ver">v{rel.version}</span>
-          <span class="mono muted rel-date">{rel.date}</span>
-        </div>
-        <ul class="rel-list">
-          {#each rel.changes as c (c)}
-            <li>{c}</li>
-          {/each}
-        </ul>
-      </div>
-    {/each}
-  </div>
-  {#if olderCount > 0}
-    <button class="btn btn-ghost" onclick={() => (showAllChanges = !showAllChanges)}>
-      {showAllChanges ? 'Show less' : `Show ${olderCount} older release${olderCount === 1 ? '' : 's'}`}
-    </button>
-  {/if}
-</section>
-
-<section class="group">
-  <h2>About</h2>
-  <p class="about muted">Acy <span class="mono">v{appVersion || '…'}</span></p>
-  <p class="about muted">License: <span class="mono">MIT</span></p>
-  <p class="about">
-    <a class="link" href="https://github.com/0x89-y" target="_blank" rel="noreferrer noopener">
-      github.com/0x89-y
-    </a>
-  </p>
-</section>
+</div>
 
 <style>
   .about {
@@ -483,9 +517,51 @@
   h1 {
     margin-bottom: 24px;
   }
+
+  .settings-layout {
+    display: flex;
+    gap: 30px;
+    align-items: flex-start;
+  }
+  .side {
+    position: sticky;
+    top: 74px;
+    flex: 0 0 160px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .side-link {
+    text-align: left;
+    padding: 8px 12px;
+    border: none;
+    border-left: 2px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    font-size: 0.92rem;
+    font-weight: 500;
+  }
+  .side-link:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+  }
+  .side-link.active {
+    background: var(--surface);
+    color: var(--text);
+    border-left-color: var(--accent);
+  }
+  .panes {
+    flex: 1;
+    min-width: 0;
+    max-width: 640px;
+  }
+
   .group {
-    margin: 0 auto 32px;
-    max-width: 600px;
+    margin: 0 0 28px;
+  }
+  .group:last-child {
+    margin-bottom: 0;
   }
   .group h2 {
     font-size: 1.05rem;
@@ -786,5 +862,19 @@
   }
   .rel-list li {
     margin-bottom: 3px;
+  }
+
+  @media (max-width: 720px) {
+    .settings-layout {
+      flex-direction: column;
+    }
+    .side {
+      position: static;
+      flex: none;
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
   }
 </style>
