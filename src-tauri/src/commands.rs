@@ -257,6 +257,33 @@ pub async fn add_scoop_bucket(app: AppHandle, name: String, op_id: String) -> Re
 }
 
 #[tauri::command]
+pub async fn winget_update_sources(app: AppHandle, op_id: String) -> Result<i32, String> {
+    runner::stream(
+        &app,
+        &op_id,
+        OP_EVENT,
+        "winget",
+        &["source".to_string(), "update".to_string()],
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn scoop_update(app: AppHandle, op_id: String) -> Result<i32, String> {
+    runner::stream(&app, &op_id, OP_EVENT, "powershell", &runner::ps_args("scoop update"))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn scoop_cleanup(app: AppHandle, op_id: String) -> Result<i32, String> {
+    runner::stream(&app, &op_id, OP_EVENT, "powershell", &runner::ps_args("scoop cleanup *"))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn pick_installer(app: AppHandle) -> Option<String> {
     let (tx, rx) = tokio::sync::oneshot::channel();
     app.dialog()

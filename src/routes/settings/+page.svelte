@@ -112,6 +112,14 @@
   let knownBuckets = $state<string[]>([]);
   let bucketBusy = $state<string | null>(null);
   let scoopAvailable = $derived(statusOf('scoop')?.available ?? false);
+  let wingetAvailable = $derived(statusOf('winget')?.available ?? false);
+
+  let maintBusy = $state<string | null>(null);
+  async function runMaint(label: string, k: string, fn: (opId: string) => Promise<number>) {
+    maintBusy = k;
+    await enqueue(label, fn);
+    maintBusy = null;
+  }
 
   async function loadBuckets() {
     try {
@@ -351,6 +359,40 @@
               </div>
             {/if}
           {/if}
+        </section>
+      {/if}
+
+      {#if wingetAvailable || scoopAvailable}
+        <section class="group">
+          <h2>Maintenance</h2>
+          <p class="muted hint">Refresh manager sources and clear out old versions.</p>
+          <div class="maint">
+            {#if wingetAvailable}
+              <button
+                class="btn"
+                disabled={maintBusy !== null}
+                onclick={() => runMaint('Update winget sources', 'winget-src', api.wingetUpdateSources)}
+              >
+                {maintBusy === 'winget-src' ? 'Working…' : 'Update winget sources'}
+              </button>
+            {/if}
+            {#if scoopAvailable}
+              <button
+                class="btn"
+                disabled={maintBusy !== null}
+                onclick={() => runMaint('Update Scoop', 'scoop-up', api.scoopUpdate)}
+              >
+                {maintBusy === 'scoop-up' ? 'Working…' : 'Update Scoop'}
+              </button>
+              <button
+                class="btn"
+                disabled={maintBusy !== null}
+                onclick={() => runMaint('Clean up Scoop', 'scoop-clean', api.scoopCleanup)}
+              >
+                {maintBusy === 'scoop-clean' ? 'Working…' : 'Clean up Scoop'}
+              </button>
+            {/if}
+          </div>
         </section>
       {/if}
 
@@ -645,6 +687,11 @@
   .bucket-add .btn {
     font-size: 0.82rem;
     padding: 6px 12px;
+  }
+  .maint {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
   }
   .upd {
     margin-top: 12px;

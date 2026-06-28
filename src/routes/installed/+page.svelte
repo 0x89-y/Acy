@@ -5,7 +5,7 @@
   import * as api from '$lib/api';
   import type { Source, Package } from '$lib/types';
   import { enqueue } from '$lib/stores/ops';
-  import { runOp } from '$lib/install';
+  import { runOp, summarizeBatch } from '$lib/install';
   import { copyText } from '$lib/clipboard';
   import { openContextMenu } from '$lib/stores/contextMenu';
   import {
@@ -160,12 +160,14 @@
   async function uninstallSelected() {
     removing = true;
     const targets = $installed.filter((p) => selected.has(selKey(p)));
+    let ok = 0;
     for (const p of targets) {
-      await runOp('uninstall', p.source, p.id, p.name);
+      if (await runOp('uninstall', p.source, p.id, p.name)) ok++;
     }
     removing = false;
     clearSel();
     refreshLibrary();
+    if (targets.length > 1) summarizeBatch(targets.length, ok, 'removed');
   }
 
   async function uninstallOne(p: Package) {

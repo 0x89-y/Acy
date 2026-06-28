@@ -55,6 +55,13 @@ export const scoopKnownBuckets = () => invoke<string[]>('scoop_known_buckets');
 export const addScoopBucket = (name: string, opId: string) =>
   invoke<number>('add_scoop_bucket', { name, opId });
 
+export const wingetUpdateSources = (opId: string) =>
+  invoke<number>('winget_update_sources', { opId });
+
+export const scoopUpdate = (opId: string) => invoke<number>('scoop_update', { opId });
+
+export const scoopCleanup = (opId: string) => invoke<number>('scoop_cleanup', { opId });
+
 export function onOpLog(cb: (line: LogLine) => void): Promise<UnlistenFn> {
   return listen<LogLine>('op-log', (event) => cb(event.payload));
 }

@@ -10,7 +10,7 @@
   import { enabledSources, managers } from '$lib/stores/managers';
   import { settings, setDiscoverView } from '$lib/stores/settings';
   import { installedKeys, loadInstalled } from '$lib/stores/library';
-  import { runOp } from '$lib/install';
+  import { runOp, summarizeBatch } from '$lib/install';
 
   function curatedVariants(app: CuratedApp, managers: Record<Source, boolean>): Variant[] {
     const seen = new Set<Source>();
@@ -148,13 +148,16 @@
   }
   async function installSelected() {
     installing = true;
+    const total = selectedApps.size;
+    let ok = 0;
     for (const entry of selectedApps.values()) {
       const v = chosenVariant(entry.variants);
-      await runOp('install', v.source, v.id, entry.name);
+      if (await runOp('install', v.source, v.id, entry.name)) ok++;
     }
     installing = false;
     exitSelect();
     loadInstalled(true);
+    if (total > 1) summarizeBatch(total, ok, 'installed');
   }
 
   let resultsEl = $state<HTMLElement | null>(null);

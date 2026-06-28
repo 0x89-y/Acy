@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { ops, dismissAll } from '$lib/stores/ops';
+  import { X } from '@lucide/svelte';
+  import { ops, notices, dismissAll, dismissNotice } from '$lib/stores/ops';
   import Toast from './Toast.svelte';
 
   let dismissable = $derived(
@@ -7,7 +8,7 @@
   );
 </script>
 
-{#if $ops.length > 0}
+{#if $ops.length > 0 || $notices.length > 0}
   <div class="stack">
     {#if dismissable > 1}
       <div class="stack-head">
@@ -16,6 +17,15 @@
         </button>
       </div>
     {/if}
+    {#each $notices as n (n.id)}
+      <div class="notice card" class:warn={n.kind === 'warn'} class:err={n.kind === 'error'}>
+        <span class="dot"></span>
+        <span class="msg">{n.message}</span>
+        <button class="x" onclick={() => dismissNotice(n.id)} aria-label="Dismiss">
+          <X size={14} />
+        </button>
+      </div>
+    {/each}
     {#each $ops as op (op.id)}
       <Toast {op} />
     {/each}
@@ -51,5 +61,46 @@
   }
   .clear-all:hover {
     background: var(--surface-hover);
+  }
+
+  .notice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 12px;
+    box-shadow: var(--shadow);
+  }
+  .notice .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--success);
+  }
+  .notice.warn .dot {
+    background: var(--warning);
+  }
+  .notice.err .dot {
+    background: var(--danger);
+  }
+  .notice .msg {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.88rem;
+    font-weight: 500;
+  }
+  .notice .x {
+    display: inline-flex;
+    flex-shrink: 0;
+    padding: 4px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    line-height: 0;
+  }
+  .notice .x:hover {
+    background: var(--surface-hover);
+    color: var(--text);
   }
 </style>

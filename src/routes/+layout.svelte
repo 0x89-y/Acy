@@ -14,6 +14,7 @@
   import AppUpdateToast from '$lib/components/AppUpdateToast.svelte';
   import ContextMenu from '$lib/components/ContextMenu.svelte';
   import CloseToTrayPrompt from '$lib/components/CloseToTrayPrompt.svelte';
+  import ShortcutsHelp, { toggleShortcuts } from '$lib/components/ShortcutsHelp.svelte';
   import ResizeHandles from '$lib/components/ResizeHandles.svelte';
   import Setup from '$lib/components/Setup.svelte';
   import { loadManagers } from '$lib/stores/managers';
@@ -27,7 +28,17 @@
 
   const UPDATE_POLL_MS = 30 * 60 * 1000;
 
+  function isTyping(e: KeyboardEvent) {
+    const t = e.target as HTMLElement | null;
+    return t?.tagName === 'INPUT' || t?.tagName === 'TEXTAREA' || t?.isContentEditable === true;
+  }
+
   function onKey(e: KeyboardEvent) {
+    if (e.key === '?' && !isTyping(e)) {
+      e.preventDefault();
+      toggleShortcuts();
+      return;
+    }
     if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
     const dest = e.key === '1' ? '/' : e.key === '2' ? '/installed' : e.key === '3' ? '/settings' : null;
     if (dest) {
@@ -64,6 +75,7 @@
 <AppUpdateToast />
 <ContextMenu />
 <CloseToTrayPrompt />
+<ShortcutsHelp />
 <ResizeHandles />
 
 <style>

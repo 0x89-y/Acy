@@ -1,6 +1,16 @@
-import { enqueue } from '$lib/stores/ops';
+import { enqueue, notice } from '$lib/stores/ops';
 import * as api from '$lib/api';
 import type { Source } from '$lib/types';
+
+export function summarizeBatch(
+  total: number,
+  ok: number,
+  verb: 'installed' | 'removed' | 'updated'
+) {
+  const fail = total - ok;
+  if (fail === 0) notice(`${ok} ${ok === 1 ? 'app' : 'apps'} ${verb}.`, 'ok');
+  else notice(`${ok} ${verb}, ${fail} failed.`, ok > 0 ? 'warn' : 'error');
+}
 
 export type InstallKind = 'install' | 'update' | 'uninstall';
 
