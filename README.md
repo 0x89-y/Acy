@@ -1,66 +1,70 @@
 # Acy
 
-A Windows app store built on top of the package managers you already have:
-**winget**, **Scoop**, and **Chocolatey**. It gives them one interface with a
-curated home page, unified search, install/uninstall/update management, and a
-light/dark theme.
+Acy is a Windows desktop interface for WinGet, Scoop, Chocolatey, and the
+Microsoft Store. It provides package search, installation, removal, and update
+management. Local `.exe` and `.msi` installers can also be added to the curated
+catalog.
 
-## What it does
+## Install
 
-- **Discover**: a curated home page grouped into categories you define in
-  `curated.json`.
-- **Search**: one search box across winget, Scoop, and Chocolatey, with results
-  merged and de-duplicated. Toggle which managers are searched.
-- **Installed + updates**: list everything installed, see available updates with
-  a count badge, update a single app or update all from one manager.
-- **App detail**: version, publisher, homepage, source, and install/uninstall/
-  update actions per app.
-- **Live output**: installs and updates stream their real output into a drawer
-  instead of a spinner.
-- **Manager setup**: detects which managers are present and offers a one-click
-  bootstrap for any that are missing.
+Download the Windows installer from the
+[latest release](https://github.com/0x89-y/Acy/releases/latest).
 
-## Stack
+Acy detects the available package managers at startup. Missing managers can be
+installed from the setup screen or enabled later in Settings. Microsoft Store
+support uses WinGet.
 
-- **Tauri 2** (Rust core) for a small, native Windows app.
-- **SvelteKit + Svelte 5 + TypeScript** frontend in pure SPA mode.
-- Plain CSS custom properties for theming. IBM Plex Sans / Mono, dot-grid identity.
+## Sources
 
-The Rust core avoids scraping fragile CLI tables for reads when it can:
+| Source | Search | Install | Uninstall | Updates |
+| --- | --- | --- | --- | --- |
+| WinGet | Yes | Yes | Yes | Yes |
+| Scoop | Yes | Yes | Yes | Yes |
+| Chocolatey | Yes | Yes | Yes | Yes |
+| Microsoft Store | Yes | Yes | No | No |
+| Local `.exe` / `.msi` | No | Yes | No | No |
 
-- **winget**: prefers the official `Microsoft.WinGet.Client` PowerShell module
-  (clean JSON), and falls back to parsing the `winget` CLI when the module is
-  not installed.
-- **Scoop**: uses `scoop export` (JSON) for installed apps; parses `scoop search`
-  and `scoop status` tables.
-- **Chocolatey**: uses `-r` (`--limit-output`) for clean pipe-delimited rows.
+Microsoft Store packages are accessed through WinGet's `msstore` source. Local
+installers are files selected by the user and are not treated as managed
+packages after installation.
 
-Reads return structured data; writes (install/uninstall/upgrade) stream the CLI
-so the UI shows live progress.
+## Development
 
-## Develop
+Requirements:
 
-Prerequisites: Node, Rust, and the Tauri prerequisites for Windows
-(WebView2 ships with Windows 11).
+- Node.js
+- Rust
+- [Tauri's Windows prerequisites](https://v2.tauri.app/start/prerequisites/)
+
+Install dependencies and run the application:
 
 ```sh
 npm install
-npm run tauri dev      # run the app
-npm run tauri build    # build an installer (MSI / NSIS) under src-tauri/target/release/bundle
+npm run tauri dev
 ```
 
-Other useful commands:
+Other commands:
 
 ```sh
-npm run build                                      # build the frontend only
-cargo test --manifest-path src-tauri/Cargo.toml    # run the parser unit tests
+npm run check                                     # check Svelte and TypeScript
+npm run build                                     # build the frontend
+npm run tauri build                               # build Windows bundles
+cargo test --manifest-path src-tauri/Cargo.toml   # run Rust tests
 ```
 
-## Editing the curated list
+Tauri writes release bundles under
+`src-tauri/target/release/bundle`. The repository's `build.bat` builds the NSIS
+installer and expects an updater signing key at
+`%USERPROFILE%\.acy\acy-updater.key`.
 
-`curated.json` (repo root) defines the home page. Each app names its `id` and
-`source`; the optional `name` / `description` / `homepage` override what the
-manager reports.
+## Curated catalog
+
+`curated.json` defines the categories and applications shown on the Discover
+page. The catalog can also be edited from within Acy.
+
+Each application has a primary package source. The optional `alternates` array
+lists the same application in other sources. Package IDs are specific to their
+source.
 
 ```json
 {
@@ -69,44 +73,62 @@ manager reports.
     {
       "id": "browsers",
       "title": "Browsers",
-      "apps": [{ "id": "Mozilla.Firefox", "source": "winget", "name": "Firefox" }]
+      "apps": [
+        {
+          "id": "Mozilla.Firefox",
+          "source": "winget",
+          "name": "Firefox",
+          "alternates": [
+            { "source": "scoop", "id": "firefox" },
+            { "source": "choco", "id": "firefox" }
+          ]
+        }
+      ]
     }
   ]
 }
 ```
 
-Package ids are manager-specific: winget uses its `PackageIdentifier`
-(`Mozilla.Firefox`), Scoop and Chocolatey use the package name (`neovim`,
-`nodejs`).
+Optional application fields are `name`, `description`, `homepage`, and `icon`.
+For local installers, use `local` as the source. The package ID may contain the
+installer path or be left empty so the file can be selected at install time.
 
-At runtime the list is read from the first source found, in order:
+The catalog is loaded as follows:
 
-1. the `ACY_CURATED` environment variable (a file path),
-2. `%APPDATA%/Acy/curated.json` (a per-user override in a shipped build),
-3. the repo-root `curated.json` during development (live edits, no rebuild),
-4. the copy bundled with the app.
+1. If `ACY_CURATED` contains a valid file path, that file replaces the catalog.
+2. Otherwise, Acy loads the repository copy during development or the bundled
+   copy in an installed build.
+3. Custom entries from the per-user catalog are merged into that base catalog.
+4. The embedded copy is used if no external base catalog can be read.
 
-If none is found it uses the version embedded at build time.
+The per-user catalog is stored in Acy's application configuration directory.
+Built-in entries are refreshed when Acy is updated; entries added by the user
+are retained.
 
-## Notes on permissions
+## Permissions
 
-- **Scoop** installs to your user profile and needs no elevation.
-- **winget** (machine scope) and **Chocolatey** usually need administrator
-  rights. Installs that need elevation trigger a UAC prompt, and the error is
-  shown in the live output if elevation is declined. Installing Chocolatey
-  itself must be done from an elevated session.
+Scoop installs packages in the current user's profile by default. WinGet and
+Chocolatey operations may require elevation depending on the package and
+installation scope. Windows displays a UAC prompt when elevation is requested.
 
-## Layout
+## Project layout
 
-```
-src-tauri/src/
-  model.rs        normalized Package + Source types
-  runner.rs       process capture + streaming helpers
-  sources/        PackageSource trait + winget.rs / scoop.rs / choco.rs
-  curated.rs      curated.json loading
-  commands.rs     Tauri command surface
+```text
 src/
-  routes/         Discover (/), Installed, app detail (/app/[source]/[id])
-  lib/            api wrappers, stores, components, theme
-curated.json      the curated catalog
+  lib/                frontend components, stores, API wrappers, and styles
+  routes/             Discover, Installed, Settings, catalog, and app pages
+src-tauri/
+  src/
+    sources/          WinGet, Scoop, Chocolatey, Microsoft Store, and local backends
+    commands.rs       Tauri command handlers
+    curated.rs        catalog loading and merging
+    model.rs          shared package and source types
+    runner.rs         process execution and output streaming
+    tray.rs           system tray integration
+  tauri.conf.json     application and bundle configuration
+curated.json          built-in catalog
 ```
+
+## License
+
+[MIT](LICENSE)

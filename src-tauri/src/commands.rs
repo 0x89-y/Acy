@@ -182,8 +182,18 @@ pub async fn bootstrap_manager(
         ),
         Source::Winget => (
             "powershell".to_string(),
+            // Install-Module needs the NuGet provider and a trusted PSGallery,
+            // which aren't set up on a fresh machine. Prepare them (and TLS 1.2)
+            // first so the module install works without prompts.
             runner::ps_args(
-                "Install-Module Microsoft.WinGet.Client -Scope CurrentUser -Force -AllowClobber",
+                "[Net.ServicePointManager]::SecurityProtocol = \
+                 [Net.ServicePointManager]::SecurityProtocol -bor 3072; \
+                 Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force \
+                 -Scope CurrentUser -ErrorAction Stop; \
+                 if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) \
+                 { Register-PSRepository -Default }; \
+                 Set-PSRepository -Name PSGallery -InstallationPolicy Trusted; \
+                 Install-Module Microsoft.WinGet.Client -Scope CurrentUser -Force -AllowClobber",
             ),
         ),
         Source::Msstore => {
@@ -193,9 +203,15 @@ pub async fn bootstrap_manager(
             return Err("The local source has nothing to set up; pick an installer file instead.".into());
         }
     };
-    runner::stream(&app, &op_id, OP_EVENT, &program, &args)
+    let result = runner::stream(&app, &op_id, OP_EVENT, &program, &args)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string());
+    // After a winget setup run, re-detect the PowerShell module so a freshly
+    // installed one is picked up without restarting Acy.
+    if matches!(source, Source::Winget) {
+        sources::winget::invalidate_module_cache();
+    }
+    result
 }
 
 /// Reflect the available-update count in the tray tooltip, so it stays visible

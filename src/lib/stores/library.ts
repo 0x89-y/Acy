@@ -2,6 +2,7 @@ import { writable, derived, get } from 'svelte/store';
 import * as api from '$lib/api';
 import type { Package, Source } from '$lib/types';
 import { enabledSources, updatesCount } from './managers';
+import { ignoredUpdateKeys, packageIgnoredKey } from './ignoredUpdates';
 
 // Caches the installed apps and available updates so navigating back to the
 // Installed page is instant. Each list reloads only when forced (Refresh, or
@@ -96,7 +97,21 @@ export const updatesReady = writable(cachedUpdates !== null);
 
 let updatesSig = '';
 
-if (cachedUpdates) updatesCount.set(cachedUpdates.length);
+/** Updates the user has not ignored for this specific available version. */
+export const actionableUpdates = derived(
+  [updates, ignoredUpdateKeys],
+  ([$updates, $ignored]) => $updates.filter((p) => !$ignored.has(packageIgnoredKey(p)))
+);
+
+/** Ignored updates are retained so the Installed page can restore them. */
+export const ignoredUpdates = derived(
+  [updates, ignoredUpdateKeys],
+  ([$updates, $ignored]) => $updates.filter((p) => $ignored.has(packageIgnoredKey(p)))
+);
+
+// The nav badge, tray tooltip, and update notifications count actionable
+// updates only. This also reacts immediately when an update is ignored.
+actionableUpdates.subscribe((list) => updatesCount.set(list.length));
 
 export async function loadUpdates(force = false): Promise<void> {
   const sources = get(enabledSources);
@@ -110,7 +125,6 @@ export async function loadUpdates(force = false): Promise<void> {
     const list = await api.listUpdates(sources);
     updates.set(list);
     writeCache(UPDATES_KEY, list);
-    updatesCount.set(list.length);
     updatesSig = current;
     updatesReady.set(true);
   } catch (e) {

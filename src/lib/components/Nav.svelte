@@ -19,7 +19,6 @@
 <header class="nav" data-tauri-drag-region>
   <div class="brand" data-tauri-drag-region>
     <span class="logo mono">acy</span>
-    <span class="tag muted">app store</span>
   </div>
   <nav class="links">
     {#each links as l (l.href)}
@@ -74,11 +73,6 @@
   .logo::before {
     content: '0x';
     color: var(--accent);
-  }
-  .tag {
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
   }
   .links {
     display: flex;

@@ -2,7 +2,7 @@ use super::PackageSource;
 use crate::model::{ManagerStatus, Package, Source};
 use crate::runner;
 use async_trait::async_trait;
-use tokio::sync::OnceCell;
+use std::sync::atomic::{AtomicI8, Ordering};
 
 /// winget backend. Prefers the official `Microsoft.WinGet.Client` PowerShell
 /// module for read operations (clean JSON), and falls back to parsing the
@@ -12,7 +12,10 @@ pub struct Winget;
 
 const MAX_SEARCH: usize = 60;
 
-static MODULE_AVAILABLE: OnceCell<bool> = OnceCell::const_new();
+/// Cached module-detection result: 0 = unknown, 1 = absent, 2 = present.
+/// Cached so we don't re-run PowerShell on every read, but `invalidate_module_cache`
+/// resets it so a freshly installed module is picked up without restarting.
+static MODULE_STATE: AtomicI8 = AtomicI8::new(0);
 
 fn s(v: &str) -> String {
     v.to_string()
@@ -24,19 +27,25 @@ fn quote(value: &str) -> String {
 }
 
 async fn module_available() -> bool {
-    *MODULE_AVAILABLE
-        .get_or_init(|| async {
-            runner::capture(
-                "powershell",
-                &runner::ps_args(
-                    "if (Get-Module -ListAvailable -Name Microsoft.WinGet.Client) { 'yes' }",
-                ),
-            )
-            .await
-            .map(|o| o.contains("yes"))
-            .unwrap_or(false)
-        })
-        .await
+    match MODULE_STATE.load(Ordering::Relaxed) {
+        2 => return true,
+        1 => return false,
+        _ => {}
+    }
+    let found = runner::capture(
+        "powershell",
+        &runner::ps_args("if (Get-Module -ListAvailable -Name Microsoft.WinGet.Client) { 'yes' }"),
+    )
+    .await
+    .map(|o| o.contains("yes"))
+    .unwrap_or(false);
+    MODULE_STATE.store(if found { 2 } else { 1 }, Ordering::Relaxed);
+    found
+}
+
+/// Force the next `module_available()` to re-detect (e.g. after installing it).
+pub fn invalidate_module_cache() {
+    MODULE_STATE.store(0, Ordering::Relaxed);
 }
 
 fn json_rows(text: &str) -> Vec<serde_json::Value> {
@@ -175,7 +184,21 @@ impl PackageSource for Winget {
                 &[s("list"), s("--accept-source-agreements"), s("--disable-interactivity")],
             )
             .await?;
-            Ok(Self::map_cli_table(&out, true))
+            let pkgs = Self::map_cli_table(&out, true);
+            // `winget list` always reports at least winget itself, so zero parsed
+            // rows from real output means we couldn't read the table (typically a
+            // non-English winget). Surface it instead of showing an empty list.
+            if pkgs.is_empty() {
+                if out.trim().is_empty() {
+                    anyhow::bail!(
+                        "winget returned no output. It may be an older version; updating App Installer can help."
+                    );
+                }
+                anyhow::bail!(
+                    "Couldn't read winget's installed list (this can happen on non-English Windows). Install the WinGet PowerShell module in Settings \u{2192} Sources for reliable results."
+                );
+            }
+            Ok(pkgs)
         }
     }
 

@@ -38,6 +38,8 @@ export interface Settings {
   askCloseToTray: boolean;
   /** Show a desktop notification when background checks find new updates. */
   notifyUpdates: boolean;
+  /** Notify when a long operation finishes while the window is in the background. */
+  notifyOperations: boolean;
   /** Check installed apps / updates automatically when Acy starts. */
   refreshOnStartup: boolean;
   /** Check for app (Acy) updates on startup and periodically. Off by default. */
@@ -63,6 +65,7 @@ const DEFAULTS: Settings = {
   closeToTray: false,
   askCloseToTray: true,
   notifyUpdates: false,
+  notifyOperations: false,
   refreshOnStartup: true,
   autoCheckUpdates: false,
   installedSort: 'name',
@@ -133,6 +136,10 @@ export function setAskCloseToTray(value: boolean) {
 
 export function setNotifyUpdates(value: boolean) {
   settings.update((s) => ({ ...s, notifyUpdates: value }));
+}
+
+export function setNotifyOperations(value: boolean) {
+  settings.update((s) => ({ ...s, notifyOperations: value }));
 }
 
 export function setRefreshOnStartup(value: boolean) {

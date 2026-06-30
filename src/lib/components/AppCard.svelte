@@ -24,6 +24,7 @@
     selected = false,
     highlight = '',
     layout = 'grid',
+    backTo = null,
     onToggleSelect,
     onChanged
   }: {
@@ -41,12 +42,16 @@
     selected?: boolean;
     /** Query to bold inside the name (search results). */
     highlight?: string;
+    /** Optional in-app destination for the detail page's Back link. */
+    backTo?: string | null;
     onToggleSelect?: () => void;
     onChanged?: () => void;
   } = $props();
 
   let primary = $derived(variants[0]);
-  let href = $derived(`/app/${primary.source}/${encodeURIComponent(primary.id)}`);
+  let href = $derived(
+    `/app/${primary.source}/${encodeURIComponent(primary.id)}${backTo ? `?back=${encodeURIComponent(backTo)}` : ''}`
+  );
 
   // The source a one-click install uses: preferred if offered, else the first.
   let chosen = $derived(
@@ -108,12 +113,6 @@
       }
     }}
   >
-    {#if selectable}
-      <span class="acheck sel-check">
-        <input type="checkbox" checked={selected} tabindex="-1" />
-        <span class="box"><Check size={13} /></span>
-      </span>
-    {/if}
     <AppIcon {name} source={primary.source} id={primary.id} {homepage} size={layout === 'list' ? 34 : 44} />
     <div class="meta">
       <div class="name">
@@ -127,15 +126,27 @@
     <div class="badges">
       {#each variants as v (v.source)}<SourceBadge source={v.source} />{/each}
     </div>
-    {#if selectable}
-      <span class="installed" class:dim={!selected}>{selected ? 'Selected' : ''}</span>
-    {:else if installed}
-      <span class="installed">Installed</span>
-    {:else if allowPick && variants.length > 1}
-      <InstallSplitButton {variants} {name} preferred={$settings.preferredSource} onDone={onChanged} />
-    {:else}
-      <InstallButton source={primary.source} id={primary.id} {name} onDone={onChanged} />
-    {/if}
+    <div class="card-action">
+      {#if selectable}
+        <label class="acheck selection-action">
+          <input
+            type="checkbox"
+            checked={selected}
+            tabindex="-1"
+            aria-label={`Select ${name}`}
+            onchange={onToggleSelect}
+          />
+          <span class="box"><Check size={13} /></span>
+          <span>{selected ? 'Selected' : 'Select'}</span>
+        </label>
+      {:else if installed}
+        <span class="installed">Installed</span>
+      {:else if allowPick && variants.length > 1}
+        <InstallSplitButton {variants} {name} preferred={$settings.preferredSource} onDone={onChanged} />
+      {:else}
+        <InstallButton source={primary.source} id={primary.id} {name} onDone={onChanged} />
+      {/if}
+    </div>
   </div>
 </div>
 
@@ -179,9 +190,6 @@
     text-decoration: none;
     min-width: 0;
     align-items: flex-start;
-  }
-  .sel-check {
-    padding-top: 2px;
   }
   .meta {
     min-width: 0;
@@ -228,12 +236,24 @@
     gap: 5px;
     flex-wrap: wrap;
   }
+  .card-action {
+    width: 104px;
+    height: 39px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-shrink: 0;
+  }
   .installed {
     font-size: 0.8rem;
     color: var(--success);
     font-weight: 500;
   }
-  .installed.dim {
-    color: transparent;
+  .selection-action {
+    justify-content: flex-end;
+    gap: 7px;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 500;
   }
 </style>
