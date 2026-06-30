@@ -1,10 +1,8 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { openUrl } from '@tauri-apps/plugin-opener';
-  import * as api from '$lib/api';
   import type { Source, Package } from '$lib/types';
-  import { enqueue } from '$lib/stores/ops';
   import { runOp, summarizeBatch } from '$lib/install';
   import { copyText } from '$lib/clipboard';
   import { openContextMenu } from '$lib/stores/contextMenu';
@@ -16,19 +14,22 @@
   } from '$lib/stores/settings';
   import {
     installed,
-    updates,
     installedLoading,
     updatesLoading,
     installedError,
     updatesError,
     installedReady,
+    actionableUpdates,
+    ignoredUpdates,
     lastChecked,
     loadInstalled,
     loadUpdates,
     refreshLibrary
   } from '$lib/stores/library';
-  import { Check } from '@lucide/svelte';
+  import { ignoreUpdate, restoreUpdate } from '$lib/stores/ignoredUpdates';
+  import { Check, EyeOff, RotateCcw } from '@lucide/svelte';
   import InstallButton from '$lib/components/InstallButton.svelte';
+  import ConfirmAction from '$lib/components/ConfirmAction.svelte';
   import AppIcon from '$lib/components/AppIcon.svelte';
   import SourceBadge from '$lib/components/SourceBadge.svelte';
   import ViewToggle from '$lib/components/ViewToggle.svelte';
@@ -40,17 +41,11 @@
 
   let loading = $derived($installedLoading || $updatesLoading);
   let error = $derived($installedError ?? $updatesError);
-  let updateSources = $derived([...new Set($updates.map((u) => u.source))]);
+  let updateSources = $derived([...new Set($actionableUpdates.map((u) => u.source))]);
+  let batchProgress = $state<{ current: number; total: number; label: string } | null>(null);
+  let showIgnored = $state(false);
 
   const sourceOrder: Source[] = ['winget', 'scoop', 'choco', 'msstore'];
-  const sourceNames: Record<Source, string> = {
-    winget: 'winget',
-    scoop: 'Scoop',
-    choco: 'Chocolatey',
-    msstore: 'Microsoft Store',
-    local: 'Local file'
-  };
-
   let q = $derived(filter.trim().toLowerCase());
   let filtered = $derived(
     $installed.filter(
@@ -91,17 +86,18 @@
   }
 
   async function updateAll(source: Source) {
+    const targets = $actionableUpdates.filter((u) => u.source === source);
+    if (targets.length === 0) return;
     updatingAll = source;
-    const names = $updates.filter((u) => u.source === source).map((u) => u.name);
-    await enqueue(
-      `Update all (${source})`,
-      (opId) => api.upgradeAll(source, opId),
-      undefined,
-      names.join(', '),
-      { action: 'update-all', name: sourceNames[source], source }
-    );
+    let ok = 0;
+    for (const [i, p] of targets.entries()) {
+      batchProgress = { current: i + 1, total: targets.length, label: `Updating ${p.name}` };
+      if (await runOp('update', p.source, p.id, p.name)) ok++;
+    }
+    batchProgress = null;
     updatingAll = null;
-    refreshLibrary();
+    await refreshLibrary();
+    if (targets.length > 1) summarizeBatch(targets.length, ok, 'updated');
   }
 
   async function updateEverything() {
@@ -116,10 +112,8 @@
     return `${p.source}:${p.id}`;
   }
   let selected = $state<Set<string>>(new Set());
+  let selectMode = $state(false);
   let selectedCount = $derived(selected.size);
-  let allVisibleSelected = $derived(
-    sorted.length > 0 && sorted.every((p) => selected.has(selKey(p)))
-  );
 
   function toggleSel(k: string) {
     const next = new Set(selected);
@@ -127,50 +121,34 @@
     else next.add(k);
     selected = next;
   }
-  function toggleAll() {
-    const next = new Set(selected);
-    if (allVisibleSelected) {
-      for (const p of sorted) next.delete(selKey(p));
-    } else {
-      for (const p of sorted) next.add(selKey(p));
-    }
-    selected = next;
-  }
   function clearSel() {
     selected = new Set();
   }
 
-  let removing = $state(false);
-  let confirmingBatch = $state(false);
-  let batchTimer: ReturnType<typeof setTimeout> | undefined;
-  onDestroy(() => clearTimeout(batchTimer));
-
-  function batchClick() {
-    if (!confirmingBatch) {
-      confirmingBatch = true;
-      clearTimeout(batchTimer);
-      batchTimer = setTimeout(() => (confirmingBatch = false), 3500);
-      return;
-    }
-    clearTimeout(batchTimer);
-    confirmingBatch = false;
-    uninstallSelected();
+  function exitSelect() {
+    clearSel();
+    selectMode = false;
   }
+
+  let removing = $state(false);
 
   async function uninstallSelected() {
     removing = true;
     const targets = $installed.filter((p) => selected.has(selKey(p)));
     let ok = 0;
-    for (const p of targets) {
+    for (const [i, p] of targets.entries()) {
+      batchProgress = { current: i + 1, total: targets.length, label: `Removing ${p.name}` };
       if (await runOp('uninstall', p.source, p.id, p.name)) ok++;
     }
+    batchProgress = null;
     removing = false;
-    clearSel();
-    refreshLibrary();
+    exitSelect();
+    await refreshLibrary();
     if (targets.length > 1) summarizeBatch(targets.length, ok, 'removed');
   }
 
   async function uninstallOne(p: Package) {
+    if (!window.confirm(`Remove ${p.name}?`)) return;
     await runOp('uninstall', p.source, p.id, p.name);
     refreshLibrary();
   }
@@ -179,13 +157,19 @@
       { label: 'Uninstall', danger: true, onSelect: () => uninstallOne(p) },
       {
         label: 'Open details',
-        onSelect: () => goto(`/app/${p.source}/${encodeURIComponent(p.id)}`)
+        onSelect: () => goto(`/app/${p.source}/${encodeURIComponent(p.id)}?from=installed`)
       },
       { label: 'Copy id', onSelect: () => copyText(p.id) },
       ...(p.homepage ? [{ label: 'Open homepage', onSelect: () => openUrl(p.homepage!) }] : [])
     ]);
   }
+
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape' && selectMode) exitSelect();
+  }
 </script>
+
+<svelte:window onkeydown={onKeydown} />
 
 <div class="head">
   <h1>Installed</h1>
@@ -212,10 +196,10 @@
 {:else if error}
   <p class="error">{error}</p>
 {:else}
-  {#if $updates.length > 0}
+  {#if $actionableUpdates.length > 0}
     <section class="block">
       <div class="block-head">
-        <h2>Updates <span class="count">{$updates.length}</span></h2>
+        <h2>Updates <span class="count">{$actionableUpdates.length}</span></h2>
         <div class="all-actions">
           {#if updateSources.length > 1}
             <button
@@ -223,7 +207,7 @@
               onclick={updateEverything}
               disabled={updatingEverything || updatingAll !== null}
             >
-              {updatingEverything ? 'Updating…' : `Update everything · ${$updates.length}`}
+              {updatingEverything ? 'Updating…' : `Update everything · ${$actionableUpdates.length}`}
             </button>
           {/if}
           {#each updateSources as s (s)}
@@ -237,15 +221,29 @@
           {/each}
         </div>
       </div>
+      {#if batchProgress}
+        <div class="batch-progress" role="status" aria-live="polite">
+          <span>{batchProgress.label}</span>
+          <span class="mono">{batchProgress.current} of {batchProgress.total}</span>
+        </div>
+      {/if}
       <div class="list">
-        {#each $updates as p (p.source + p.id)}
+        {#each $actionableUpdates as p (p.source + p.id)}
           <div class="row card">
             <AppIcon name={p.name} size={36} source={p.source} id={p.id} homepage={p.homepage} />
             <div class="info">
-              <a class="name" href={`/app/${p.source}/${encodeURIComponent(p.id)}`}>{p.name}</a>
+              <a class="name" href={`/app/${p.source}/${encodeURIComponent(p.id)}?from=installed`}>{p.name}</a>
               <div class="ver mono">{p.version ?? '?'} → {p.availableVersion ?? '?'}</div>
             </div>
             <SourceBadge source={p.source} />
+            <button
+              class="icon-action"
+              onclick={() => ignoreUpdate(p)}
+              title="Ignore this version"
+              aria-label={`Ignore ${p.name} version ${p.availableVersion ?? ''}`}
+            >
+              <EyeOff size={16} />
+            </button>
             <InstallButton
               source={p.source}
               id={p.id}
@@ -259,8 +257,35 @@
     </section>
   {/if}
 
-  {#if $updates.length === 0 && $installed.length > 0}
-    <p class="uptodate">✓ Everything is up to date.</p>
+  {#if $actionableUpdates.length === 0 && $installed.length > 0}
+    <p class="uptodate">
+      {$ignoredUpdates.length > 0 ? 'No active updates.' : '✓ Everything is up to date.'}
+    </p>
+  {/if}
+
+  {#if $ignoredUpdates.length > 0}
+    <section class="ignored-block">
+      <button class="ignored-toggle" onclick={() => (showIgnored = !showIgnored)} aria-expanded={showIgnored}>
+        Ignored updates <span class="count soft">{$ignoredUpdates.length}</span>
+      </button>
+      {#if showIgnored}
+        <div class="list ignored-list">
+          {#each $ignoredUpdates as p (p.source + p.id)}
+            <div class="row card">
+              <AppIcon name={p.name} size={36} source={p.source} id={p.id} homepage={p.homepage} />
+              <div class="info">
+                <span class="name">{p.name}</span>
+                <div class="ver mono">{p.version ?? '?'} → {p.availableVersion ?? '?'}</div>
+              </div>
+              <SourceBadge source={p.source} />
+              <button class="btn btn-ghost" onclick={() => restoreUpdate(p)}>
+                <RotateCcw size={14} /> Restore
+              </button>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </section>
   {/if}
 
   <section class="block">
@@ -275,27 +300,25 @@
           <span class="sel-count">{selectedCount} selected</span>
           <div class="sel-spacer"></div>
           <button class="btn btn-ghost" onclick={clearSel} disabled={removing}>Clear</button>
-          <button
-            class="btn"
-            class:confirm={confirmingBatch}
-            onclick={batchClick}
-            disabled={removing}
-          >
-            {removing
-              ? 'Removing…'
-              : confirmingBatch
-                ? `Confirm remove ${selectedCount}?`
-                : `Uninstall ${selectedCount}`}
-          </button>
+          <ConfirmAction
+            label={`Uninstall ${selectedCount}`}
+            message={`Remove ${selectedCount} selected ${selectedCount === 1 ? 'app' : 'apps'}?`}
+            confirmLabel="Uninstall"
+            busyLabel={batchProgress ? `${batchProgress.current} of ${batchProgress.total}…` : 'Removing…'}
+            busy={removing}
+            onConfirm={uninstallSelected}
+          />
         </div>
       {/if}
       <div class="toolbar">
-        <label class="selall acheck">
-          <input type="checkbox" checked={allVisibleSelected} onchange={toggleAll} />
-          <span class="box"><Check size={13} /></span>
-          Select all
-        </label>
-        <input class="filter" placeholder="Filter installed…" bind:value={filter} />
+        <input class="filter" placeholder="Filter installed…" aria-label="Filter installed apps" bind:value={filter} />
+        <button
+          class="btn"
+          onclick={() => (selectMode ? exitSelect() : (selectMode = true))}
+          aria-pressed={selectMode}
+        >
+          {selectMode ? 'Cancel selection' : 'Select apps'}
+        </button>
         <label class="sort">
           Sort
           <select
@@ -337,26 +360,33 @@
                 oncontextmenu={(e) => rowMenu(e, p)}
                 role="group"
               >
-                <label class="acheck sel">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(selKey(p))}
-                    onchange={() => toggleSel(selKey(p))}
-                  />
-                  <span class="box"><Check size={13} /></span>
-                </label>
                 <AppIcon name={p.name} size={36} source={p.source} id={p.id} homepage={p.homepage} />
                 <div class="info">
-                  <a class="name" href={`/app/${p.source}/${encodeURIComponent(p.id)}`}>{p.name}</a>
+                  <a class="name" href={`/app/${p.source}/${encodeURIComponent(p.id)}?from=installed`}>{p.name}</a>
                   <div class="ver mono">{p.id}{p.version ? ` · ${p.version}` : ''}</div>
                 </div>
-                <InstallButton
-                  source={p.source}
-                  id={p.id}
-                  name={p.name}
-                  kind="uninstall"
-                  onDone={refreshLibrary}
-                />
+                <div class="row-action">
+                  {#if selectMode}
+                    <label class="acheck row-select">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(selKey(p))}
+                        onchange={() => toggleSel(selKey(p))}
+                        aria-label={`Select ${p.name}`}
+                      />
+                      <span class="box"><Check size={13} /></span>
+                      <span>{selected.has(selKey(p)) ? 'Selected' : 'Select'}</span>
+                    </label>
+                  {:else}
+                    <InstallButton
+                      source={p.source}
+                      id={p.id}
+                      name={p.name}
+                      kind="uninstall"
+                      onDone={refreshLibrary}
+                    />
+                  {/if}
+                </div>
               </div>
             {/each}
           </div>
@@ -370,27 +400,34 @@
               oncontextmenu={(e) => rowMenu(e, p)}
               role="group"
             >
-              <label class="acheck sel">
-                <input
-                  type="checkbox"
-                  checked={selected.has(selKey(p))}
-                  onchange={() => toggleSel(selKey(p))}
-                />
-                <span class="box"><Check size={13} /></span>
-              </label>
               <AppIcon name={p.name} size={36} source={p.source} id={p.id} homepage={p.homepage} />
               <div class="info">
-                <a class="name" href={`/app/${p.source}/${encodeURIComponent(p.id)}`}>{p.name}</a>
+                <a class="name" href={`/app/${p.source}/${encodeURIComponent(p.id)}?from=installed`}>{p.name}</a>
                 <div class="ver mono">{p.id}{p.version ? ` · ${p.version}` : ''}</div>
               </div>
               <SourceBadge source={p.source} />
-              <InstallButton
-                source={p.source}
-                id={p.id}
-                name={p.name}
-                kind="uninstall"
-                onDone={refreshLibrary}
-              />
+              <div class="row-action">
+                {#if selectMode}
+                  <label class="acheck row-select">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(selKey(p))}
+                      onchange={() => toggleSel(selKey(p))}
+                      aria-label={`Select ${p.name}`}
+                    />
+                    <span class="box"><Check size={13} /></span>
+                    <span>{selected.has(selKey(p)) ? 'Selected' : 'Select'}</span>
+                  </label>
+                {:else}
+                  <InstallButton
+                    source={p.source}
+                    id={p.id}
+                    name={p.name}
+                    kind="uninstall"
+                    onDone={refreshLibrary}
+                  />
+                {/if}
+              </div>
             </div>
           {/each}
         </div>
@@ -447,10 +484,49 @@
     gap: 8px;
     flex-wrap: wrap;
   }
+  .batch-progress {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin: -2px 0 10px;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+  }
   .uptodate {
     color: var(--success);
     font-size: 0.9rem;
     margin: -8px 0 24px;
+  }
+  .icon-action {
+    display: inline-flex;
+    padding: 6px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    background: transparent;
+  }
+  .icon-action:hover {
+    color: var(--text);
+    background: var(--surface-hover);
+  }
+  .ignored-block {
+    margin: -12px 0 28px;
+  }
+  .ignored-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.86rem;
+  }
+  .ignored-toggle:hover {
+    color: var(--text);
+  }
+  .ignored-list {
+    margin-top: 9px;
   }
   .toolbar {
     display: flex;
@@ -558,6 +634,22 @@
     gap: 12px;
     padding: 10px 14px;
   }
+  .row-action {
+    width: 100px;
+    height: 39px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  .row-select {
+    width: 100%;
+    justify-content: flex-end;
+    gap: 7px;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
   .info {
     flex: 1;
     min-width: 0;
@@ -605,19 +697,6 @@
   }
   .sel-spacer {
     flex: 1;
-  }
-  .sel-bar .confirm {
-    background: var(--danger);
-    border-color: var(--danger);
-    color: #fff;
-  }
-  .selall {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 0.86rem;
-    color: var(--text-muted);
-    white-space: nowrap;
   }
   .row.selected {
     border-color: var(--accent);

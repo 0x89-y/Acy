@@ -5,7 +5,7 @@
   import { copyText } from '$lib/clipboard';
   import { X, ChevronDown, ChevronRight, RotateCw, ShieldAlert, Copy, Check } from '@lucide/svelte';
 
-  let { op }: { op: Op } = $props();
+  let { op, queueAhead = 0 }: { op: Op; queueAhead?: number } = $props();
 
   let copied = $state(false);
   async function copyOutput() {
@@ -62,7 +62,7 @@
   <div class="status">
     <span class="status-text {op.state}">
       {#if op.state === 'queued'}
-        Waiting…
+        {queueAhead > 0 ? `Waiting · ${queueAhead} ahead` : 'Waiting…'}
       {:else if op.state === 'running'}
         {lastLine || 'Working…'}
       {:else if op.state === 'done'}

@@ -29,6 +29,7 @@ export interface Settings {
   closeToTray: boolean;
   askCloseToTray: boolean;
   notifyUpdates: boolean;
+  notifyOperations: boolean;
   refreshOnStartup: boolean;
   autoCheckUpdates: boolean;
   installedSort: 'name' | 'source';
@@ -51,6 +52,7 @@ const DEFAULTS: Settings = {
   closeToTray: false,
   askCloseToTray: true,
   notifyUpdates: false,
+  notifyOperations: false,
   refreshOnStartup: true,
   autoCheckUpdates: false,
   installedSort: 'name',
@@ -120,6 +122,10 @@ export function setAskCloseToTray(value: boolean) {
 
 export function setNotifyUpdates(value: boolean) {
   settings.update((s) => ({ ...s, notifyUpdates: value }));
+}
+
+export function setNotifyOperations(value: boolean) {
+  settings.update((s) => ({ ...s, notifyOperations: value }));
 }
 
 export function setRefreshOnStartup(value: boolean) {

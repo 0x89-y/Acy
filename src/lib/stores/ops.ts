@@ -1,6 +1,7 @@
 import { writable, get } from 'svelte/store';
-import { onOpLog } from '$lib/api';
+import { onOpLog, notify as notifyDesktop } from '$lib/api';
 import { logActivity, type ActivityAction } from './activity';
+import { settings } from './settings';
 import type { Source } from '$lib/types';
 
 export interface ActivityMeta {
@@ -105,6 +106,7 @@ async function work() {
   working = true;
   while (queue.length > 0) {
     const job = queue.shift()!;
+    const startedAt = Date.now();
     updateOp(job.id, (op) => ({ ...op, state: 'running' }));
 
     let ok = false;
@@ -130,6 +132,18 @@ async function work() {
     }
 
     if (job.meta) logActivity({ ...job.meta, ok });
+    const elapsed = Date.now() - startedAt;
+    if (
+      elapsed >= 15_000 &&
+      get(settings).notifyOperations &&
+      typeof document !== 'undefined' &&
+      document.visibilityState !== 'visible'
+    ) {
+      void notifyDesktop(
+        ok ? 'Operation complete' : 'Operation failed',
+        `${get(ops).find((op) => op.id === job.id)?.title ?? 'Acy operation'} ${ok ? 'finished.' : 'failed.'}`
+      ).catch(() => {});
+    }
     job.resolve(ok);
     if (ok) scheduleDismiss(job.id);
   }

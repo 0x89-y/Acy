@@ -7,6 +7,34 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.5.5',
+    date: '2026-06-29',
+    changes: [
+      'Long categories now open a dedicated page with every app (the "Show more" link is now "View all"), keeping grid/list views and multi-select install.',
+      'Back from an app\'s detail page returns to the category page you came from.',
+      'More curated apps.'
+    ]
+  },
+  {
+    version: '0.5.4',
+    date: '2026-06-28',
+    changes: [
+      'Fixed the installed-apps list failing to load on non-English Windows (e.g. German).',
+      'The "Install WinGet PowerShell module" action now installs its NuGet prerequisite, so it works on a fresh machine and takes effect without restarting Acy.'
+    ]
+  },
+  {
+    version: '0.5.3',
+    date: '2026-06-28',
+    changes: [
+      'Ignore a specific update so it stops prompting until a newer version is released.',
+      'Tidier Discover: a steadier "Select apps" mode that no longer shifts the layout, and already-installed apps can no longer be selected.',
+      'Grid and list view controls now sit consistently on the right.',
+      'Simplified the search button and fixed Back navigation from an app\'s detail page.',
+      'Smoother batch operations: clearer progress, confirmations, notifications, keyboard access, and history.'
+    ]
+  },
+  {
     version: '0.5.2',
     date: '2026-06-28',
     changes: [

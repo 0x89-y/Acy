@@ -2,13 +2,13 @@ use super::PackageSource;
 use crate::model::{ManagerStatus, Package, Source};
 use crate::runner;
 use async_trait::async_trait;
-use tokio::sync::OnceCell;
+use std::sync::atomic::{AtomicI8, Ordering};
 
 pub struct Winget;
 
 const MAX_SEARCH: usize = 60;
 
-static MODULE_AVAILABLE: OnceCell<bool> = OnceCell::const_new();
+static MODULE_STATE: AtomicI8 = AtomicI8::new(0);
 
 fn s(v: &str) -> String {
     v.to_string()
@@ -19,19 +19,24 @@ fn quote(value: &str) -> String {
 }
 
 async fn module_available() -> bool {
-    *MODULE_AVAILABLE
-        .get_or_init(|| async {
-            runner::capture(
-                "powershell",
-                &runner::ps_args(
-                    "if (Get-Module -ListAvailable -Name Microsoft.WinGet.Client) { 'yes' }",
-                ),
-            )
-            .await
-            .map(|o| o.contains("yes"))
-            .unwrap_or(false)
-        })
-        .await
+    match MODULE_STATE.load(Ordering::Relaxed) {
+        2 => return true,
+        1 => return false,
+        _ => {}
+    }
+    let found = runner::capture(
+        "powershell",
+        &runner::ps_args("if (Get-Module -ListAvailable -Name Microsoft.WinGet.Client) { 'yes' }"),
+    )
+    .await
+    .map(|o| o.contains("yes"))
+    .unwrap_or(false);
+    MODULE_STATE.store(if found { 2 } else { 1 }, Ordering::Relaxed);
+    found
+}
+
+pub fn invalidate_module_cache() {
+    MODULE_STATE.store(0, Ordering::Relaxed);
 }
 
 fn json_rows(text: &str) -> Vec<serde_json::Value> {
@@ -165,7 +170,18 @@ impl PackageSource for Winget {
                 &[s("list"), s("--accept-source-agreements"), s("--disable-interactivity")],
             )
             .await?;
-            Ok(Self::map_cli_table(&out, true))
+            let pkgs = Self::map_cli_table(&out, true);
+            if pkgs.is_empty() {
+                if out.trim().is_empty() {
+                    anyhow::bail!(
+                        "winget returned no output. It may be an older version; updating App Installer can help."
+                    );
+                }
+                anyhow::bail!(
+                    "Couldn't read winget's installed list (this can happen on non-English Windows). Install the WinGet PowerShell module in Settings \u{2192} Sources for reliable results."
+                );
+            }
+            Ok(pkgs)
         }
     }
 

@@ -7,7 +7,11 @@
 </script>
 
 <script lang="ts">
+  import { tick } from 'svelte';
   import { X } from '@lucide/svelte';
+
+  let dialog = $state<HTMLDivElement | null>(null);
+  let previousFocus: HTMLElement | null = null;
 
   const shortcuts: { keys: string[]; desc: string }[] = [
     { keys: ['Ctrl', 'K'], desc: 'Focus search (or /)' },
@@ -24,15 +28,43 @@
   function close() {
     shortcutsOpen.set(false);
   }
+
+  $effect(() => {
+    if (!$shortcutsOpen || typeof document === 'undefined') return;
+    previousFocus = document.activeElement as HTMLElement | null;
+    void tick().then(() => dialog?.querySelector<HTMLElement>('button')?.focus());
+    return () => previousFocus?.focus();
+  });
+
+  function onKeydown(e: KeyboardEvent) {
+    if (!$shortcutsOpen) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+      return;
+    }
+    if (e.key !== 'Tab' || !dialog) return;
+    const items = Array.from(dialog.querySelectorAll<HTMLElement>('button, [href], [tabindex]:not([tabindex="-1"])'));
+    const first = items[0];
+    const last = items.at(-1);
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last?.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first?.focus();
+    }
+  }
 </script>
 
-<svelte:window onkeydown={(e) => $shortcutsOpen && e.key === 'Escape' && close()} />
+<svelte:window onkeydown={onKeydown} />
 
 {#if $shortcutsOpen}
   <div class="backdrop">
-    <div class="dialog card" role="dialog" aria-modal="true">
+    <button class="backdrop-close" onclick={close} aria-label="Close keyboard shortcuts"></button>
+    <div class="dialog card" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title" bind:this={dialog}>
       <div class="head">
-        <h2>Keyboard shortcuts</h2>
+        <h2 id="shortcuts-title">Keyboard shortcuts</h2>
         <button class="x" onclick={close} aria-label="Close"><X size={16} /></button>
       </div>
       <ul class="list">
@@ -60,7 +92,16 @@
     justify-content: center;
     padding: 24px;
   }
+  .backdrop-close {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: transparent;
+    cursor: default;
+  }
   .dialog {
+    position: relative;
+    z-index: 1;
     width: min(440px, 100%);
     padding: 18px 20px 20px;
     box-shadow: var(--shadow);

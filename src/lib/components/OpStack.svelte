@@ -1,6 +1,7 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
   import { ops, notices, dismissAll, dismissNotice } from '$lib/stores/ops';
+  import { setSettingsTab } from '$lib/stores/settings';
   import Toast from './Toast.svelte';
 
   let dismissable = $derived(
@@ -10,11 +11,14 @@
 
 {#if $ops.length > 0 || $notices.length > 0}
   <div class="stack">
-    {#if dismissable > 1}
+    {#if $ops.length > 0}
       <div class="stack-head">
-        <button class="clear-all" onclick={dismissAll} title="Dismiss finished toasts">
-          Clear all
-        </button>
+        <a class="history" href="/settings" onclick={() => setSettingsTab('about')}>Activity</a>
+        {#if dismissable > 1}
+          <button class="clear-all" onclick={dismissAll} title="Dismiss finished notifications">
+            Clear all
+          </button>
+        {/if}
       </div>
     {/if}
     {#each $notices as n (n.id)}
@@ -26,8 +30,11 @@
         </button>
       </div>
     {/each}
-    {#each $ops as op (op.id)}
-      <Toast {op} />
+    {#each $ops as op, i (op.id)}
+      {@const queueAhead = op.state === 'queued'
+        ? $ops.slice(0, i).filter((item) => item.state === 'queued' || item.state === 'running').length
+        : 0}
+      <Toast {op} {queueAhead} />
     {/each}
   </div>
 {/if}
@@ -47,8 +54,11 @@
   }
   .stack-head {
     display: flex;
+    align-items: center;
     justify-content: flex-end;
+    gap: 8px;
   }
+  .history,
   .clear-all {
     border: 1px solid var(--border-strong);
     background: var(--surface);
@@ -59,6 +69,13 @@
     font-weight: 500;
     box-shadow: var(--shadow);
   }
+  .history {
+    text-decoration: none;
+  }
+  .clear-all {
+    font-family: inherit;
+  }
+  .history:hover,
   .clear-all:hover {
     background: var(--surface-hover);
   }

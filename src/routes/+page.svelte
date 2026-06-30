@@ -44,7 +44,6 @@
   let searchedCurrent = $derived(showSearch && searchedQuery === trimmed);
 
   const COLLAPSED = 4;
-  let expanded = $state<Record<string, boolean>>({});
 
   let visibleCategories = $derived(
     (curated?.categories ?? [])
@@ -124,6 +123,7 @@
 
   let selectMode = $state(false);
   let installing = $state(false);
+  let installProgress = $state<{ current: number; total: number; name: string } | null>(null);
   let selectedApps = $state<Map<string, { name: string; variants: Variant[] }>>(new Map());
   function appKey(app: CuratedApp) {
     return `${app.source}:${app.id}`;
@@ -135,7 +135,7 @@
   }
   function toggleSelectApp(app: CuratedApp) {
     const vs = curatedVariants(app, $settings.managers);
-    if (vs.length === 0) return;
+    if (vs.length === 0 || anyInstalled(vs)) return;
     const k = appKey(app);
     const next = new Map(selectedApps);
     if (next.has(k)) next.delete(k);
@@ -150,10 +150,14 @@
     installing = true;
     const total = selectedApps.size;
     let ok = 0;
+    let current = 0;
     for (const entry of selectedApps.values()) {
+      current++;
+      installProgress = { current, total, name: entry.name };
       const v = chosenVariant(entry.variants);
       if (await runOp('install', v.source, v.id, entry.name)) ok++;
     }
+    installProgress = null;
     installing = false;
     exitSelect();
     loadInstalled(true);
@@ -230,6 +234,11 @@
       target?.isContentEditable;
     const cmdK = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k';
     const slash = e.key === '/' && !typing;
+    if (e.key === 'Escape' && selectMode && !typing) {
+      e.preventDefault();
+      exitSelect();
+      return;
+    }
     if (cmdK || slash) {
       e.preventDefault();
       searchInput?.focus();
@@ -270,7 +279,8 @@
     <Search size={18} />
     <input
       bind:this={searchInput}
-      placeholder="Search curated apps…"
+      aria-label="Search apps"
+      placeholder="Search apps…"
       bind:value={query}
       oninput={onInput}
       onfocus={() => (searchFocused = true)}
@@ -292,7 +302,7 @@
     {/if}
   </div>
   <button class="btn btn-accent search-btn" onclick={runSearch} disabled={!showSearch || searching}>
-    {searching ? 'Searching…' : 'Search managers'}
+    {searching ? 'Searching…' : 'Search'}
   </button>
 </div>
 
@@ -309,19 +319,30 @@
 
 {#if !loadingCurated && !noManagers}
   <div class="discover-bar">
-    <ViewToggle value={$settings.discoverView} onChange={setDiscoverView} />
-    <button class="btn btn-ghost sel-toggle" onclick={() => (selectMode ? exitSelect() : (selectMode = true))}>
-      {selectMode ? 'Cancel selection' : 'Select multiple'}
+    <button
+      class="btn sel-toggle"
+      onclick={() => (selectMode ? exitSelect() : (selectMode = true))}
+      aria-pressed={selectMode}
+    >
+      {selectMode ? 'Cancel selection' : 'Select apps'}
     </button>
+    <div class="discover-spacer"></div>
+    <ViewToggle value={$settings.discoverView} onChange={setDiscoverView} />
   </div>
 {/if}
 
 {#if selectMode && selectedApps.size > 0}
   <div class="sel-bar">
-    <span class="sel-count">{selectedApps.size} selected</span>
+    <span class="sel-count" role="status" aria-live="polite">
+      {#if installProgress}
+        Installing {installProgress.current} of {installProgress.total} · {installProgress.name}
+      {:else}
+        {selectedApps.size} selected
+      {/if}
+    </span>
     <div class="sel-spacer"></div>
     <button class="btn btn-accent" onclick={installSelected} disabled={installing}>
-      {installing ? 'Installing…' : `Install ${selectedApps.size}`}
+      {installProgress ? `${installProgress.current} of ${installProgress.total}…` : `Install ${selectedApps.size}`}
     </button>
   </div>
 {/if}
@@ -344,7 +365,7 @@
             allowPick
             layout={$settings.discoverView}
             highlight={trimmed}
-            selectable={selectMode}
+            selectable={selectMode && !anyInstalled(vs)}
             selected={selectedApps.has(appKey(app))}
             onToggleSelect={() => toggleSelectApp(app)}
             onChanged={() => loadInstalled(true)}
@@ -388,9 +409,7 @@
       {#if curatedMatches.length === 0}
         <p class="muted">No curated apps match “{query}”.</p>
       {/if}
-      <button class="btn" onclick={runSearch}>
-        Search package managers for “{trimmed}”
-      </button>
+      <p class="muted">Press Enter or select Search to look beyond the curated catalog.</p>
     </div>
   {/if}
   </div>
@@ -424,13 +443,13 @@
       <div class="cat-head">
         <h2>{cat.title}</h2>
         {#if cat.apps.length > COLLAPSED}
-          <button class="more-btn" onclick={() => (expanded[cat.id] = !expanded[cat.id])}>
-            {expanded[cat.id] ? 'Show less' : `Show ${cat.apps.length - COLLAPSED} more`}
-          </button>
+          <a class="more-btn" href={`/category/${encodeURIComponent(cat.id)}`}>
+            View all {cat.apps.length}
+          </a>
         {/if}
       </div>
       <div class={gridClass}>
-        {#each expanded[cat.id] ? cat.apps : cat.apps.slice(0, COLLAPSED) as app (app.source + app.id)}
+        {#each cat.apps.slice(0, COLLAPSED) as app (app.source + app.id)}
           {@const vs = curatedVariants(app, $settings.managers)}
           <AppCard
             name={app.name ?? app.id}
@@ -441,7 +460,7 @@
             homepage={app.icon ?? app.homepage}
             allowPick
             layout={$settings.discoverView}
-            selectable={selectMode}
+            selectable={selectMode && !anyInstalled(vs)}
             selected={selectedApps.has(appKey(app))}
             onToggleSelect={() => toggleSelectApp(app)}
             onChanged={() => loadInstalled(true)}
@@ -545,9 +564,11 @@
   .discover-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 10px;
     margin: -10px 0 16px;
+  }
+  .discover-spacer {
+    flex: 1;
   }
   .list-flow {
     display: flex;

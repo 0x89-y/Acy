@@ -2,6 +2,7 @@ import { writable, derived, get } from 'svelte/store';
 import * as api from '$lib/api';
 import type { Package, Source } from '$lib/types';
 import { enabledSources, updatesCount } from './managers';
+import { ignoredUpdateKeys, packageIgnoredKey } from './ignoredUpdates';
 
 const INSTALLED_KEY = 'acy-installed-cache';
 const UPDATES_KEY = 'acy-updates-cache';
@@ -79,7 +80,17 @@ export const updatesReady = writable(cachedUpdates !== null);
 
 let updatesSig = '';
 
-if (cachedUpdates) updatesCount.set(cachedUpdates.length);
+export const actionableUpdates = derived(
+  [updates, ignoredUpdateKeys],
+  ([$updates, $ignored]) => $updates.filter((p) => !$ignored.has(packageIgnoredKey(p)))
+);
+
+export const ignoredUpdates = derived(
+  [updates, ignoredUpdateKeys],
+  ([$updates, $ignored]) => $updates.filter((p) => $ignored.has(packageIgnoredKey(p)))
+);
+
+actionableUpdates.subscribe((list) => updatesCount.set(list.length));
 
 export async function loadUpdates(force = false): Promise<void> {
   const sources = get(enabledSources);
@@ -93,7 +104,6 @@ export async function loadUpdates(force = false): Promise<void> {
     const list = await api.listUpdates(sources);
     updates.set(list);
     writeCache(UPDATES_KEY, list);
-    updatesCount.set(list.length);
     updatesSig = current;
     updatesReady.set(true);
   } catch (e) {

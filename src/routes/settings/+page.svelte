@@ -20,6 +20,7 @@
     setDownloadIcons,
     setCloseToTray,
     setNotifyUpdates,
+    setNotifyOperations,
     setRefreshOnStartup,
     setAutoCheckUpdates,
     setSettingsTab,
@@ -205,7 +206,7 @@
       </section>
 
       <section class="group">
-        <h2>Installs</h2>
+        <h2>Operations</h2>
         <label class="toggle-row card">
           <span class="toggle-text">
             <span class="toggle-title">Show command output while installing</span>
@@ -232,6 +233,22 @@
               type="checkbox"
               checked={$settings.refreshOnStartup}
               onchange={(e) => setRefreshOnStartup(e.currentTarget.checked)}
+            />
+            <span class="slider"></span>
+          </span>
+        </label>
+        <label class="toggle-row card">
+          <span class="toggle-text">
+            <span class="toggle-title">Notify when long operations finish</span>
+            <span class="toggle-sub muted">
+              Shown only when an operation takes at least 15 seconds and Acy is in the background.
+            </span>
+          </span>
+          <span class="switch">
+            <input
+              type="checkbox"
+              checked={$settings.notifyOperations}
+              onchange={(e) => setNotifyOperations(e.currentTarget.checked)}
             />
             <span class="slider"></span>
           </span>

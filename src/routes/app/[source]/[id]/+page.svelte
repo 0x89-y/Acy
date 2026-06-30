@@ -24,6 +24,11 @@
   let source = $derived($page.params.source as Source);
   let id = $derived(decodeURIComponent($page.params.id ?? ''));
   let idLower = $derived(id.toLowerCase());
+  let backHref = $derived.by(() => {
+    const requested = $page.url.searchParams.get('back');
+    if (requested?.startsWith('/') && !requested.startsWith('//')) return requested;
+    return $page.url.searchParams.get('from') === 'installed' ? '/installed' : '/';
+  });
 
   let curatedApp = $derived.by(() => {
     const c = $curatedStore;
@@ -121,7 +126,7 @@
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && history.back()} />
 
-<a class="back" href="/"><ArrowLeft size={16} /> Back</a>
+<a class="back" href={backHref}><ArrowLeft size={16} /> Back</a>
 
 {#if !curatedKnown}
   <p class="muted">Loading…</p>

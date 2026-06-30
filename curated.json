@@ -51,6 +51,16 @@
       ]
     },
     {
+      "id": "documents",
+      "title": "Documents",
+      "apps": [
+        { "id": "SumatraPDF.SumatraPDF", "source": "winget", "name": "SumatraPDF", "homepage": "https://www.sumatrapdfreader.org/", "description": "Fast, lightweight reader for PDF, EPUB, and comic books." },
+        { "id": "DigitalScholar.Zotero", "source": "winget", "name": "Zotero", "homepage": "https://www.zotero.org/", "description": "Research assistant for collecting, organizing, and citing sources." },
+        { "id": "geeksoftwareGmbH.PDF24Creator", "source": "winget", "name": "PDF24", "homepage": "https://tools.pdf24.org/en/creator", "description": "Create, edit, merge, split, and convert PDF files." },
+        { "id": "Cyanfish.NAPS2", "source": "winget", "name": "NAPS2", "homepage": "https://www.naps2.com/", "description": "Scan documents to PDF and other file formats." }
+      ]
+    },
+    {
       "id": "dev",
       "title": "Developer Tools",
       "apps": [
@@ -69,7 +79,12 @@
         { "id": "JanDeDobbeleer.OhMyPosh", "source": "winget", "name": "Oh My Posh", "homepage": "https://ohmyposh.dev/", "description": "Prompt theme engine for any shell.", "alternates": [{ "source": "scoop", "id": "oh-my-posh" }, { "source": "choco", "id": "oh-my-posh" }] },
         { "id": "Anysphere.Cursor", "source": "winget", "name": "Cursor", "homepage": "https://cursor.com/", "description": "AI-first code editor." },
         { "id": "SublimeHQ.SublimeText.4", "source": "winget", "name": "Sublime Text", "homepage": "https://www.sublimetext.com/", "description": "Fast, lightweight code and text editor.", "alternates": [{ "source": "scoop", "id": "sublime-text" }, { "source": "choco", "id": "sublimetext4" }] },
-        { "id": "Ollama.Ollama", "source": "winget", "name": "Ollama", "homepage": "https://ollama.com/", "description": "Run large language models locally.", "alternates": [{ "source": "scoop", "id": "ollama" }, { "source": "choco", "id": "Ollama" }] }
+        { "id": "Ollama.Ollama", "source": "winget", "name": "Ollama", "homepage": "https://ollama.com/", "description": "Run large language models locally.", "alternates": [{ "source": "scoop", "id": "ollama" }, { "source": "choco", "id": "Ollama" }] },
+        { "id": "OpenJS.NodeJS.LTS", "source": "winget", "name": "Node.js LTS", "homepage": "https://nodejs.org/", "description": "Long-term support release of the Node.js JavaScript runtime." },
+        { "id": "Docker.DockerDesktop", "source": "winget", "name": "Docker Desktop", "homepage": "https://www.docker.com/products/docker-desktop/", "description": "Build and run containerized applications on Windows." },
+        { "id": "JetBrains.Toolbox", "source": "winget", "name": "JetBrains Toolbox", "homepage": "https://www.jetbrains.com/toolbox-app/", "description": "Install and manage JetBrains IDEs from one app." },
+        { "id": "Bruno.Bruno", "source": "winget", "name": "Bruno", "homepage": "https://www.usebruno.com/", "description": "Git-friendly, offline-first API client." },
+        { "id": "GitHub.cli", "source": "winget", "name": "GitHub CLI", "homepage": "https://cli.github.com/", "description": "Use GitHub issues, pull requests, and workflows from the terminal." }
       ]
     },
     {
@@ -87,7 +102,8 @@
         { "id": "Malwarebytes.Malwarebytes", "source": "winget", "name": "Malwarebytes", "homepage": "https://www.malwarebytes.com/", "description": "Anti-malware protection and removal.", "alternates": [{ "source": "choco", "id": "malwarebytes" }] },
         { "id": "WiresharkFoundation.Wireshark", "source": "winget", "name": "Wireshark", "homepage": "https://www.wireshark.org/", "description": "Network protocol analyzer and packet capture.", "alternates": [{ "source": "scoop", "id": "wireshark" }, { "source": "choco", "id": "wireshark" }] },
         { "id": "GnuPG.Gpg4win", "source": "winget", "name": "Gpg4win", "homepage": "https://www.gpg4win.org/", "description": "GnuPG encryption and signing for Windows.", "alternates": [{ "source": "scoop", "id": "gpg4win" }, { "source": "choco", "id": "Gpg4win" }] },
-        { "id": "GlassWire.GlassWire", "source": "winget", "name": "GlassWire", "homepage": "https://www.glasswire.com/", "description": "Network monitor and firewall.", "alternates": [{ "source": "choco", "id": "glasswire" }] }
+        { "id": "GlassWire.GlassWire", "source": "winget", "name": "GlassWire", "homepage": "https://www.glasswire.com/", "description": "Network monitor and firewall.", "alternates": [{ "source": "choco", "id": "glasswire" }] },
+        { "id": "Safing.Portmaster", "source": "winget", "name": "Portmaster", "homepage": "https://safing.io/", "description": "Privacy-focused application firewall and network monitor." }
       ]
     },
     {
@@ -97,7 +113,9 @@
         { "id": "AnyDeskSoftwareGmbH.AnyDesk", "source": "winget", "name": "AnyDesk", "homepage": "https://anydesk.com/", "description": "Remote desktop access.", "alternates": [{ "source": "scoop", "id": "anydesk" }, { "source": "choco", "id": "anydesk" }] },
         { "id": "tailscale.tailscale", "source": "winget", "name": "Tailscale", "homepage": "https://tailscale.com/", "description": "Mesh VPN built on WireGuard.", "alternates": [{ "source": "scoop", "id": "tailscale" }, { "source": "choco", "id": "tailscale" }] },
         { "id": "ZeroTier.ZeroTierOne", "source": "winget", "name": "ZeroTier", "homepage": "https://www.zerotier.com/", "description": "Software-defined mesh networking.", "alternates": [{ "source": "choco", "id": "zerotier-one" }] },
-        { "id": "RustDesk.RustDesk", "source": "winget", "name": "RustDesk", "homepage": "https://rustdesk.com/", "description": "Open-source remote desktop access.", "alternates": [{ "source": "scoop", "id": "rustdesk" }, { "source": "choco", "id": "rustdesk" }] }
+        { "id": "RustDesk.RustDesk", "source": "winget", "name": "RustDesk", "homepage": "https://rustdesk.com/", "description": "Open-source remote desktop access.", "alternates": [{ "source": "scoop", "id": "rustdesk" }, { "source": "choco", "id": "rustdesk" }] },
+        { "id": "WireGuard.WireGuard", "source": "winget", "name": "WireGuard", "homepage": "https://www.wireguard.com/", "description": "Fast, modern VPN tunnel client." },
+        { "id": "Parsec.Parsec", "source": "winget", "name": "Parsec", "homepage": "https://parsec.app/", "description": "Low-latency remote desktop for work and gaming." }
       ]
     },
     {
@@ -179,7 +197,11 @@
         { "id": "RARLab.WinRAR", "source": "winget", "name": "WinRAR", "homepage": "https://www.win-rar.com/", "description": "Archiver for RAR and ZIP files.", "alternates": [{ "source": "scoop", "id": "winrar" }, { "source": "choco", "id": "winrar" }] },
         { "id": "M2Team.NanaZip", "source": "winget", "name": "NanaZip", "homepage": "https://github.com/M2Team/NanaZip", "description": "Modern fork of 7-Zip for Windows 11.", "alternates": [{ "source": "scoop", "id": "nanazip" }, { "source": "choco", "id": "nanazip" }, { "source": "msstore", "id": "9N8G7TSCL18R" }] },
         { "id": "REALiX.HWiNFO", "source": "winget", "name": "HWiNFO", "homepage": "https://www.hwinfo.com/", "description": "In-depth hardware monitoring and reporting.", "alternates": [{ "source": "scoop", "id": "hwinfo" }, { "source": "choco", "id": "hwinfo" }] },
-        { "id": "TechPowerUp.GPU-Z", "source": "winget", "name": "GPU-Z", "homepage": "https://www.techpowerup.com/gpuz/", "description": "Graphics card information and monitoring.", "alternates": [{ "source": "scoop", "id": "gpu-z" }, { "source": "choco", "id": "gpu-z" }] }
+        { "id": "TechPowerUp.GPU-Z", "source": "winget", "name": "GPU-Z", "homepage": "https://www.techpowerup.com/gpuz/", "description": "Graphics card information and monitoring.", "alternates": [{ "source": "scoop", "id": "gpu-z" }, { "source": "choco", "id": "gpu-z" }] },
+        { "id": "QL-Win.QuickLook", "source": "winget", "name": "QuickLook", "homepage": "https://github.com/QL-Win/QuickLook", "description": "Preview files instantly with the spacebar." },
+        { "id": "Ditto.Ditto", "source": "winget", "name": "Ditto", "homepage": "https://ditto-cp.sourceforge.io/", "description": "Searchable extension to the Windows clipboard." },
+        { "id": "KDE.KDEConnect", "source": "winget", "name": "KDE Connect", "homepage": "https://kdeconnect.kde.org/", "description": "Connect your phone and PC for files, notifications, and remote control." },
+        { "id": "Microsoft.Sysinternals.Suite", "source": "winget", "name": "Sysinternals Suite", "homepage": "https://learn.microsoft.com/sysinternals/", "description": "Microsoft's advanced Windows troubleshooting utilities." }
       ]
     }
   ]
