@@ -32,9 +32,16 @@ async fn module_available() -> bool {
         1 => return false,
         _ => {}
     }
+    // Actually import the module (under Acy's Bypass policy) rather than just
+    // checking `-ListAvailable`: it can be installed but fail to load (e.g. its
+    // format files blocked by Mark-of-the-Web), and using it anyway yields an
+    // empty installed list. Only treat it as available if it truly loads.
     let found = runner::capture(
         "powershell",
-        &runner::ps_args("if (Get-Module -ListAvailable -Name Microsoft.WinGet.Client) { 'yes' }"),
+        &runner::ps_args(
+            "try { Import-Module Microsoft.WinGet.Client -ErrorAction Stop; \
+             if (Get-Command Get-WinGetPackage -ErrorAction SilentlyContinue) { 'yes' } } catch { }",
+        ),
     )
     .await
     .map(|o| o.contains("yes"))
@@ -162,7 +169,6 @@ impl PackageSource for Winget {
                 s("--source"),
                 s("winget"),
                 s("--accept-source-agreements"),
-                s("--disable-interactivity"),
             ],
         )
         .await?;
@@ -172,34 +178,33 @@ impl PackageSource for Winget {
     }
 
     async fn list_installed(&self) -> anyhow::Result<Vec<Package>> {
-        if module_available().await {
+        let mut pkgs = if module_available().await {
             let script = "Get-WinGetPackage | ForEach-Object { \
                  [pscustomobject]@{ Name=$_.Name; Id=$_.Id; Version=$_.InstalledVersion; \
                  Source=$_.Source } } | ConvertTo-Json -Depth 3";
             let out = runner::capture("powershell", &runner::ps_args(script)).await?;
-            Ok(Self::map_module_rows(&out, true))
-        } else {
-            let out = runner::capture(
-                "winget",
-                &[s("list"), s("--accept-source-agreements"), s("--disable-interactivity")],
-            )
-            .await?;
-            let pkgs = Self::map_cli_table(&out, true);
-            // `winget list` always reports at least winget itself, so zero parsed
-            // rows from real output means we couldn't read the table (typically a
-            // non-English winget). Surface it instead of showing an empty list.
-            if pkgs.is_empty() {
-                if out.trim().is_empty() {
-                    anyhow::bail!(
-                        "winget returned no output. It may be an older version; updating App Installer can help."
-                    );
-                }
-                anyhow::bail!(
-                    "Couldn't read winget's installed list (this can happen on non-English Windows). Install the WinGet PowerShell module in Settings \u{2192} Sources for reliable results."
-                );
+            let rows = Self::map_module_rows(&out, true);
+            // A present-but-broken module can load yet return nothing; fall back
+            // to the CLI rather than showing an empty installed list.
+            if rows.is_empty() {
+                cli_list_installed().await?
+            } else {
+                rows
             }
-            Ok(pkgs)
+        } else {
+            cli_list_installed().await?
+        };
+        // Fill in Publisher / InstallLocation for ARP pass-through entries from
+        // the registry so the UI can categorize games, drivers, etc. The scan is
+        // blocking I/O, so it runs on the blocking pool; if it fails for any
+        // reason we keep the (un-enriched) list rather than losing it.
+        if pkgs.iter().any(|p| p.id.starts_with("ARP\\")) {
+            let map = tokio::task::spawn_blocking(crate::arp::scan)
+                .await
+                .unwrap_or_default();
+            enrich_from_arp(&mut pkgs, &map);
         }
+        Ok(pkgs)
     }
 
     async fn list_updates(&self) -> anyhow::Result<Vec<Package>> {
@@ -212,7 +217,7 @@ impl PackageSource for Winget {
         } else {
             let out = runner::capture(
                 "winget",
-                &[s("upgrade"), s("--accept-source-agreements"), s("--disable-interactivity")],
+                &[s("upgrade"), s("--accept-source-agreements")],
             )
             .await?;
             Ok(Self::map_cli_table(&out, true))
@@ -220,6 +225,12 @@ impl PackageSource for Winget {
     }
 
     async fn info(&self, id: &str) -> anyhow::Result<Option<Package>> {
+        // ARP/MSIX pass-through entries have no winget manifest, so `winget show`
+        // just hangs (and piles up processes) before returning nothing. Skip it
+        // and let the UI fall back to the data it already has (registry / installed).
+        if id.starts_with("ARP\\") || id.starts_with("MSIX\\") {
+            return Ok(None);
+        }
         // `winget show` works without the module and carries description/homepage.
         let out = runner::capture(
             "winget",
@@ -229,7 +240,6 @@ impl PackageSource for Winget {
                 s(id),
                 s("-e"),
                 s("--accept-source-agreements"),
-                s("--disable-interactivity"),
             ],
         )
         .await?;
@@ -247,7 +257,6 @@ impl PackageSource for Winget {
                 s("--silent"),
                 s("--accept-package-agreements"),
                 s("--accept-source-agreements"),
-                s("--disable-interactivity"),
             ],
         )
     }
@@ -262,7 +271,6 @@ impl PackageSource for Winget {
                 s("-e"),
                 s("--silent"),
                 s("--accept-source-agreements"),
-                s("--disable-interactivity"),
             ],
         )
     }
@@ -278,7 +286,6 @@ impl PackageSource for Winget {
                 s("--silent"),
                 s("--accept-package-agreements"),
                 s("--accept-source-agreements"),
-                s("--disable-interactivity"),
             ],
         )
     }
@@ -292,9 +299,55 @@ impl PackageSource for Winget {
                 s("--silent"),
                 s("--accept-package-agreements"),
                 s("--accept-source-agreements"),
-                s("--disable-interactivity"),
             ],
         )
+    }
+}
+
+/// Read the installed list via the `winget list` CLI — the fallback when the
+/// PowerShell module is absent or present-but-broken.
+async fn cli_list_installed() -> anyhow::Result<Vec<Package>> {
+    let out = runner::capture("winget", &[s("list"), s("--accept-source-agreements")]).await?;
+    let pkgs = Winget::map_cli_table(&out, true);
+    // `winget list` always reports at least winget itself, so zero parsed rows
+    // from real output means we couldn't read the table (typically a non-English
+    // winget). Surface it instead of showing an empty list.
+    if pkgs.is_empty() {
+        if out.trim().is_empty() {
+            anyhow::bail!(
+                "winget returned no output. It may be an older version; updating App Installer can help."
+            );
+        }
+        anyhow::bail!(
+            "Couldn't read winget's installed list (this can happen on non-English Windows). Install the WinGet PowerShell module in Settings \u{2192} Sources for reliable results."
+        );
+    }
+    Ok(pkgs)
+}
+
+/// Enrich winget's thin `ARP\…` entries with Publisher / InstallLocation from a
+/// pre-scanned registry map (correlated by display name).
+fn enrich_from_arp(
+    pkgs: &mut [Package],
+    map: &std::collections::HashMap<String, crate::arp::ArpInfo>,
+) {
+    if map.is_empty() {
+        return;
+    }
+    for p in pkgs.iter_mut() {
+        if !p.id.starts_with("ARP\\") {
+            continue;
+        }
+        // winget id is `ARP\Scope\Arch\<subkey>`; correlate on that last segment.
+        let subkey = p.id.rsplit('\\').next().unwrap_or_default();
+        if let Some(info) = map.get(&crate::arp::norm(subkey)) {
+            if info.publisher.is_some() {
+                p.publisher = info.publisher.clone();
+            }
+            if info.install_location.is_some() {
+                p.install_location = info.install_location.clone();
+            }
+        }
     }
 }
 

@@ -40,6 +40,9 @@ pub struct Package {
     /// Set when an update is available (installed < available).
     pub available_version: Option<String>,
     pub publisher: Option<String>,
+    /// Filesystem install path (from the ARP registry), used to categorize
+    /// launcher-installed apps like games. Only populated for winget ARP entries.
+    pub install_location: Option<String>,
     pub homepage: Option<String>,
     pub description: Option<String>,
     pub installed: bool,
@@ -54,6 +57,7 @@ impl Package {
             version: None,
             available_version: None,
             publisher: None,
+            install_location: None,
             homepage: None,
             description: None,
             installed: false,

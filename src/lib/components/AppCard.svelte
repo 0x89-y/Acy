@@ -8,7 +8,7 @@
   import InstallSplitButton from './InstallSplitButton.svelte';
   import { settings } from '$lib/stores/settings';
   import { copyText } from '$lib/clipboard';
-  import { runOp } from '$lib/install';
+  import { runOp, installCommand } from '$lib/install';
   import { openContextMenu, type CtxItem } from '$lib/stores/contextMenu';
   import type { Variant } from '$lib/types';
 
@@ -17,7 +17,6 @@
     description = null,
     variants,
     installed = false,
-    sub = null,
     homepage = null,
     allowPick = false,
     selectable = false,
@@ -25,6 +24,7 @@
     highlight = '',
     layout = 'grid',
     backTo = null,
+    tags = [],
     onToggleSelect,
     onChanged
   }: {
@@ -32,9 +32,10 @@
     description?: string | null;
     variants: Variant[];
     installed?: boolean;
-    sub?: string | null;
     homepage?: string | null;
     allowPick?: boolean;
+    /** Free-form labels shown as small chips on the card. */
+    tags?: string[];
     /** Card layout: a vertical tile (grid) or a horizontal row (list). */
     layout?: 'grid' | 'list';
     /** When true, the card is a selection toggle (multi-select install). */
@@ -90,6 +91,8 @@
     const items: CtxItem[] = [];
     if (!installed) items.push({ label: 'Install', onSelect: doInstall });
     items.push({ label: 'Open details', onSelect: () => goto(href) });
+    const cmd = installCommand(primary.source, primary.id);
+    if (cmd) items.push({ label: 'Copy command', onSelect: () => copyText(cmd) });
     items.push({ label: 'Copy id', onSelect: () => copyText(primary.id) });
     if (homepage) items.push({ label: 'Open homepage', onSelect: () => openUrl(homepage) });
     openContextMenu(e, items);
@@ -118,8 +121,12 @@
       <div class="name">
         {#each nameParts as p, i (i)}{#if p.hit}<mark>{p.t}</mark>{:else}{p.t}{/if}{/each}
       </div>
-      <div class="sub mono">{sub ?? primary.id}</div>
       {#if description}<div class="desc muted">{description}</div>{/if}
+      {#if tags.length}
+        <div class="tags">
+          {#each tags.slice(0, 3) as t (t)}<span class="tag">{t}</span>{/each}
+        </div>
+      {/if}
     </div>
   </a>
   <div class="foot">
@@ -176,7 +183,10 @@
     align-items: center;
   }
   .app-card.list .desc {
-    display: none;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    margin-top: 2px;
   }
   .app-card.list .foot {
     margin-top: 0;
@@ -208,13 +218,6 @@
     color: var(--accent);
     font-weight: 700;
   }
-  .sub {
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
   .desc {
     font-size: 0.82rem;
     margin-top: 4px;
@@ -222,6 +225,25 @@
     -webkit-line-clamp: 2;
     line-clamp: 2;
     -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 5px;
+  }
+  .tags .tag {
+    font-size: 0.66rem;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 1px 7px;
+    white-space: nowrap;
+  }
+  .app-card.list .tags {
+    flex-wrap: nowrap;
     overflow: hidden;
   }
   .foot {

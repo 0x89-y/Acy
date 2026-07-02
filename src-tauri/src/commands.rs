@@ -70,16 +70,44 @@ pub async fn list_installed(sources: Vec<Source>) -> Result<Vec<Package>, String
     let mut set = JoinSet::new();
     for source in sources {
         let src = sources::for_source(source);
-        set.spawn(async move { src.list_installed().await.unwrap_or_default() });
+        set.spawn(async move { src.list_installed().await.map_err(|e| e.to_string()) });
     }
+    let (all, errored) = collect(&mut set).await;
+    // If a manager timed out / failed and nothing else produced results, report
+    // it as an error so the UI keeps its last-known list instead of blanking.
+    if all.is_empty() && errored {
+        return Err(
+            "Couldn't read installed apps (a package manager timed out or failed).".into(),
+        );
+    }
+    Ok(all)
+}
+
+/// Drain a JoinSet of per-source results into one sorted list, tracking whether
+/// any source errored or panicked (so the caller can distinguish "no apps" from
+/// "the scan failed").
+async fn collect(set: &mut JoinSet<Result<Vec<Package>, String>>) -> (Vec<Package>, bool) {
     let mut all = Vec::new();
+    let mut errored = false;
     while let Some(res) = set.join_next().await {
-        if let Ok(found) = res {
-            all.extend(found);
+        match res {
+            Ok(Ok(found)) => all.extend(found),
+            Ok(Err(_)) | Err(_) => errored = true,
         }
     }
     all.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-    Ok(all)
+    (all, errored)
+}
+
+/// A fast, registry-only installed list for an instant first paint. Reads ARP
+/// directly (no `winget list`), so it returns in milliseconds. The full
+/// `list_installed` still runs afterwards to add package-id correlation, other
+/// managers, and update info.
+#[tauri::command]
+pub async fn list_installed_fast() -> Result<Vec<Package>, String> {
+    tokio::task::spawn_blocking(crate::arp::list_installed)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// All available updates across the given managers.
@@ -88,15 +116,12 @@ pub async fn list_updates(sources: Vec<Source>) -> Result<Vec<Package>, String> 
     let mut set = JoinSet::new();
     for source in sources {
         let src = sources::for_source(source);
-        set.spawn(async move { src.list_updates().await.unwrap_or_default() });
+        set.spawn(async move { src.list_updates().await.map_err(|e| e.to_string()) });
     }
-    let mut all = Vec::new();
-    while let Some(res) = set.join_next().await {
-        if let Ok(found) = res {
-            all.extend(found);
-        }
+    let (all, errored) = collect(&mut set).await;
+    if all.is_empty() && errored {
+        return Err("Couldn't check for updates (a package manager timed out or failed).".into());
     }
-    all.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     Ok(all)
 }
 
@@ -120,6 +145,13 @@ pub async fn install(
     runner::stream(&app, &op_id, OP_EVENT, &program, &args)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// The scoop bucket a package needs added before it will install (or null if it
+/// already resolves), so the UI can ask before changing scoop's config.
+#[tauri::command]
+pub async fn scoop_needed_bucket(id: String) -> Option<String> {
+    sources::scoop::needed_bucket(&id)
 }
 
 #[tauri::command]
@@ -284,6 +316,26 @@ pub async fn add_scoop_bucket(app: AppHandle, name: String, op_id: String) -> Re
         return Err("invalid bucket name".into());
     }
     let script = format!("scoop bucket add {name}");
+    runner::stream(&app, &op_id, OP_EVENT, "powershell", &runner::ps_args(&script))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Remove a Scoop bucket by name (`scoop bucket rm`). Streams output.
+#[tauri::command]
+pub async fn remove_scoop_bucket(
+    app: AppHandle,
+    name: String,
+    op_id: String,
+) -> Result<i32, String> {
+    if name.is_empty()
+        || !name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    {
+        return Err("invalid bucket name".into());
+    }
+    let script = format!("scoop bucket rm {name}");
     runner::stream(&app, &op_id, OP_EVENT, "powershell", &runner::ps_args(&script))
         .await
         .map_err(|e| e.to_string())

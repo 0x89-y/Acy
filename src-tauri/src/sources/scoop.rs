@@ -183,6 +183,44 @@ fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
 
+/// The scoop bucket an app needs added before it will install, if it isn't added
+/// yet — so the UI can ask first instead of silently changing scoop's config.
+/// Returns None when the app already resolves in an added bucket (or scoop isn't
+/// set up). Most curated apps live in `extras`, which isn't added by default.
+/// Checked on the filesystem — fast, and no extra scoop invocation.
+pub fn needed_bucket(id: &str) -> Option<String> {
+    let buckets = scoop_home()?.join("buckets");
+    if let Some((bucket, _)) = id.split_once('/') {
+        // Explicit `bucket/name` id: needed only if that bucket isn't added.
+        (!buckets.join(bucket).is_dir()).then(|| bucket.to_string())
+    } else if manifest_in_added_bucket(&buckets, id) {
+        None
+    } else {
+        Some("extras".to_string())
+    }
+}
+
+fn scoop_home() -> Option<std::path::PathBuf> {
+    use std::path::PathBuf;
+    match std::env::var("SCOOP") {
+        Ok(s) if !s.is_empty() => Some(PathBuf::from(s)),
+        _ => std::env::var("USERPROFILE").ok().map(|u| PathBuf::from(u).join("scoop")),
+    }
+}
+
+/// Whether any *added* bucket contains `<id>.json` (manifests live either under
+/// a `bucket/` subfolder or at the bucket root).
+fn manifest_in_added_bucket(buckets: &std::path::Path, id: &str) -> bool {
+    let file = format!("{id}.json");
+    let Ok(entries) = std::fs::read_dir(buckets) else {
+        return false;
+    };
+    entries.flatten().any(|entry| {
+        let dir = entry.path();
+        dir.is_dir() && (dir.join("bucket").join(&file).is_file() || dir.join(&file).is_file())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

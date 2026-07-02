@@ -1,13 +1,14 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { openUrl } from '@tauri-apps/plugin-opener';
-  import { ExternalLink, ArrowLeft, Copy, Check } from '@lucide/svelte';
+  import { ExternalLink, ArrowLeft, Heart } from '@lucide/svelte';
   import AppIcon from '$lib/components/AppIcon.svelte';
   import SourceBadge from '$lib/components/SourceBadge.svelte';
   import InstallButton from '$lib/components/InstallButton.svelte';
   import InstallSplitButton from '$lib/components/InstallSplitButton.svelte';
   import { copyText } from '$lib/clipboard';
   import { installCommand } from '$lib/install';
+  import { openContextMenu, type CtxItem } from '$lib/stores/contextMenu';
   import * as api from '$lib/api';
   import {
     installed as installedStore,
@@ -77,6 +78,8 @@
   // from one site but the recognizable logo lives on the original site).
   let iconSource = $derived(curatedApp?.icon ?? homepage);
   let description = $derived(curatedApp?.description ?? info?.description ?? null);
+  let tags = $derived(curatedApp?.tags ?? []);
+  let donate = $derived(curatedApp?.donate ?? null);
   let publisher = $derived(info?.publisher ?? null);
   let latestVersion = $derived(info?.version ?? null);
   let isInstalled = $derived(!!installedPkg);
@@ -115,22 +118,15 @@
     refreshLibrary();
   }
 
-  // Copy-to-clipboard helpers (install command + package id), with brief feedback.
+  // Copy actions live in the right-click menu (install command + package id).
   let cmd = $derived(installCommand(source, id));
-  let cmdCopied = $state(false);
-  let idCopied = $state(false);
 
-  async function copyCmd() {
-    if (cmd && (await copyText(cmd))) {
-      cmdCopied = true;
-      setTimeout(() => (cmdCopied = false), 1200);
-    }
-  }
-  async function copyId() {
-    if (await copyText(id)) {
-      idCopied = true;
-      setTimeout(() => (idCopied = false), 1200);
-    }
+  function headerMenu(e: MouseEvent) {
+    const items: CtxItem[] = [];
+    if (cmd) items.push({ label: 'Copy command', onSelect: () => copyText(cmd!) });
+    items.push({ label: 'Copy id', onSelect: () => copyText(id) });
+    if (homepage) items.push({ label: 'Open homepage', onSelect: () => openUrl(homepage!) });
+    openContextMenu(e, items);
   }
 </script>
 
@@ -141,7 +137,7 @@
 {#if !curatedKnown}
   <p class="muted">Loading…</p>
 {:else}
-  <div class="header">
+  <div class="header" oncontextmenu={headerMenu} role="group">
     <AppIcon {name} size={72} {source} {id} homepage={iconSource} />
     <div class="title">
       <h1>{name}</h1>
@@ -150,6 +146,11 @@
         <span class="mono id">{id}</span>
         {#if publisher}<span class="muted">· {publisher}</span>{/if}
       </div>
+      {#if tags.length}
+        <div class="det-tags">
+          {#each tags as t (t)}<span class="det-tag">{t}</span>{/each}
+        </div>
+      {/if}
       <div class="actions">
         {#if $installedReady}
           {#if updatable && updateVariant}
@@ -184,14 +185,11 @@
             <ExternalLink size={15} /> Website
           </button>
         {/if}
-        {#if cmd}
-          <button class="btn btn-ghost" onclick={copyCmd} title={cmd}>
-            {#if cmdCopied}<Check size={15} /> Copied{:else}<Copy size={15} /> Copy command{/if}
+        {#if donate}
+          <button class="btn btn-ghost" onclick={() => openUrl(donate!)}>
+            <Heart size={15} /> Donate
           </button>
         {/if}
-        <button class="btn btn-ghost" onclick={copyId} title="Copy package id">
-          {#if idCopied}<Check size={15} /> Copied{:else}<Copy size={15} /> Copy id{/if}
-        </button>
       </div>
     </div>
   </div>
@@ -277,6 +275,19 @@
   .meta .id {
     color: var(--text-muted);
     font-size: 0.78rem;
+  }
+  .det-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .det-tag {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 2px 9px;
   }
   .actions {
     display: flex;

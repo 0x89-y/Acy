@@ -32,7 +32,8 @@
   import { managers, loadManagers } from '$lib/stores/managers';
   import { clearIconCache } from '$lib/stores/icons';
   import { enqueue } from '$lib/stores/ops';
-  import { activity, clearActivity, type ActivityAction } from '$lib/stores/activity';
+  import { confirmAction } from '$lib/stores/confirm';
+  import { activity, type ActivityAction } from '$lib/stores/activity';
   import { CHANGELOG } from '$lib/changelog';
   import * as api from '$lib/api';
   import type { Source } from '$lib/types';
@@ -73,17 +74,8 @@
   let busy = $state<Source | null>(null);
   let clearing = $state(false);
   let appVersion = $state('');
-  let showAllChanges = $state(false);
-  let showAllActivity = $state(false);
-
-  let shownReleases = $derived(showAllChanges ? CHANGELOG : CHANGELOG.slice(0, 1));
-  let olderCount = $derived(CHANGELOG.length - 1);
-
-  /** Number of activity rows shown before the "show all" toggle. */
+  /** Number of recent activity rows shown in the About preview. */
   const ACTIVITY_PREVIEW = 6;
-  let shownActivity = $derived(
-    showAllActivity ? $activity : $activity.slice(0, ACTIVITY_PREVIEW)
-  );
 
   onMount(async () => {
     try {
@@ -140,9 +132,57 @@
     if (scoopAvailable && buckets === null) loadBuckets();
   });
 
+  // One-line descriptions for the well-known buckets.
+  const BUCKET_INFO: Record<string, string> = {
+    main: 'Core command-line tools',
+    extras: 'GUI apps — Firefox, VLC, Discord, VS Code…',
+    versions: 'Alternate and older app versions',
+    nirsoft: 'NirSoft utilities',
+    games: 'Games and game tools',
+    java: 'Java runtimes and JDKs',
+    php: 'PHP versions',
+    nonportable: 'Apps that need a full installer',
+    sysinternals: 'Microsoft Sysinternals tools'
+  };
+
+  // Every bucket (added + well-known), sorted: main first, then added, then the
+  // rest alphabetically — each with its added state and a description.
+  let bucketRows = $derived.by(() => {
+    const added = buckets ?? [];
+    const names = [...new Set([...added, ...knownBuckets])];
+    return names
+      .map((name) => ({
+        name,
+        added: added.includes(name),
+        description: BUCKET_INFO[name] ?? (added.includes(name) ? 'Added bucket' : '')
+      }))
+      .sort((a, b) => {
+        if (a.name === 'main') return -1;
+        if (b.name === 'main') return 1;
+        if (a.added !== b.added) return a.added ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+  });
+
   async function addBucket(name: string) {
     bucketBusy = name;
     await enqueue(`Add Scoop bucket: ${name}`, (opId) => api.addScoopBucket(name, opId));
+    bucketBusy = null;
+    loadBuckets();
+  }
+
+  async function removeBucket(name: string) {
+    const ok = await confirmAction({
+      title: `Remove the "${name}" bucket?`,
+      message:
+        `Apps you already installed from "${name}" stay, but Scoop won't offer updates ` +
+        `for them until you add it back.`,
+      confirmLabel: 'Remove bucket',
+      danger: true
+    });
+    if (!ok) return;
+    bucketBusy = name;
+    await enqueue(`Remove Scoop bucket: ${name}`, (opId) => api.removeScoopBucket(name, opId));
     bucketBusy = null;
     loadBuckets();
   }
@@ -301,7 +341,7 @@
         <button class="btn" onclick={restartSetup}>Run setup again</button>
       </section>
     {:else if activeTab === 'sources'}
-      <section class="group">
+      <section class="group source-group">
         <h2>Package managers</h2>
         <p class="muted hint">
           Turn managers on or off. A disabled manager is skipped in search, installed apps, and
@@ -324,11 +364,11 @@
             you can still pick another from its menu.
           </p>
         </div>
-        <div class="list">
+        <div class="manager-grid">
           {#each allManagers as s (s)}
             {@const st = statusOf(s)}
             {@const isLocal = s === 'local'}
-            <div class="row card">
+            <div class="row card manager-row">
               <div class="info">
                 <span class="name">{names[s]}</span>
                 <span
@@ -358,7 +398,7 @@
       </section>
 
       {#if scoopAvailable}
-        <section class="group">
+        <section class="group source-group">
           <h2>Scoop buckets</h2>
           <p class="muted hint">
             Buckets are app catalogs for Scoop. Some apps (e.g. Firefox, VLC) live in the
@@ -367,26 +407,41 @@
           {#if buckets === null}
             <p class="muted">Loading…</p>
           {:else}
-            <div class="buckets">
-              {#each buckets as b (b)}<span class="chip">{b}</span>{/each}
-              {#if buckets.length === 0}<span class="muted">No buckets added.</span>{/if}
+            <div class="bucket-list">
+              {#each bucketRows as row (row.name)}
+                <div class="bucket-row" class:is-added={row.added}>
+                  <div class="bucket-meta">
+                    <span class="bucket-name mono">{row.name}</span>
+                    {#if row.description}<span class="bucket-desc muted">{row.description}</span>{/if}
+                  </div>
+                  {#if row.added && row.name === 'main'}
+                    <span class="bucket-state">Added</span>
+                  {:else if row.added}
+                    <button
+                      class="btn btn-ghost bucket-btn"
+                      onclick={() => removeBucket(row.name)}
+                      disabled={bucketBusy !== null}
+                    >
+                      {bucketBusy === row.name ? 'Removing…' : 'Remove'}
+                    </button>
+                  {:else}
+                    <button
+                      class="btn bucket-btn"
+                      onclick={() => addBucket(row.name)}
+                      disabled={bucketBusy !== null}
+                    >
+                      {bucketBusy === row.name ? 'Adding…' : 'Add'}
+                    </button>
+                  {/if}
+                </div>
+              {/each}
             </div>
-            {@const addable = knownBuckets.filter((k) => !(buckets ?? []).includes(k))}
-            {#if addable.length > 0}
-              <div class="bucket-add">
-                {#each addable as k (k)}
-                  <button class="btn" onclick={() => addBucket(k)} disabled={bucketBusy !== null}>
-                    {bucketBusy === k ? 'Adding…' : `+ ${k}`}
-                  </button>
-                {/each}
-              </div>
-            {/if}
           {/if}
         </section>
       {/if}
 
       {#if wingetAvailable || scoopAvailable}
-        <section class="group">
+        <section class="group source-group">
           <h2>Maintenance</h2>
           <p class="muted hint">Refresh manager sources and clear out old versions.</p>
           <div class="maint">
@@ -419,7 +474,7 @@
         </section>
       {/if}
 
-      <section class="group">
+      <section class="group source-group">
         <h2>App icons</h2>
         <label class="toggle-row card">
           <span class="toggle-text">
@@ -444,7 +499,7 @@
         </button>
       </section>
 
-      <section class="group">
+      <section class="group source-group">
         <h2>Curated catalog</h2>
         <p class="muted hint">Edit the categories and apps shown on the Discover home page.</p>
         <a class="btn" href="/curated">Open catalog editor</a>
@@ -507,7 +562,7 @@
       <section class="group">
         <h2>What's new</h2>
         <div class="log">
-          {#each shownReleases as rel (rel.version)}
+          {#each CHANGELOG.slice(0, 1) as rel (rel.version)}
             <div class="rel">
               <div class="rel-head">
                 <span class="mono rel-ver">v{rel.version}</span>
@@ -521,13 +576,7 @@
             </div>
           {/each}
         </div>
-        {#if olderCount > 0}
-          <button class="btn btn-ghost" onclick={() => (showAllChanges = !showAllChanges)}>
-            {showAllChanges
-              ? 'Show less'
-              : `Show ${olderCount} older release${olderCount === 1 ? '' : 's'}`}
-          </button>
-        {/if}
+        <a class="btn btn-ghost" href="/changelog">View full changelog</a>
       </section>
 
       <section class="group">
@@ -536,7 +585,7 @@
           <p class="muted hint">Your installs, updates, and removals will show up here.</p>
         {:else}
           <div class="log">
-            {#each shownActivity as a (a.id)}
+            {#each $activity.slice(0, ACTIVITY_PREVIEW) as a (a.id)}
               <div class="log-row">
                 <span class="log-dot" class:ok={a.ok} class:bad={!a.ok}></span>
                 <span class="log-txt">
@@ -549,12 +598,7 @@
             {/each}
           </div>
           <div class="log-actions">
-            {#if $activity.length > ACTIVITY_PREVIEW}
-              <button class="btn btn-ghost" onclick={() => (showAllActivity = !showAllActivity)}>
-                {showAllActivity ? 'Show less' : `Show all ${$activity.length}`}
-              </button>
-            {/if}
-            <button class="btn btn-ghost" onclick={clearActivity}>Clear activity</button>
+            <a class="btn btn-ghost" href="/activity">View activity</a>
           </div>
         {/if}
       </section>
@@ -674,7 +718,14 @@
     margin-bottom: 8px;
   }
   .pref {
-    margin-bottom: 16px;
+    display: grid;
+    grid-template-columns: 124px minmax(0, 1fr);
+    align-items: center;
+    gap: 6px 12px;
+    margin-bottom: 14px;
+  }
+  .pref .field-label {
+    margin: 0;
   }
   .pref-select {
     background: var(--surface);
@@ -685,31 +736,83 @@
     font-size: 0.9rem;
   }
   .pref .hint {
-    margin: 8px 0 0;
+    grid-column: 2;
+    margin: 0;
+    font-size: 0.78rem;
   }
-  .buckets {
+  .source-group {
+    margin-bottom: 20px;
+  }
+  .source-group h2 {
+    margin-bottom: 9px;
+  }
+  .manager-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+  .manager-row {
+    gap: 9px;
+    min-width: 0;
+    padding: 9px 11px;
+  }
+  .manager-row .info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    min-width: 0;
+  }
+  .manager-row .btn {
+    padding: 5px 9px;
+    font-size: 0.78rem;
+  }
+  .bucket-list {
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 12px;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
   }
-  .buckets .chip {
-    font-family: var(--font-mono);
-    font-size: 0.76rem;
+  .bucket-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    border-top: 1px solid var(--border);
+  }
+  .bucket-row:first-child {
+    border-top: none;
+  }
+  .bucket-row.is-added {
+    background: color-mix(in srgb, var(--accent) 5%, transparent);
+  }
+  .bucket-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    flex: 1;
+  }
+  .bucket-name {
+    font-size: 0.84rem;
+    font-weight: 600;
     color: var(--text);
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-pill);
-    padding: 2px 10px;
   }
-  .bucket-add {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+  .bucket-desc {
+    font-size: 0.76rem;
   }
-  .bucket-add .btn {
-    font-size: 0.82rem;
-    padding: 6px 12px;
+  .bucket-state {
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--accent);
+    flex-shrink: 0;
+    padding-right: 4px;
+  }
+  .bucket-btn {
+    font-size: 0.8rem;
+    padding: 5px 12px;
+    flex-shrink: 0;
+    min-width: 76px;
   }
   .maint {
     display: flex;
@@ -760,12 +863,6 @@
       0 0 0 4px var(--sw);
   }
 
-  .list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    text-align: left;
-  }
   .row {
     display: flex;
     align-items: center;
@@ -940,6 +1037,15 @@
       flex-wrap: wrap;
       gap: 4px;
       margin-bottom: 8px;
+    }
+    .manager-grid {
+      grid-template-columns: 1fr;
+    }
+    .pref {
+      grid-template-columns: 1fr;
+    }
+    .pref .hint {
+      grid-column: 1;
     }
   }
 </style>

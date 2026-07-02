@@ -1,7 +1,17 @@
 use serde::Serialize;
+use std::process::Stdio;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
+
+/// Upper bound for read commands (list/search/show/detection). A healthy
+/// `winget list` on a machine with hundreds of apps can take ~80s, so this is
+/// deliberately generous — it exists only to break true deadlocks (e.g. a
+/// winget waiting on an un-accepted source agreement) instead of hanging the
+/// UI forever. Write operations (install/uninstall) stream and are NOT bounded
+/// here, since installers can legitimately run for many minutes.
+const READ_TIMEOUT_SECS: u64 = 300;
 
 /// One line of output streamed from a running install/uninstall/upgrade.
 #[derive(Debug, Clone, Serialize)]
@@ -29,25 +39,49 @@ fn build(program: &str, args: &[String]) -> Command {
     let mut std_cmd = std::process::Command::new(program);
     std_cmd.args(args);
     hide_window(&mut std_cmd);
-    Command::from(std_cmd)
+    let mut cmd = Command::from(std_cmd);
+    // Reap the child if its future is dropped (e.g. a read that times out, or an
+    // aborted stream) so we never leave zombie winget processes behind.
+    cmd.kill_on_drop(true);
+    cmd
+}
+
+/// Run a spawned child to completion under [`READ_TIMEOUT_SECS`]. On timeout the
+/// child future is dropped, which (via `kill_on_drop`) kills the process, and a
+/// clear error is returned instead of hanging forever.
+async fn output_with_timeout(
+    program: &str,
+    mut cmd: Command,
+) -> anyhow::Result<std::process::Output> {
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+    let child = cmd
+        .spawn()
+        .map_err(|e| anyhow::anyhow!("failed to run `{program}`: {e}"))?;
+    match tokio::time::timeout(Duration::from_secs(READ_TIMEOUT_SECS), child.wait_with_output())
+        .await
+    {
+        Ok(res) => res.map_err(|e| anyhow::anyhow!("failed to run `{program}`: {e}")),
+        Err(_) => anyhow::bail!(
+            "`{program}` did not respond within {READ_TIMEOUT_SECS}s — it may be waiting on a \
+             source agreement or prompt. Try running `{program}` once in a terminal (e.g. \
+             `winget list`), or install the WinGet PowerShell module in Settings \u{2192} Sources."
+        ),
+    }
 }
 
 /// Run a command to completion and return stdout as a (lossy) UTF-8 string.
-/// Returns an error if the process cannot be spawned. A non-zero exit is not
-/// treated as a hard error: some managers exit non-zero when there are simply
-/// no results, so callers decide what an empty/odd result means.
+/// Returns an error if the process cannot be spawned or times out. A non-zero
+/// exit is not treated as a hard error: some managers exit non-zero when there
+/// are simply no results, so callers decide what an empty/odd result means.
 pub async fn capture(program: &str, args: &[String]) -> anyhow::Result<String> {
-    let output = build(program, args).output().await.map_err(|e| {
-        anyhow::anyhow!("failed to run `{program}`: {e}")
-    })?;
+    let output = output_with_timeout(program, build(program, args)).await?;
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
 /// Like [`capture`] but returns stdout only when the process exits successfully.
 pub async fn capture_ok(program: &str, args: &[String]) -> anyhow::Result<String> {
-    let output = build(program, args).output().await.map_err(|e| {
-        anyhow::anyhow!("failed to run `{program}`: {e}")
-    })?;
+    let output = output_with_timeout(program, build(program, args)).await?;
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("`{program}` exited with {}: {}", output.status, err.trim());
@@ -114,8 +148,12 @@ pub fn ps_args(script: &str) -> Vec<String> {
     vec![
         "-NoProfile".into(),
         "-NonInteractive".into(),
+        // RemoteSigned (scoop's own recommended policy) rather than Bypass:
+        // `powershell -ExecutionPolicy Bypass` spawned by a GUI app is a classic
+        // antivirus/heuristic red flag, and our inline `-Command` scripts don't
+        // need Bypass anyway (execution policy only governs script *files*).
         "-ExecutionPolicy".into(),
-        "Bypass".into(),
+        "RemoteSigned".into(),
         "-Command".into(),
         wrapped,
     ]

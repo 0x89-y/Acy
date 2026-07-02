@@ -66,6 +66,8 @@
       homepage: null,
       icon: null,
       alternates: [],
+      tags: [],
+      donate: null,
       custom: true
     });
     openApp[`${ci}-${cat.apps.length - 1}`] = true;
@@ -117,6 +119,8 @@
             homepage: blank(a.homepage),
             icon: blank(a.icon),
             alternates: uniq.slice(1),
+            tags: (a.tags ?? []).map((t) => t.trim()).filter(Boolean),
+            donate: blank(a.donate),
             custom: a.custom
           };
         })
@@ -321,6 +325,25 @@
                     <span class="fl">Description</span>
                     <input class="in" placeholder="optional" bind:value={app.description} />
                   </label>
+                  <div class="fields two">
+                    <label class="f">
+                      <span class="fl">Tags (comma-separated)</span>
+                      <input
+                        class="in"
+                        placeholder="open source, free, chromium"
+                        value={(app.tags ?? []).join(', ')}
+                        onchange={(e) =>
+                          (app.tags = e.currentTarget.value
+                            .split(',')
+                            .map((t) => t.trim())
+                            .filter(Boolean))}
+                      />
+                    </label>
+                    <label class="f">
+                      <span class="fl">Donate URL</span>
+                      <input class="in" placeholder="optional" bind:value={app.donate} />
+                    </label>
+                  </div>
                 </div>
               {/if}
             </div>
@@ -466,6 +489,9 @@
   }
   .fields.three {
     grid-template-columns: 1.3fr 0.8fr 1fr;
+  }
+  .fields.two {
+    grid-template-columns: 1.4fr 1fr;
   }
   .f {
     display: flex;

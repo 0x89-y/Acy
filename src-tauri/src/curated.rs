@@ -34,6 +34,13 @@ pub struct CuratedApp {
     /// plus these form the full set of install options shown on the card.
     #[serde(default)]
     pub alternates: Vec<CuratedVariant>,
+    /// Free-form labels (e.g. "open source", "free", "chromium", a license) used
+    /// for display and filtering on Discover.
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// Optional donation / "support the developer" URL.
+    #[serde(default)]
+    pub donate: Option<String>,
     /// True when the user added this app (it is not in the bundled catalog).
     /// Set by `save`; lets a new app version refresh the built-in apps while
     /// keeping the user's own additions.

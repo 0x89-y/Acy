@@ -21,6 +21,8 @@ export interface Package {
   version: string | null;
   availableVersion: string | null;
   publisher: string | null;
+  /** Filesystem install path (ARP entries only), used to categorize games. */
+  installLocation: string | null;
   homepage: string | null;
   description: string | null;
   installed: boolean;
@@ -56,6 +58,10 @@ export interface CuratedApp {
   icon: string | null;
   /** Other managers the same app is available from (besides the primary source/id). */
   alternates: Variant[];
+  /** Free-form labels (open source, free, chromium, a license, ...) for display + filtering. */
+  tags: string[];
+  /** Optional donation / support URL. */
+  donate: string | null;
   /** True when the user added this app; built-in apps come from the bundled catalog. */
   custom: boolean;
 }

@@ -158,8 +158,8 @@
           description={app.description}
           {variants}
           {installed}
-          sub={app.id}
           homepage={app.icon ?? app.homepage}
+          tags={app.tags ?? []}
           allowPick
           layout={$settings.discoverView}
           backTo={`/category/${encodeURIComponent(category.id)}`}

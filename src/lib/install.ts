@@ -1,6 +1,51 @@
 import { enqueue, notice } from '$lib/stores/ops';
+import { get } from 'svelte/store';
 import * as api from '$lib/api';
+import { confirmAction, confirmRemember } from '$lib/stores/confirm';
+import { settings, setWarnChocoAdmin } from '$lib/stores/settings';
 import type { Source } from '$lib/types';
+
+/**
+ * Chocolatey writes to C:\ProgramData and usually needs admin. We don't probe
+ * elevation (that "check my own privileges" pattern trips antivirus heuristics);
+ * instead we warn once before a choco write and let the user proceed. Returns
+ * false only if they cancel.
+ */
+export async function ensureCanWrite(source: Source): Promise<boolean> {
+  if (source !== 'choco') return true;
+  if (!get(settings).warnChocoAdmin) return true;
+  const { ok, remember } = await confirmRemember({
+    title: 'Chocolatey may need administrator rights',
+    message:
+      'Chocolatey installs to a system folder and usually needs admin. If it fails, restart ' +
+      'Acy as administrator (right-click Acy → Run as administrator), then try again.',
+    confirmLabel: 'Continue',
+    rememberLabel: "Don't remind me again"
+  });
+  if (ok && remember) setWarnChocoAdmin(false);
+  return ok;
+}
+
+/**
+ * Scoop apps live in "buckets" that must be added before their manifest
+ * resolves — most curated apps are in `extras`, which isn't added by default.
+ * If the needed bucket is missing, ask before adding it (rather than silently
+ * changing the user's scoop setup), then add it. Returns false if they decline
+ * or the add fails.
+ */
+async function ensureScoopBucket(id: string, name: string): Promise<boolean> {
+  const bucket = await api.scoopNeededBucket(id);
+  if (!bucket) return true;
+  const ok = await confirmAction({
+    title: `Add the "${bucket}" scoop bucket?`,
+    message:
+      `${name} is in scoop's "${bucket}" bucket, which isn't added yet. ` +
+      `Acy can add it, then install.`,
+    confirmLabel: 'Add bucket & install'
+  });
+  if (!ok) return false;
+  return enqueue(`Add scoop bucket ${bucket}`, (opId) => api.addScoopBucket(bucket, opId));
+}
 
 /** Show a single summary toast after a batch install/uninstall/update. */
 export function summarizeBatch(
@@ -52,6 +97,15 @@ export async function runOp(
   id: string,
   name = id
 ): Promise<boolean> {
+  // Chocolatey writes need admin — bail out early with a clear message rather
+  // than running and failing with a permissions error.
+  if (!(await ensureCanWrite(source))) return false;
+
+  // A scoop install may need its bucket added first — ask before doing so.
+  if (source === 'scoop' && kind === 'install' && !(await ensureScoopBucket(id, name))) {
+    return false;
+  }
+
   // "local" runs an installer file: use the stored path, or ask for one. There
   // is nothing to verify afterwards, so trust the installer's exit code.
   if (source === 'local') {
