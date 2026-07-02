@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { get } from 'svelte/store';
-  import { Search, X } from '@lucide/svelte';
+  import { Check, ChevronDown, Funnel, Search, X } from '@lucide/svelte';
   import AppCard from '$lib/components/AppCard.svelte';
   import ManagerSetup from '$lib/components/ManagerSetup.svelte';
   import ViewToggle from '$lib/components/ViewToggle.svelte';
@@ -45,11 +45,70 @@
 
   const COLLAPSED = 4;
 
+  let allTags = $derived.by(() => {
+    const set = new Set<string>();
+    for (const cat of curated?.categories ?? [])
+      for (const app of cat.apps)
+        if (curatedVariants(app, $settings.managers).length > 0)
+          for (const t of app.tags ?? []) set.add(t);
+    return [...set].sort();
+  });
+  let activeTags = $state<Set<string>>(new Set());
+  let tagMatchMode = $state<'all' | 'any'>('all');
+  let tagMenuOpen = $state(false);
+  let tagQuery = $state('');
+  let tagFilterRoot = $state<HTMLDivElement | null>(null);
+  let tagSearchInput = $state<HTMLInputElement | null>(null);
+  let activeTagList = $derived([...activeTags].sort());
+  let matchingTagOptions = $derived(
+    allTags.filter((tag) => tag.toLowerCase().includes(tagQuery.trim().toLowerCase()))
+  );
+  let tagCounts = $derived.by(() => {
+    const counts = new Map<string, number>();
+    for (const cat of curated?.categories ?? []) {
+      for (const app of cat.apps) {
+        if (curatedVariants(app, $settings.managers).length === 0) continue;
+        for (const tag of new Set(app.tags ?? [])) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      }
+    }
+    return counts;
+  });
+
+  function toggleTag(t: string) {
+    const next = new Set(activeTags);
+    if (next.has(t)) next.delete(t);
+    else next.add(t);
+    activeTags = next;
+  }
+  function matchesTags(app: CuratedApp): boolean {
+    if (activeTags.size === 0) return true;
+    const t = new Set(app.tags ?? []);
+    return tagMatchMode === 'all'
+      ? activeTagList.every((tag) => t.has(tag))
+      : activeTagList.some((tag) => t.has(tag));
+  }
+  function clearTags() {
+    activeTags = new Set();
+  }
+  async function toggleTagMenu() {
+    tagMenuOpen = !tagMenuOpen;
+    if (tagMenuOpen) {
+      tagQuery = '';
+      await tick();
+      tagSearchInput?.focus();
+    }
+  }
+  function onWindowClick(e: MouseEvent) {
+    if (tagMenuOpen && !tagFilterRoot?.contains(e.target as Node)) tagMenuOpen = false;
+  }
+
   let visibleCategories = $derived(
     (curated?.categories ?? [])
       .map((cat) => ({
         ...cat,
-        apps: cat.apps.filter((a) => curatedVariants(a, $settings.managers).length > 0)
+        apps: cat.apps.filter(
+          (a) => curatedVariants(a, $settings.managers).length > 0 && matchesTags(a)
+        )
       }))
       .filter((cat) => cat.apps.length > 0)
   );
@@ -234,6 +293,11 @@
       target?.isContentEditable;
     const cmdK = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k';
     const slash = e.key === '/' && !typing;
+    if (e.key === 'Escape' && tagMenuOpen) {
+      e.preventDefault();
+      tagMenuOpen = false;
+      return;
+    }
     if (e.key === 'Escape' && selectMode && !typing) {
       e.preventDefault();
       exitSelect();
@@ -271,6 +335,8 @@
     return hit.variants.some((v) => $installedKeys.has(key(v.source, v.id)));
   }
 </script>
+
+<svelte:window onclick={onWindowClick} />
 
 <ManagerSetup />
 
@@ -319,6 +385,79 @@
 
 {#if !loadingCurated && !noManagers}
   <div class="discover-bar">
+    {#if !showSearch && allTags.length > 0}
+      <div class="filter-wrap" bind:this={tagFilterRoot}>
+        <button
+          class="btn filter-trigger"
+          class:on={activeTags.size > 0}
+          onclick={toggleTagMenu}
+          aria-haspopup="dialog"
+          aria-expanded={tagMenuOpen}
+        >
+          <Funnel size={15} /> Filters
+          {#if activeTags.size > 0}<span class="filter-count">{activeTags.size}</span>{/if}
+          <ChevronDown size={14} />
+        </button>
+
+        {#if tagMenuOpen}
+          <div class="filter-pop card" role="dialog" aria-label="Filter apps by tag">
+            <div class="filter-head">
+              <strong>Filter by tags</strong>
+              {#if activeTags.size > 0}
+                <button class="clear-tags" onclick={clearTags}>Clear all</button>
+              {/if}
+            </div>
+            <input
+              class="tag-search"
+              bind:this={tagSearchInput}
+              bind:value={tagQuery}
+              placeholder="Find a tag…"
+              aria-label="Find a tag"
+            />
+            <div class="match-mode" aria-label="Tag matching mode">
+              <button class:on={tagMatchMode === 'all'} onclick={() => (tagMatchMode = 'all')}>
+                Match all
+              </button>
+              <button class:on={tagMatchMode === 'any'} onclick={() => (tagMatchMode = 'any')}>
+                Match any
+              </button>
+            </div>
+            <div class="tag-options">
+              {#each matchingTagOptions as tag (tag)}
+                <button
+                  class="tag-option"
+                  class:on={activeTags.has(tag)}
+                  onclick={() => toggleTag(tag)}
+                  aria-pressed={activeTags.has(tag)}
+                >
+                  <span class="tag-check">{#if activeTags.has(tag)}<Check size={13} />{/if}</span>
+                  <span>{tag}</span>
+                  <span class="tag-count mono">{tagCounts.get(tag) ?? 0}</span>
+                </button>
+              {/each}
+              {#if matchingTagOptions.length === 0}
+                <span class="no-tags muted">No matching tags.</span>
+              {/if}
+            </div>
+          </div>
+        {/if}
+      </div>
+
+      {#each activeTagList.slice(0, 2) as tag (tag)}
+        <button class="active-tag" onclick={() => toggleTag(tag)} title={`Remove ${tag} filter`}>
+          {tag} <X size={12} />
+        </button>
+      {/each}
+      {#if activeTagList.length > 2}
+        <button
+          class="active-more"
+          onclick={(e) => {
+            e.stopPropagation();
+            toggleTagMenu();
+          }}>+{activeTagList.length - 2}</button
+        >
+      {/if}
+    {/if}
     <button
       class="btn sel-toggle"
       onclick={() => (selectMode ? exitSelect() : (selectMode = true))}
@@ -360,8 +499,8 @@
             description={app.description}
             variants={vs}
             installed={anyInstalled(vs)}
-            sub={app.id}
             homepage={app.icon ?? app.homepage}
+            tags={app.tags ?? []}
             allowPick
             layout={$settings.discoverView}
             highlight={trimmed}
@@ -438,7 +577,14 @@
     <a class="btn btn-accent" href="/settings">Open Settings</a>
   </div>
 {:else}
-  {#each visibleCategories as cat (cat.id)}
+  {#if visibleCategories.length === 0 && activeTags.size > 0}
+    <div class="filter-empty card">
+      <h2>No apps match these filters</h2>
+      <p class="muted">Try fewer tags or switch between matching all and matching any.</p>
+      <button class="btn" onclick={clearTags}>Clear filters</button>
+    </div>
+  {:else}
+    {#each visibleCategories as cat (cat.id)}
     <section class="cat">
       <div class="cat-head">
         <h2>{cat.title}</h2>
@@ -456,8 +602,8 @@
             description={app.description}
             variants={vs}
             installed={anyInstalled(vs)}
-            sub={app.id}
             homepage={app.icon ?? app.homepage}
+            tags={app.tags ?? []}
             allowPick
             layout={$settings.discoverView}
             selectable={selectMode && !anyInstalled(vs)}
@@ -468,7 +614,8 @@
         {/each}
       </div>
     </section>
-  {/each}
+    {/each}
+  {/if}
 {/if}
 
 <style>
@@ -564,8 +711,153 @@
   .discover-bar {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 10px;
     margin: -10px 0 16px;
+  }
+  .filter-wrap {
+    position: relative;
+  }
+  .filter-trigger.on {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .filter-count {
+    min-width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+    border-radius: var(--radius-pill);
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+  .filter-pop {
+    position: absolute;
+    z-index: 35;
+    top: calc(100% + 7px);
+    left: 0;
+    width: min(330px, calc(100vw - 48px));
+    padding: 14px;
+    box-shadow: var(--shadow);
+  }
+  .filter-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+  }
+  .clear-tags {
+    padding: 2px 4px;
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    font-size: 0.78rem;
+  }
+  .tag-search {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    outline: none;
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 0.84rem;
+  }
+  .tag-search:focus {
+    border-color: var(--accent);
+  }
+  .match-mode {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px;
+    padding: 3px;
+    margin: 9px 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+  }
+  .match-mode button {
+    padding: 5px 8px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.77rem;
+  }
+  .match-mode button.on {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--card-shadow);
+  }
+  .tag-options {
+    max-height: 245px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .tag-option {
+    display: grid;
+    grid-template-columns: 19px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 8px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+    font-size: 0.82rem;
+  }
+  .tag-option:hover,
+  .tag-option.on {
+    background: var(--surface-hover);
+  }
+  .tag-check {
+    width: 17px;
+    height: 17px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    color: var(--accent-contrast);
+  }
+  .tag-option.on .tag-check {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+  .tag-count {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+  }
+  .no-tags {
+    padding: 12px 8px;
+    font-size: 0.82rem;
+  }
+  .active-tag,
+  .active-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 28px;
+    padding: 3px 9px;
+    border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+    color: var(--accent);
+    font-size: 0.76rem;
+  }
+  .active-more {
+    min-width: 32px;
+    justify-content: center;
   }
   .discover-spacer {
     flex: 1;
@@ -577,6 +869,19 @@
   }
   .sel-toggle {
     font-size: 0.85rem;
+  }
+  .filter-empty {
+    max-width: 480px;
+    margin: 38px auto;
+    padding: 30px;
+    text-align: center;
+  }
+  .filter-empty h2 {
+    font-size: 1.05rem;
+  }
+  .filter-empty p {
+    margin: 7px 0 18px;
+    font-size: 0.88rem;
   }
   .sel-bar {
     position: sticky;

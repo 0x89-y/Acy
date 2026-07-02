@@ -1,3 +1,4 @@
+mod arp;
 mod commands;
 mod curated;
 mod icons;
@@ -49,9 +50,11 @@ pub fn run() {
             commands::save_curated,
             commands::search,
             commands::list_installed,
+            commands::list_installed_fast,
             commands::list_updates,
             commands::app_info,
             commands::install,
+            commands::scoop_needed_bucket,
             commands::uninstall,
             commands::upgrade,
             commands::upgrade_all,
@@ -64,6 +67,7 @@ pub fn run() {
             commands::scoop_buckets,
             commands::scoop_known_buckets,
             commands::add_scoop_bucket,
+            commands::remove_scoop_bucket,
             commands::winget_update_sources,
             commands::scoop_update,
             commands::scoop_cleanup,

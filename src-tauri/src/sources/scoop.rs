@@ -175,6 +175,36 @@ fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
 
+pub fn needed_bucket(id: &str) -> Option<String> {
+    let buckets = scoop_home()?.join("buckets");
+    if let Some((bucket, _)) = id.split_once('/') {
+        (!buckets.join(bucket).is_dir()).then(|| bucket.to_string())
+    } else if manifest_in_added_bucket(&buckets, id) {
+        None
+    } else {
+        Some("extras".to_string())
+    }
+}
+
+fn scoop_home() -> Option<std::path::PathBuf> {
+    use std::path::PathBuf;
+    match std::env::var("SCOOP") {
+        Ok(s) if !s.is_empty() => Some(PathBuf::from(s)),
+        _ => std::env::var("USERPROFILE").ok().map(|u| PathBuf::from(u).join("scoop")),
+    }
+}
+
+fn manifest_in_added_bucket(buckets: &std::path::Path, id: &str) -> bool {
+    let file = format!("{id}.json");
+    let Ok(entries) = std::fs::read_dir(buckets) else {
+        return false;
+    };
+    entries.flatten().any(|entry| {
+        let dir = entry.path();
+        dir.is_dir() && (dir.join("bucket").join(&file).is_file() || dir.join(&file).is_file())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

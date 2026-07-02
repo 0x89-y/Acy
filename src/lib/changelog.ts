@@ -7,6 +7,60 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.6.4',
+    date: '2026-07-01',
+    changes: [
+      'Chocolatey actions now show a dismissible "may need administrator rights" warning instead of checking your admin status (which some antivirus flagged).',
+      'Removed the "switch an app to another package manager" action, and softened how Acy invokes PowerShell, to avoid antivirus false positives.',
+      "Acy's own entry can no longer show up in — or be removed from — the Installed list."
+    ]
+  },
+  {
+    version: '0.6.3',
+    date: '2026-07-01',
+    changes: [
+      'Fixed the right-click "Switch to another manager" and "Uninstall" actions erroring instead of asking for confirmation.',
+      'Chocolatey needs administrator rights: Acy now shows a clear "restart as administrator" message instead of failing when it isn\'t elevated.',
+      'Added an "Admin" badge in the nav when Acy is running as administrator.'
+    ]
+  },
+  {
+    version: '0.6.2',
+    date: '2026-07-01',
+    changes: [
+      'Installed apps now appear instantly (read straight from Windows), with winget filling in details in the background.',
+      'With "refresh on startup" off, launches no longer run a slow winget scan — it only runs when you press Refresh, so installs and uninstalls no longer get stuck behind it.',
+      'A slow or failed refresh no longer blanks the Installed list.',
+      'Right-click a curated app to switch it between package managers (e.g. winget → choco).',
+      'Games, drivers, and Windows system components now sort into their own collapsible groups more accurately; the list is grouped by default.',
+      'Added a small indicator that shows when winget is scanning in the background.'
+    ]
+  },
+  {
+    version: '0.6.1',
+    date: '2026-07-01',
+    changes: [
+      'Fixed winget hanging indefinitely: reads now time out with a clear error instead of freezing the app or leaving stuck processes.',
+      'Fixed uninstalls and refreshes stalling when a source agreement or an administrator prompt was pending.',
+      'Installed now sorts Steam/other games, drivers, and Windows system components into their own collapsible groups, and remembers what you collapse.',
+      'New "Show" control (All / Hide system / Managed only) with a "managed · total" count.',
+      'Right-click an app to hide it from the list; apps installed via more than one manager are flagged.',
+      'Acy no longer lists itself twice.'
+    ]
+  },
+  {
+    version: '0.6.0',
+    date: '2026-07-01',
+    changes: [
+      'Curated apps now have tags, and you can filter Discover by them.',
+      'Many apps now show a "Donate" button linking to the developer\'s donation page.',
+      'Discover list view shows app descriptions; cards no longer show the package id.',
+      '"Copy command" and "Copy id" moved into the right-click menu.',
+      'New Changelog and Activity pages, linked from Settings.',
+      'Acy now appears in your Installed list, and Acy updates show alongside app updates.'
+    ]
+  },
+  {
     version: '0.5.5',
     date: '2026-06-29',
     changes: [

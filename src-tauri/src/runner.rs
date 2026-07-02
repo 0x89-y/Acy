@@ -1,7 +1,11 @@
 use serde::Serialize;
+use std::process::Stdio;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
+
+const READ_TIMEOUT_SECS: u64 = 300;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,20 +29,39 @@ fn build(program: &str, args: &[String]) -> Command {
     let mut std_cmd = std::process::Command::new(program);
     std_cmd.args(args);
     hide_window(&mut std_cmd);
-    Command::from(std_cmd)
+    let mut cmd = Command::from(std_cmd);
+    cmd.kill_on_drop(true);
+    cmd
+}
+
+async fn output_with_timeout(
+    program: &str,
+    mut cmd: Command,
+) -> anyhow::Result<std::process::Output> {
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+    let child = cmd
+        .spawn()
+        .map_err(|e| anyhow::anyhow!("failed to run `{program}`: {e}"))?;
+    match tokio::time::timeout(Duration::from_secs(READ_TIMEOUT_SECS), child.wait_with_output())
+        .await
+    {
+        Ok(res) => res.map_err(|e| anyhow::anyhow!("failed to run `{program}`: {e}")),
+        Err(_) => anyhow::bail!(
+            "`{program}` did not respond within {READ_TIMEOUT_SECS}s — it may be waiting on a \
+             source agreement or prompt. Try running `{program}` once in a terminal (e.g. \
+             `winget list`), or install the WinGet PowerShell module in Settings \u{2192} Sources."
+        ),
+    }
 }
 
 pub async fn capture(program: &str, args: &[String]) -> anyhow::Result<String> {
-    let output = build(program, args).output().await.map_err(|e| {
-        anyhow::anyhow!("failed to run `{program}`: {e}")
-    })?;
+    let output = output_with_timeout(program, build(program, args)).await?;
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
 pub async fn capture_ok(program: &str, args: &[String]) -> anyhow::Result<String> {
-    let output = build(program, args).output().await.map_err(|e| {
-        anyhow::anyhow!("failed to run `{program}`: {e}")
-    })?;
+    let output = output_with_timeout(program, build(program, args)).await?;
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("`{program}` exited with {}: {}", output.status, err.trim());
@@ -102,7 +125,7 @@ pub fn ps_args(script: &str) -> Vec<String> {
         "-NoProfile".into(),
         "-NonInteractive".into(),
         "-ExecutionPolicy".into(),
-        "Bypass".into(),
+        "RemoteSigned".into(),
         "-Command".into(),
         wrapped,
     ]

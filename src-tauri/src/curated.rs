@@ -27,6 +27,10 @@ pub struct CuratedApp {
     #[serde(default)]
     pub alternates: Vec<CuratedVariant>,
     #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub donate: Option<String>,
+    #[serde(default)]
     pub custom: bool,
 }
 

@@ -3,6 +3,7 @@ import * as api from '$lib/api';
 import type { Package, Source } from '$lib/types';
 import { enabledSources, updatesCount } from './managers';
 import { ignoredUpdateKeys, packageIgnoredKey } from './ignoredUpdates';
+import { settings } from './settings';
 
 const INSTALLED_KEY = 'acy-installed-cache';
 const UPDATES_KEY = 'acy-updates-cache';
@@ -10,6 +11,19 @@ const CHECKED_KEY = 'acy-last-checked';
 
 function sig(sources: Source[]): string {
   return [...sources].sort().join(',');
+}
+
+export function isAcyPackage(p: Package): boolean {
+  if (p.source !== 'winget') return false;
+  if (p.name.trim().toLowerCase() === 'acy') return true;
+  const id = p.id.toLowerCase();
+  if (id.endsWith('\\acy') || id.endsWith('/acy')) return true;
+  const loc = (p.installLocation ?? '').replace(/[\\/]+$/, '').toLowerCase();
+  return loc.endsWith('\\acy') || loc.endsWith('/acy');
+}
+
+function withoutSelf(list: Package[]): Package[] {
+  return list.filter((p) => !isAcyPackage(p));
 }
 
 function readCache(key: string): Package[] | null {
@@ -33,7 +47,7 @@ function writeCache(key: string, value: Package[]): void {
 
 const cachedInstalled = readCache(INSTALLED_KEY);
 
-export const installed = writable<Package[]>(cachedInstalled ?? []);
+export const installed = writable<Package[]>(cachedInstalled ? withoutSelf(cachedInstalled) : []);
 export const installedLoading = writable(false);
 export const installedError = writable<string | null>(null);
 export const installedReady = writable(cachedInstalled !== null);
@@ -50,13 +64,26 @@ let installedSig = '';
 export async function loadInstalled(force = false): Promise<void> {
   const sources = get(enabledSources);
   const current = sig(sources);
-  if (!force && get(installedReady) && current === installedSig) return;
   if (get(installedLoading)) return;
+  if (!force && get(installedReady) && current === installedSig) return;
+
+  if (sources.includes('winget') && (force || !get(installedReady))) {
+    try {
+      const fast = withoutSelf(await api.listInstalledFast());
+      if (fast.length > 0) {
+        installed.set(fast);
+        installedReady.set(true);
+      }
+    } catch {
+    }
+  }
+
+  if (!force && !get(settings).refreshOnStartup) return;
 
   installedLoading.set(true);
   installedError.set(null);
   try {
-    const list = await api.listInstalled(sources);
+    const list = withoutSelf(await api.listInstalled(sources));
     installed.set(list);
     writeCache(INSTALLED_KEY, list);
     installedSig = current;
@@ -73,7 +100,7 @@ export async function loadInstalled(force = false): Promise<void> {
 
 const cachedUpdates = readCache(UPDATES_KEY);
 
-export const updates = writable<Package[]>(cachedUpdates ?? []);
+export const updates = writable<Package[]>(cachedUpdates ? withoutSelf(cachedUpdates) : []);
 export const updatesLoading = writable(false);
 export const updatesError = writable<string | null>(null);
 export const updatesReady = writable(cachedUpdates !== null);
@@ -97,11 +124,12 @@ export async function loadUpdates(force = false): Promise<void> {
   const current = sig(sources);
   if (!force && get(updatesReady) && current === updatesSig) return;
   if (get(updatesLoading)) return;
+  if (!force && !get(settings).refreshOnStartup) return;
 
   updatesLoading.set(true);
   updatesError.set(null);
   try {
-    const list = await api.listUpdates(sources);
+    const list = withoutSelf(await api.listUpdates(sources));
     updates.set(list);
     writeCache(UPDATES_KEY, list);
     updatesSig = current;

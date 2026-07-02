@@ -18,6 +18,7 @@ export interface Package {
   version: string | null;
   availableVersion: string | null;
   publisher: string | null;
+  installLocation: string | null;
   homepage: string | null;
   description: string | null;
   installed: boolean;
@@ -51,6 +52,8 @@ export interface CuratedApp {
   homepage: string | null;
   icon: string | null;
   alternates: Variant[];
+  tags: string[];
+  donate: string | null;
   custom: boolean;
 }
 

@@ -16,6 +16,8 @@
   import CloseToTrayPrompt from '$lib/components/CloseToTrayPrompt.svelte';
   import ShortcutsHelp, { toggleShortcuts } from '$lib/components/ShortcutsHelp.svelte';
   import ResizeHandles from '$lib/components/ResizeHandles.svelte';
+  import WingetBusy from '$lib/components/WingetBusy.svelte';
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import Setup from '$lib/components/Setup.svelte';
   import { loadManagers } from '$lib/stores/managers';
   import { loadUpdates } from '$lib/stores/library';
@@ -77,6 +79,8 @@
 <CloseToTrayPrompt />
 <ShortcutsHelp />
 <ResizeHandles />
+<WingetBusy />
+<ConfirmDialog />
 
 <style>
   .page {

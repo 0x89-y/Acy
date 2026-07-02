@@ -56,7 +56,6 @@ impl PackageSource for Msstore {
                 s("--source"),
                 s("msstore"),
                 s("--accept-source-agreements"),
-                s("--disable-interactivity"),
             ],
         )
         .await?;
@@ -84,7 +83,6 @@ impl PackageSource for Msstore {
                 s("--source"),
                 s("msstore"),
                 s("--accept-source-agreements"),
-                s("--disable-interactivity"),
             ],
         )
         .await?;
@@ -106,7 +104,6 @@ impl PackageSource for Msstore {
                 s("msstore"),
                 s("--accept-package-agreements"),
                 s("--accept-source-agreements"),
-                s("--disable-interactivity"),
             ],
         )
     }
@@ -120,7 +117,6 @@ impl PackageSource for Msstore {
                 s(id),
                 s("-e"),
                 s("--accept-source-agreements"),
-                s("--disable-interactivity"),
             ],
         )
     }
@@ -137,7 +133,6 @@ impl PackageSource for Msstore {
                 s("msstore"),
                 s("--accept-package-agreements"),
                 s("--accept-source-agreements"),
-                s("--disable-interactivity"),
             ],
         )
     }
@@ -152,7 +147,6 @@ impl PackageSource for Msstore {
                 s("msstore"),
                 s("--accept-package-agreements"),
                 s("--accept-source-agreements"),
-                s("--disable-interactivity"),
             ],
         )
     }

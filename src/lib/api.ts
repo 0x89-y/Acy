@@ -21,6 +21,8 @@ export const search = (query: string, sources: Source[]) =>
 export const listInstalled = (sources: Source[]) =>
   invoke<Package[]>('list_installed', { sources });
 
+export const listInstalledFast = () => invoke<Package[]>('list_installed_fast');
+
 export const listUpdates = (sources: Source[]) =>
   invoke<Package[]>('list_updates', { sources });
 
@@ -29,6 +31,9 @@ export const appInfo = (source: Source, id: string) =>
 
 export const install = (source: Source, id: string, opId: string) =>
   invoke<number>('install', { source, id, opId });
+
+export const scoopNeededBucket = (id: string) =>
+  invoke<string | null>('scoop_needed_bucket', { id });
 
 export const uninstall = (source: Source, id: string, opId: string) =>
   invoke<number>('uninstall', { source, id, opId });
@@ -54,6 +59,9 @@ export const scoopKnownBuckets = () => invoke<string[]>('scoop_known_buckets');
 
 export const addScoopBucket = (name: string, opId: string) =>
   invoke<number>('add_scoop_bucket', { name, opId });
+
+export const removeScoopBucket = (name: string, opId: string) =>
+  invoke<number>('remove_scoop_bucket', { name, opId });
 
 export const wingetUpdateSources = (opId: string) =>
   invoke<number>('winget_update_sources', { opId });
