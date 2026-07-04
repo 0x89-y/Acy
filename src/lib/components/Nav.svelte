@@ -1,7 +1,6 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { Settings } from '@lucide/svelte';
-  import ThemeToggle from './ThemeToggle.svelte';
   import WindowControls from './WindowControls.svelte';
   import { updatesCount } from '$lib/stores/managers';
 
@@ -41,7 +40,6 @@
     >
       <Settings size={18} />
     </a>
-    <ThemeToggle />
     <div class="win-divider"></div>
     <WindowControls />
   </div>
@@ -56,8 +54,7 @@
     align-items: center;
     gap: 22px;
     padding: 12px 8px 12px 24px;
-    background: color-mix(in srgb, var(--bg) 82%, transparent);
-    backdrop-filter: blur(12px);
+    background: var(--bg);
     border-bottom: 1px solid var(--border);
   }
   .brand {
@@ -73,6 +70,12 @@
   .logo::before {
     content: '0x';
     color: var(--accent);
+  }
+  :global([data-accent='aurora']) .logo::before {
+    background: var(--aurora-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
   .links {
     display: flex;
@@ -101,9 +104,9 @@
   .count {
     font-family: var(--font-mono);
     font-size: 0.7rem;
-    background: var(--accent);
+    background: var(--accent-fill);
     color: var(--accent-contrast);
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     padding: 0 6px;
     line-height: 1.5;
   }

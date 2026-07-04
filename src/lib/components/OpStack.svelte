@@ -64,7 +64,7 @@
     background: var(--surface);
     color: var(--text);
     padding: 4px 12px;
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     font-size: 0.78rem;
     font-weight: 500;
     box-shadow: var(--shadow);

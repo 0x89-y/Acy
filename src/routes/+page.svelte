@@ -11,6 +11,16 @@
   import { settings, setDiscoverView } from '$lib/stores/settings';
   import { installedKeys, loadInstalled } from '$lib/stores/library';
   import { runOp, summarizeBatch } from '$lib/install';
+  import {
+    addToCurated,
+    searchHitToInput,
+    curatedKeys as allCuratedKeys,
+    curatedKey,
+    moveCuratedApp
+  } from '$lib/stores/curated';
+  import { notice } from '$lib/stores/ops';
+  import { pendingTag } from '$lib/stores/discover';
+  import type { CtxItem } from '$lib/stores/contextMenu';
 
   function curatedVariants(app: CuratedApp, managers: Record<Source, boolean>): Variant[] {
     const seen = new Set<Source>();
@@ -122,7 +132,8 @@
       for (const app of cat.apps) {
         if (curatedVariants(app, $settings.managers).length === 0) continue;
         const name = (app.name ?? app.id).toLowerCase();
-        if (name.includes(q) || app.id.toLowerCase().includes(q)) {
+        const tagHit = (app.tags ?? []).some((t) => t.toLowerCase().includes(q));
+        if (name.includes(q) || app.id.toLowerCase().includes(q) || tagHit) {
           const k = `${app.source}:${app.id.toLowerCase()}`;
           if (!seen.has(k)) {
             seen.add(k);
@@ -334,6 +345,46 @@
   function hitInstalled(hit: SearchHit): boolean {
     return hit.variants.some((v) => $installedKeys.has(key(v.source, v.id)));
   }
+
+  let curatedKeySet = $derived(allCuratedKeys(curated));
+  function hitInList(hit: SearchHit): boolean {
+    return hit.variants.some((v) => curatedKeySet.has(curatedKey(v.source, v.id)));
+  }
+
+  async function addHit(hit: SearchHit) {
+    const res = await addToCurated(searchHitToInput(hit));
+    if (res !== 'error') curated = await api.getCurated();
+    if (res === 'added') notice(`Added ${hit.name} to your list.`, 'ok');
+    else if (res === 'exists') notice(`${hit.name} is already in your list.`, 'ok');
+    else notice(`Couldn't add ${hit.name} to your list.`, 'error');
+  }
+
+  $effect(() => {
+    const t = $pendingTag;
+    if (!t) return;
+    activeTags = new Set([t]);
+    query = '';
+    pendingTag.set(null);
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
+  });
+
+  function moveMenu(app: CuratedApp): CtxItem[] {
+    return (curated?.categories ?? [])
+      .filter((c) => c.id !== 'uncategorized')
+      .map((c) => ({
+        label: `Move to ${c.title || c.id}`,
+        onSelect: () => moveApp(app, c.id, c.title || c.id)
+      }));
+  }
+  async function moveApp(app: CuratedApp, toId: string, toTitle: string) {
+    const ok = await moveCuratedApp(app.source, app.id, toId);
+    if (ok) {
+      curated = await api.getCurated();
+      notice(`Moved ${app.name ?? app.id} to ${toTitle}.`, 'ok');
+    } else {
+      notice(`Couldn't move ${app.name ?? app.id}.`, 'error');
+    }
+  }
 </script>
 
 <svelte:window onclick={onWindowClick} />
@@ -531,6 +582,8 @@
               installed={hitInstalled(hit)}
               layout={$settings.discoverView}
               highlight={trimmed}
+              inList={hitInList(hit)}
+              onAddToList={() => addHit(hit)}
               onChanged={() => loadInstalled(true)}
             />
           {/each}
@@ -543,13 +596,8 @@
           : `No package-manager results for “${query}”.`}
       </p>
     {/if}
-  {:else}
-    <div class="search-prompt">
-      {#if curatedMatches.length === 0}
-        <p class="muted">No curated apps match “{query}”.</p>
-      {/if}
-      <p class="muted">Press Enter or select Search to look beyond the curated catalog.</p>
-    </div>
+  {:else if curatedMatches.length === 0}
+    <p class="muted">No curated apps match “{query}”.</p>
   {/if}
   </div>
 {:else if loadingCurated}
@@ -608,6 +656,7 @@
             layout={$settings.discoverView}
             selectable={selectMode && !anyInstalled(vs)}
             selected={selectedApps.has(appKey(app))}
+            ctxExtra={cat.id === 'uncategorized' ? moveMenu(app) : []}
             onToggleSelect={() => toggleSelectApp(app)}
             onChanged={() => loadInstalled(true)}
           />
@@ -679,13 +728,6 @@
     flex-shrink: 0;
     white-space: nowrap;
   }
-  .search-prompt {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 8px 0 4px;
-  }
   .recents {
     display: flex;
     flex-wrap: wrap;
@@ -701,7 +743,7 @@
     background: var(--surface);
     color: var(--text);
     padding: 4px 12px;
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     font-size: 0.82rem;
   }
   .recent:hover {
@@ -729,8 +771,8 @@
     align-items: center;
     justify-content: center;
     padding: 0 5px;
-    border-radius: var(--radius-pill);
-    background: var(--accent);
+    border-radius: var(--radius-sm);
+    background: var(--accent-fill);
     color: var(--accent-contrast);
     font-size: 0.7rem;
     font-weight: 600;
@@ -832,7 +874,7 @@
   }
   .tag-option.on .tag-check {
     border-color: var(--accent);
-    background: var(--accent);
+    background: var(--accent-fill);
   }
   .tag-count {
     color: var(--text-muted);
@@ -849,10 +891,10 @@
     gap: 5px;
     min-height: 28px;
     padding: 3px 9px;
-    border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
-    border-radius: var(--radius-pill);
-    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-    color: var(--accent);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text);
     font-size: 0.76rem;
   }
   .active-more {
@@ -892,9 +934,8 @@
     gap: 10px;
     padding: 10px 14px;
     margin-bottom: 18px;
-    background: color-mix(in srgb, var(--surface) 92%, transparent);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: var(--radius);
   }
   .sel-count {

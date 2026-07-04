@@ -25,6 +25,24 @@
   let saving = $state(false);
   let status = $state<{ kind: 'ok' | 'err'; msg: string } | null>(null);
 
+  let filter = $state('');
+  let filtering = $derived(filter.trim().length > 0);
+  function matchesApp(app: CuratedApp): boolean {
+    const q = filter.trim().toLowerCase();
+    if (!q) return true;
+    const hay = [app.name ?? '', app.id, app.source, ...(app.tags ?? []), ...app.alternates.map((a) => a.id)]
+      .join(' ')
+      .toLowerCase();
+    return hay.includes(q);
+  }
+  function catMatches(cat: CuratedCategory): boolean {
+    const q = filter.trim().toLowerCase();
+    if (!q) return true;
+    return `${cat.title} ${cat.id}`.toLowerCase().includes(q);
+  }
+  const catShown = (cat: CuratedCategory) => catMatches(cat) || cat.apps.some(matchesApp);
+  const appShown = (cat: CuratedCategory, app: CuratedApp) => catMatches(cat) || matchesApp(app);
+
   let openCat = $state<Record<number, boolean>>({});
   let openApp = $state<Record<string, boolean>>({});
   const catOpen = (ci: number) => openCat[ci] ?? true;
@@ -66,6 +84,7 @@
       alternates: [],
       tags: [],
       donate: null,
+      releaseNotes: null,
       custom: true
     });
     openApp[`${ci}-${cat.apps.length - 1}`] = true;
@@ -112,6 +131,7 @@
             alternates: uniq.slice(1),
             tags: (a.tags ?? []).map((t) => t.trim()).filter(Boolean),
             donate: blank(a.donate),
+            releaseNotes: blank(a.releaseNotes),
             custom: a.custom
           };
         })
@@ -162,13 +182,6 @@
   </button>
 </div>
 
-<p class="muted hint">
-  The catalog that powers the Discover home page. Package ids are manager-specific (winget uses its
-  PackageIdentifier; Scoop and Chocolatey use the package name). <strong>Built-in</strong> apps ship
-  with Acy and refresh on update — renaming or removing them won't stick. Apps you add are kept as
-  <strong>custom</strong> and survive updates.
-</p>
-
 {#if status}
   <p class="status" class:ok={status.kind === 'ok'} class:err={status.kind === 'err'}>{status.msg}</p>
 {/if}
@@ -176,9 +189,13 @@
 {#if loading}
   <p class="muted">Loading…</p>
 {:else if file}
-  <p class="muted count">{file.categories.length} categories · {appCount} apps</p>
+  <div class="toolbar">
+    <p class="muted count">{file.categories.length} categories · {appCount} apps</p>
+    <input class="in search" placeholder="Search apps…" bind:value={filter} />
+  </div>
 
   {#each file.categories as cat, ci (ci)}
+    {#if !filtering || catShown(cat)}
     <section class="cat card">
       <div class="cat-head">
         <button class="disclose" onclick={() => (openCat[ci] = !catOpen(ci))} aria-label="Toggle category">
@@ -200,9 +217,10 @@
         </div>
       </div>
 
-      {#if catOpen(ci)}
+      {#if catOpen(ci) || filtering}
         <div class="apps">
           {#each cat.apps as app, ai (ai)}
+            {#if !filtering || appShown(cat, app)}
             <div class="app" class:open={appOpen(ci, ai)}>
               <div class="app-row">
                 <button
@@ -335,9 +353,14 @@
                       <input class="in" placeholder="optional" bind:value={app.donate} />
                     </label>
                   </div>
+                  <label class="f">
+                    <span class="fl">Release notes URL</span>
+                    <input class="in" placeholder="optional" bind:value={app.releaseNotes} />
+                  </label>
                 </div>
               {/if}
             </div>
+            {/if}
           {/each}
 
           <button class="btn btn-ghost add" onclick={() => addApp(cat, ci)}>
@@ -346,6 +369,7 @@
         </div>
       {/if}
     </section>
+    {/if}
   {/each}
 
   <button class="btn add-cat" onclick={addCategory}>
@@ -366,11 +390,6 @@
   .spacer {
     flex: 1;
   }
-  .hint {
-    font-size: 0.86rem;
-    max-width: 720px;
-    margin-bottom: 16px;
-  }
   .status {
     font-size: 0.88rem;
     padding: 8px 12px;
@@ -385,9 +404,19 @@
     color: var(--danger);
     background: color-mix(in srgb, var(--danger) 12%, transparent);
   }
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
   .count {
     font-size: 0.82rem;
-    margin-bottom: 14px;
+    flex-shrink: 0;
+  }
+  .search {
+    max-width: 300px;
+    margin-left: auto;
   }
 
   .cat {
@@ -405,7 +434,7 @@
     color: var(--text-muted);
     background: var(--surface-2);
     border: 1px solid var(--border);
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     padding: 1px 9px;
     flex-shrink: 0;
   }
@@ -458,7 +487,7 @@
     font-family: var(--font-mono);
     font-size: 0.64rem;
     padding: 1px 7px;
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border-strong);
     color: var(--text-muted);
     white-space: nowrap;

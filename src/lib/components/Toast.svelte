@@ -135,7 +135,7 @@
     font-size: 0.7rem;
     font-family: var(--font-mono);
     padding: 1px 7px;
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     border: 1px solid currentColor;
     flex-shrink: 0;
   }
@@ -191,7 +191,7 @@
   }
   .progress.running .bar {
     width: 35%;
-    background: var(--accent);
+    background: var(--accent-fill);
     animation: indeterminate 1.1s ease-in-out infinite;
   }
   .progress.done .bar {

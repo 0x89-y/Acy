@@ -1,7 +1,9 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { openUrl } from '@tauri-apps/plugin-opener';
-  import { ExternalLink, ArrowLeft, Heart } from '@lucide/svelte';
+  import { ExternalLink, ArrowLeft, Heart, Plus, Pencil, FileText } from '@lucide/svelte';
+  import CuratedAppEditModal from '$lib/components/CuratedAppEditModal.svelte';
+  import { filterByTag } from '$lib/stores/discover';
   import AppIcon from '$lib/components/AppIcon.svelte';
   import SourceBadge from '$lib/components/SourceBadge.svelte';
   import InstallButton from '$lib/components/InstallButton.svelte';
@@ -18,7 +20,7 @@
     loadUpdates,
     refreshLibrary
   } from '$lib/stores/library';
-  import { curated as curatedStore, loadCurated } from '$lib/stores/curated';
+  import { curated as curatedStore, loadCurated, addToCurated } from '$lib/stores/curated';
   import { settings } from '$lib/stores/settings';
   import type { Package, Source, Variant } from '$lib/types';
 
@@ -72,6 +74,7 @@
   let description = $derived(curatedApp?.description ?? info?.description ?? null);
   let tags = $derived(curatedApp?.tags ?? []);
   let donate = $derived(curatedApp?.donate ?? null);
+  let releaseNotes = $derived(curatedApp?.releaseNotes ?? null);
   let publisher = $derived(info?.publisher ?? null);
   let latestVersion = $derived(info?.version ?? null);
   let isInstalled = $derived(!!installedPkg);
@@ -109,6 +112,17 @@
     refreshLibrary();
   }
 
+  let adding = $state(false);
+  let editing = $state(false);
+  async function addThis() {
+    adding = true;
+    const alternates = variants
+      .filter((v) => !(v.source === source && v.id === id))
+      .map((v) => ({ source: v.source, id: v.id }));
+    await addToCurated({ source, id, name, description, homepage, alternates });
+    adding = false;
+  }
+
   let cmd = $derived(installCommand(source, id));
 
   function headerMenu(e: MouseEvent) {
@@ -122,7 +136,14 @@
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && history.back()} />
 
-<a class="back" href={backHref}><ArrowLeft size={16} /> Back</a>
+<div class="topbar">
+  <a class="back" href={backHref}><ArrowLeft size={16} /> Back</a>
+  {#if curatedApp}
+    <button class="edit-btn" onclick={() => (editing = true)} title="Edit this app" aria-label="Edit this app">
+      <Pencil size={17} />
+    </button>
+  {/if}
+</div>
 
 {#if !curatedKnown}
   <p class="muted">Loading…</p>
@@ -138,7 +159,11 @@
       </div>
       {#if tags.length}
         <div class="det-tags">
-          {#each tags as t (t)}<span class="det-tag">{t}</span>{/each}
+          {#each tags as t (t)}
+            <button class="det-tag" onclick={() => filterByTag(t)} title={`Filter Discover by "${t}"`}>
+              {t}
+            </button>
+          {/each}
         </div>
       {/if}
       <div class="actions">
@@ -178,6 +203,16 @@
         {#if donate}
           <button class="btn btn-ghost" onclick={() => openUrl(donate!)}>
             <Heart size={15} /> Donate
+          </button>
+        {/if}
+        {#if releaseNotes}
+          <button class="btn btn-ghost" onclick={() => openUrl(releaseNotes!)}>
+            <FileText size={15} /> Release notes
+          </button>
+        {/if}
+        {#if !curatedApp}
+          <button class="btn btn-ghost" onclick={addThis} disabled={adding}>
+            <Plus size={15} /> {adding ? 'Adding…' : 'Add to my list'}
           </button>
         {/if}
       </div>
@@ -228,7 +263,18 @@
   {/if}
 {/if}
 
+{#if editing}
+  <CuratedAppEditModal {source} {id} onClose={() => (editing = false)} />
+{/if}
+
 <style>
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
   .back {
     display: inline-flex;
     align-items: center;
@@ -236,10 +282,25 @@
     color: var(--text-muted);
     text-decoration: none;
     font-size: 0.9rem;
-    margin-bottom: 20px;
   }
   .back:hover {
     color: var(--text);
+  }
+  .edit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    line-height: 0;
+  }
+  .edit-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+    border-color: var(--border);
   }
   .header {
     display: flex;
@@ -253,7 +314,7 @@
     min-width: 0;
   }
   .title h1 {
-    font-size: 1.6rem;
+    font-size: 1.4rem;
   }
   .meta {
     display: flex;
@@ -276,8 +337,14 @@
     color: var(--text-muted);
     background: var(--surface-2);
     border: 1px solid var(--border);
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     padding: 2px 9px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .det-tag:hover {
+    color: var(--accent);
+    border-color: var(--accent);
   }
   .actions {
     display: flex;

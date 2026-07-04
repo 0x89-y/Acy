@@ -54,6 +54,7 @@ export interface CuratedApp {
   alternates: Variant[];
   tags: string[];
   donate: string | null;
+  releaseNotes: string | null;
   custom: boolean;
 }
 

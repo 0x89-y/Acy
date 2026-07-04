@@ -78,6 +78,20 @@
     position: relative;
     display: inline-flex;
     align-items: stretch;
+    background: var(--accent-fill);
+    border-radius: var(--radius-sm);
+  }
+  .split .main,
+  .split .caret {
+    background: transparent;
+    border-color: transparent;
+  }
+  .split .caret {
+    border-left: 1px solid color-mix(in srgb, var(--accent-contrast) 35%, transparent);
+  }
+  .split .main:hover:not(:disabled),
+  .split .caret:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.14);
   }
   .main {
     border-top-right-radius: 0;
@@ -86,7 +100,6 @@
   .caret {
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
-    border-left: 1px solid color-mix(in srgb, var(--accent-contrast) 35%, transparent);
     padding: 8px 8px;
   }
   .menu {

@@ -39,7 +39,7 @@
     color: var(--text);
   }
   .view-toggle button.on {
-    background: var(--accent);
+    background: var(--accent-fill);
     color: var(--accent-contrast);
   }
 </style>

@@ -33,3 +33,8 @@ export async function clearIconCache(): Promise<void> {
   }
   iconCacheVersion.update((n) => n + 1);
 }
+
+export function refreshIcons(): void {
+  cache = new Map();
+  iconCacheVersion.update((n) => n + 1);
+}

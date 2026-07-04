@@ -15,6 +15,15 @@ export const getCurated = () => invoke<CuratedFile>('get_curated');
 
 export const saveCurated = (file: CuratedFile) => invoke<void>('save_curated', { file });
 
+export const updateCuratedCatalog = (apply: boolean) =>
+  invoke<{
+    updated: boolean;
+    available: boolean;
+    version: number;
+    appCount: number;
+    message: string;
+  }>('update_curated_catalog', { apply });
+
 export const search = (query: string, sources: Source[]) =>
   invoke<SearchHit[]>('search', { query, sources });
 
@@ -34,6 +43,10 @@ export const install = (source: Source, id: string, opId: string) =>
 
 export const scoopNeededBucket = (id: string) =>
   invoke<string | null>('scoop_needed_bucket', { id });
+
+export const refetchMissingIcons = (
+  items: { source: Source; id: string; homepage: string | null }[]
+) => invoke<{ fetched: number; failed: number }>('refetch_missing_icons', { items });
 
 export const uninstall = (source: Source, id: string, opId: string) =>
   invoke<number>('uninstall', { source, id, opId });
@@ -72,4 +85,12 @@ export const scoopCleanup = (opId: string) => invoke<number>('scoop_cleanup', { 
 
 export function onOpLog(cb: (line: LogLine) => void): Promise<UnlistenFn> {
   return listen<LogLine>('op-log', (event) => cb(event.payload));
+}
+
+export function onIconRefetchProgress(
+  cb: (p: { current: number; total: number }) => void
+): Promise<UnlistenFn> {
+  return listen<{ current: number; total: number }>('icon-refetch-progress', (e) =>
+    cb(e.payload)
+  );
 }

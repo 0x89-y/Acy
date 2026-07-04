@@ -7,6 +7,53 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.7.1',
+    date: '2026-07-04',
+    changes: [
+      'Curated apps can now carry a "Release notes" link — it shows on the app page and on its update row in Installed, so you can see what changed before updating.',
+      'Tags are clickable everywhere (cards and the app page): click one to filter Discover by it, and Discover search now matches tags too (e.g. "free").',
+      'Added a custom accent colour picker (Settings → Appearance) that adapts to light and dark automatically.',
+      'Added "Reset all settings" to restore theme, accent, managers, and preferences to defaults (your apps and curated list are untouched).',
+      'Apps in the Uncategorized group can be filed into a category from their right-click menu.',
+      'Discover catalog updates no longer apply automatically — like the app updater, "Check for catalog updates" tells you when a new version is available and you choose to apply it.',
+      'Fixed the ▾ menu on the Install split button not opening.'
+    ]
+  },
+  {
+    version: '0.7.0',
+    date: '2026-07-03',
+    changes: [
+      'Discover can now be updated without a new app version: Acy fetches a newer, signature-verified catalog from the web when you press "Check for catalog updates" (Settings → Sources → Curated catalog).',
+      'Add any app you find in search to your Discover list with a "+" button, then edit or remove it right from the app\'s page — no need to open the catalog editor.',
+      'The catalog editor gained a search box that matches app names, ids, tags, and category titles.',
+      'Added an Aurora accent theme, and in light mode all the accent colours are now softer pastels with dark text.',
+      'Combined the Settings action buttons (app icons, maintenance, catalog) and the changelog pager into single accent controls.',
+      'Removed the light/dark toggle from the top bar — change the theme in Settings → Appearance instead.'
+    ]
+  },
+  {
+    version: '0.6.6',
+    date: '2026-07-03',
+    changes: [
+      'Missing app icons can be re-downloaded from Settings → App icons, and icon fetching is gentler about rate limits — apps with no icon are remembered so they are not re-checked every time.',
+      'Icons now show a loading placeholder while they load, with calmer fallback tiles.',
+      'Reworked Settings: a new Appearance tab for theme, accent, and icons, and every section now uses the same clean bordered-list look.',
+      "Scoop buckets have their own page, opened from a \"Manage buckets\" button on Scoop's row in Settings.",
+      "The Installed list groups each manager's apps into a single bordered list."
+    ]
+  },
+  {
+    version: '0.6.5',
+    date: '2026-07-02',
+    changes: [
+      'Refreshed the interface for a calmer, flatter look: muted accent colours, no glass blur on the top bar, squared-off badges and tags, and less explanatory clutter.',
+      "Scoop installs that need a bucket you don't have (like extras for Firefox or VS Code) now offer to add it first instead of failing.",
+      'Redesigned the Scoop buckets settings as a list you can add to and remove from, each with a short description.',
+      'Added ALCOM, Bambu Studio, Ente Photos, Hytale, MusicBrainz Picard, TeamSpeak, VRChat Creator Companion, VRCX, and WowUp to Discover.',
+      'Expanded filter tags across the catalog and added more verified support links.'
+    ]
+  },
+  {
     version: '0.6.4',
     date: '2026-07-01',
     changes: [

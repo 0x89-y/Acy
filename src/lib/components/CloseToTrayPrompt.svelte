@@ -64,10 +64,6 @@
     <button class="backdrop-close" onclick={cancel} aria-label="Cancel closing Acy"></button>
     <div class="dialog card" role="dialog" aria-modal="true" aria-labelledby="tray-prompt-title" bind:this={dialog}>
       <h2 id="tray-prompt-title">Keep Acy running in the tray?</h2>
-      <p class="muted">
-        Acy can stay in the system tray and check for updates in the background instead of fully
-        closing. You can change this any time in Settings.
-      </p>
       <label class="dontask">
         <input type="checkbox" bind:checked={dontAsk} />
         Don't ask again
@@ -108,12 +104,7 @@
   }
   .dialog h2 {
     font-size: 1.1rem;
-    margin-bottom: 10px;
-  }
-  .dialog p {
-    font-size: 0.9rem;
-    line-height: 1.5;
-    margin: 0 0 16px;
+    margin-bottom: 16px;
   }
   .dontask {
     display: inline-flex;

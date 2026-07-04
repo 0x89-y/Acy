@@ -5,13 +5,15 @@ use regex::Regex;
 use reqwest::Client;
 use std::path::PathBuf;
 use std::sync::OnceLock;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 use tokio::sync::{OnceCell, Semaphore};
 
 static FETCH_SEM: Semaphore = Semaphore::const_new(4);
 
 static CLIENT: OnceCell<Client> = OnceCell::const_new();
+
+const NO_ICON_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
 async fn http_client() -> &'static Client {
     CLIENT
@@ -48,6 +50,29 @@ fn cache_path(app: &AppHandle, source: Source, id: &str) -> Option<PathBuf> {
     let dir = app.path().app_cache_dir().ok()?.join("icons");
     let _ = std::fs::create_dir_all(&dir);
     Some(dir.join(format!("{}_{}.img", source_key(source), sanitize(id))))
+}
+
+fn none_path(app: &AppHandle, source: Source, id: &str) -> Option<PathBuf> {
+    let dir = app.path().app_cache_dir().ok()?.join("icons");
+    let _ = std::fs::create_dir_all(&dir);
+    Some(dir.join(format!("{}_{}.none", source_key(source), sanitize(id))))
+}
+
+fn now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn no_icon_marker_fresh(path: &PathBuf) -> bool {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    let Ok(stamp) = text.trim().parse::<u64>() else {
+        return false;
+    };
+    now_secs().saturating_sub(stamp) < NO_ICON_TTL.as_secs()
 }
 
 fn mime_of(bytes: &[u8]) -> &'static str {
@@ -140,7 +165,26 @@ async fn fetch_bytes(client: &Client, url: reqwest::Url) -> Option<Vec<u8>> {
 
 async fn favicon_service(domain: &str) -> Option<Vec<u8>> {
     let url = format!("https://www.google.com/s2/favicons?domain={domain}&sz=64");
-    fetch_bytes(http_client().await, reqwest::Url::parse(&url).ok()?).await
+    let url = reqwest::Url::parse(&url).ok()?;
+    let client = http_client().await;
+    let mut delay = Duration::from_millis(400);
+    for attempt in 0..3 {
+        match client.get(url.clone()).send().await {
+            Ok(resp) if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS => {
+            }
+            Ok(resp) if resp.status().is_success() => {
+                let bytes = resp.bytes().await.ok()?;
+                return (bytes.len() >= 100).then(|| bytes.to_vec());
+            }
+            Ok(_) => return None,
+            Err(_) => {}
+        }
+        if attempt < 2 {
+            tokio::time::sleep(delay).await;
+            delay *= 2;
+        }
+    }
+    None
 }
 
 async fn resolve_icon(source_url: &str) -> Option<Vec<u8>> {
@@ -188,21 +232,57 @@ pub async fn get_icon(
         }
     }
 
+    if let Some(none) = none_path(app, source, &id) {
+        if no_icon_marker_fresh(&none) {
+            return None;
+        }
+    }
+
     let _permit = FETCH_SEM.acquire().await.ok()?;
 
     let homepage = match homepage {
-        Some(h) if !h.trim().is_empty() => h,
+        Some(h) if !h.trim().is_empty() => Some(h),
         _ => sources::for_source(source)
             .info(&id)
             .await
             .ok()
             .flatten()
-            .and_then(|p| p.homepage)?,
+            .and_then(|p| p.homepage),
     };
 
-    let bytes = resolve_icon(&homepage).await?;
-    let _ = std::fs::write(&path, &bytes);
-    Some(to_data_url(&bytes))
+    let bytes = match homepage {
+        Some(h) => resolve_icon(&h).await,
+        None => None,
+    };
+
+    match bytes {
+        Some(bytes) => {
+            let _ = std::fs::write(&path, &bytes);
+            if let Some(none) = none_path(app, source, &id) {
+                let _ = std::fs::remove_file(none);
+            }
+            Some(to_data_url(&bytes))
+        }
+        None => {
+            if let Some(none) = none_path(app, source, &id) {
+                let _ = std::fs::write(none, now_secs().to_string());
+            }
+            None
+        }
+    }
+}
+
+pub fn is_resolved(app: &AppHandle, source: Source, id: &str) -> bool {
+    let has_icon = cache_path(app, source, id)
+        .and_then(|p| std::fs::metadata(p).ok())
+        .map(|m| m.len() > 0)
+        .unwrap_or(false);
+    if has_icon {
+        return true;
+    }
+    none_path(app, source, id)
+        .map(|p| no_icon_marker_fresh(&p))
+        .unwrap_or(false)
 }
 
 pub fn clear_cache(app: &AppHandle) -> std::io::Result<()> {
