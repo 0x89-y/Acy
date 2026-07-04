@@ -17,6 +17,16 @@ export const getCurated = () => invoke<CuratedFile>('get_curated');
 
 export const saveCurated = (file: CuratedFile) => invoke<void>('save_curated', { file });
 
+/** Check (apply=false) or apply (apply=true) a hosted catalog update. */
+export const updateCuratedCatalog = (apply: boolean) =>
+  invoke<{
+    updated: boolean;
+    available: boolean;
+    version: number;
+    appCount: number;
+    message: string;
+  }>('update_curated_catalog', { apply });
+
 export const search = (query: string, sources: Source[]) =>
   invoke<SearchHit[]>('search', { query, sources });
 
@@ -40,6 +50,11 @@ export const install = (source: Source, id: string, opId: string) =>
 /** The scoop bucket a package needs added before installing, or null. */
 export const scoopNeededBucket = (id: string) =>
   invoke<string | null>('scoop_needed_bucket', { id });
+
+/** Re-fetch icons only for apps missing one, gently. Returns fetched/failed counts. */
+export const refetchMissingIcons = (
+  items: { source: Source; id: string; homepage: string | null }[]
+) => invoke<{ fetched: number; failed: number }>('refetch_missing_icons', { items });
 
 export const uninstall = (source: Source, id: string, opId: string) =>
   invoke<number>('uninstall', { source, id, opId });
@@ -87,4 +102,13 @@ export const scoopCleanup = (opId: string) => invoke<number>('scoop_cleanup', { 
 
 export function onOpLog(cb: (line: LogLine) => void): Promise<UnlistenFn> {
   return listen<LogLine>('op-log', (event) => cb(event.payload));
+}
+
+/** Progress from a "re-download missing icons" pass (current is 0-based). */
+export function onIconRefetchProgress(
+  cb: (p: { current: number; total: number }) => void
+): Promise<UnlistenFn> {
+  return listen<{ current: number; total: number }>('icon-refetch-progress', (e) =>
+    cb(e.payload)
+  );
 }

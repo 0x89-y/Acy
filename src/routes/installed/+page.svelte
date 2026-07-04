@@ -36,7 +36,8 @@
   } from '$lib/stores/library';
   import { ignoreUpdate, restoreUpdate } from '$lib/stores/ignoredUpdates';
   import { updaterPhase, updaterVersion, installUpdate } from '$lib/stores/updater';
-  import { Check, EyeOff, RotateCcw, ChevronDown } from '@lucide/svelte';
+  import { curated, loadCurated } from '$lib/stores/curated';
+  import { Check, EyeOff, RotateCcw, ChevronDown, FileText } from '@lucide/svelte';
   import InstallButton from '$lib/components/InstallButton.svelte';
   import ConfirmAction from '$lib/components/ConfirmAction.svelte';
   import AppIcon from '$lib/components/AppIcon.svelte';
@@ -57,6 +58,24 @@
   let acyVersion = $state('');
   let acyUpdateAvailable = $derived($updaterPhase === 'available' && !!$updaterVersion);
   let totalUpdateCount = $derived($actionableUpdates.length + (acyUpdateAvailable ? 1 : 0));
+
+  // Release-notes links from the curated catalog, keyed by every manager id an
+  // app can be installed from, so an update row can link to its changelog.
+  let releaseNotesMap = $derived.by(() => {
+    const m = new Map<string, string>();
+    const file = $curated;
+    if (!file) return m;
+    const k = (s: Source, i: string) => `${s}:${i.toLowerCase()}`;
+    for (const cat of file.categories) {
+      for (const app of cat.apps) {
+        if (!app.releaseNotes) continue;
+        m.set(k(app.source, app.id), app.releaseNotes);
+        for (const alt of app.alternates ?? []) m.set(k(alt.source, alt.id), app.releaseNotes);
+      }
+    }
+    return m;
+  });
+  const releaseNotesFor = (p: Package) => releaseNotesMap.get(`${p.source}:${p.id.toLowerCase()}`) ?? null;
 
   const sourceOrder: Source[] = ['winget', 'scoop', 'choco', 'msstore'];
   let q = $derived(filter.trim().toLowerCase());
@@ -209,6 +228,7 @@
   onMount(() => {
     loadInstalled();
     loadUpdates();
+    loadCurated();
     getVersion().then((version) => (acyVersion = version)).catch(() => (acyVersion = ''));
     const tick = setInterval(() => (now = Date.now()), 30_000);
     return () => clearInterval(tick);
@@ -433,6 +453,16 @@
               <div class="ver mono">{p.version ?? '?'} → {p.availableVersion ?? '?'}</div>
             </div>
             <SourceBadge source={p.source} />
+            {#if releaseNotesFor(p)}
+              <button
+                class="icon-action"
+                onclick={() => openUrl(releaseNotesFor(p)!)}
+                title="Release notes"
+                aria-label={`Release notes for ${p.name}`}
+              >
+                <FileText size={16} />
+              </button>
+            {/if}
             <button
               class="icon-action"
               onclick={() => ignoreUpdate(p)}
@@ -710,9 +740,9 @@
   .count {
     font-family: var(--font-mono);
     font-size: 0.78rem;
-    background: var(--accent);
+    background: var(--accent-fill);
     color: var(--accent-contrast);
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     padding: 0 8px;
     line-height: 1.55;
   }
@@ -842,7 +872,7 @@
     transition: transform 0.15s;
   }
   .switch input:checked + .slider {
-    background: var(--accent);
+    background: var(--accent-fill);
   }
   .switch input:checked + .slider::before {
     transform: translateX(18px);
@@ -895,7 +925,23 @@
   .list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  /* In list view the rows are dividers inside one bordered container (like the
+     package-manager list), not separate cards. */
+  .list .row {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    border-top: 1px solid var(--border);
+  }
+  .list .row:first-child {
+    border-top: none;
+  }
+  .list .row.selected {
+    box-shadow: inset 2px 0 0 var(--accent);
   }
   .grid-rows {
     display: grid;
@@ -923,7 +969,7 @@
     width: fit-content;
     padding: 1px 8px;
     border: 1px solid var(--accent);
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     color: var(--accent);
     font-family: var(--font-mono);
     font-size: 0.7rem;
@@ -986,9 +1032,8 @@
     gap: 10px;
     padding: 10px 14px;
     margin-bottom: 12px;
-    background: color-mix(in srgb, var(--surface) 92%, transparent);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: var(--radius);
   }
   .sel-count {

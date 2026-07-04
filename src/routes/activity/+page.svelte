@@ -41,7 +41,6 @@
 <header>
   <div>
     <h1>Activity</h1>
-    <p class="muted">Recent installs, updates, removals, and setup operations.</p>
   </div>
   {#if $activity.length > 0}
     <button class="btn btn-ghost" onclick={clear}>Clear activity</button>
@@ -97,10 +96,6 @@
     justify-content: space-between;
     gap: 16px;
     margin-bottom: 20px;
-  }
-  header p {
-    margin: 5px 0 0;
-    font-size: 0.9rem;
   }
   .activity {
     padding: 4px 18px;

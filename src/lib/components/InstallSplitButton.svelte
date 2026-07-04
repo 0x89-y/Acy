@@ -80,6 +80,24 @@
     position: relative;
     display: inline-flex;
     align-items: stretch;
+    /* One fill behind both halves so the accent (and the Aurora gradient) flows
+       across the seam instead of restarting on the caret. The border-radius
+       already rounds the fill; no overflow:hidden (it would clip the menu). */
+    background: var(--accent-fill);
+    border-radius: var(--radius-sm);
+  }
+  /* Let the wrapper's fill show through; keep only the divider + hover feedback. */
+  .split .main,
+  .split .caret {
+    background: transparent;
+    border-color: transparent;
+  }
+  .split .caret {
+    border-left: 1px solid color-mix(in srgb, var(--accent-contrast) 35%, transparent);
+  }
+  .split .main:hover:not(:disabled),
+  .split .caret:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.14);
   }
   .main {
     border-top-right-radius: 0;
@@ -88,7 +106,6 @@
   .caret {
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
-    border-left: 1px solid color-mix(in srgb, var(--accent-contrast) 35%, transparent);
     padding: 8px 8px;
   }
   .menu {

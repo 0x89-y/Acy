@@ -25,7 +25,16 @@ appliedTheme.subscribe((value) => {
 });
 
 settings.subscribe((s) => {
-  if (typeof document !== 'undefined') {
-    document.documentElement.setAttribute('data-accent', s.accent ?? 'purple');
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  const accent = s.accent ?? 'purple';
+  if (accent === 'custom' && s.customAccent) {
+    // A custom colour just seeds --accent; the fill/hover/contrast tokens derive
+    // from it per theme, exactly like a preset.
+    root.setAttribute('data-accent', 'custom');
+    root.style.setProperty('--accent', s.customAccent);
+  } else {
+    root.setAttribute('data-accent', accent);
+    root.style.removeProperty('--accent');
   }
 });

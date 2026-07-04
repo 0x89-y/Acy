@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { openUrl } from '@tauri-apps/plugin-opener';
-  import { Check } from '@lucide/svelte';
+  import { Check, Plus } from '@lucide/svelte';
   import AppIcon from './AppIcon.svelte';
   import SourceBadge from './SourceBadge.svelte';
   import InstallButton from './InstallButton.svelte';
@@ -10,6 +10,7 @@
   import { copyText } from '$lib/clipboard';
   import { runOp, installCommand } from '$lib/install';
   import { openContextMenu, type CtxItem } from '$lib/stores/contextMenu';
+  import { filterByTag } from '$lib/stores/discover';
   import type { Variant } from '$lib/types';
 
   let {
@@ -25,8 +26,11 @@
     layout = 'grid',
     backTo = null,
     tags = [],
+    inList = false,
+    ctxExtra = [],
     onToggleSelect,
-    onChanged
+    onChanged,
+    onAddToList
   }: {
     name: string;
     description?: string | null;
@@ -45,8 +49,14 @@
     highlight?: string;
     /** Optional in-app destination for the detail page's Back link. */
     backTo?: string | null;
+    /** True when this app is already in the user's curated list. */
+    inList?: boolean;
+    /** Extra right-click menu items appended by the parent (e.g. move-to-category). */
+    ctxExtra?: CtxItem[];
     onToggleSelect?: () => void;
     onChanged?: () => void;
+    /** When set, shows a "+ Add" button that adds this app to the user's list. */
+    onAddToList?: () => void;
   } = $props();
 
   let primary = $derived(variants[0]);
@@ -95,7 +105,7 @@
     if (cmd) items.push({ label: 'Copy command', onSelect: () => copyText(cmd) });
     items.push({ label: 'Copy id', onSelect: () => copyText(primary.id) });
     if (homepage) items.push({ label: 'Open homepage', onSelect: () => openUrl(homepage) });
-    openContextMenu(e, items);
+    openContextMenu(e, [...items, ...ctxExtra]);
   }
 </script>
 
@@ -103,6 +113,7 @@
   class="card app-card"
   class:list={layout === 'list'}
   class:selected={selectable && selected}
+  class:has-add={!!onAddToList && !selectable}
   oncontextmenu={onCtx}
   role="group"
 >
@@ -124,7 +135,28 @@
       {#if description}<div class="desc muted">{description}</div>{/if}
       {#if tags.length}
         <div class="tags">
-          {#each tags.slice(0, 3) as t (t)}<span class="tag">{t}</span>{/each}
+          {#each tags.slice(0, 3) as t (t)}
+            <span
+              class="tag"
+              role="button"
+              tabindex="0"
+              title={`Filter Discover by "${t}"`}
+              onclick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                filterByTag(t);
+              }}
+              onkeydown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  filterByTag(t);
+                }
+              }}
+            >
+              {t}
+            </span>
+          {/each}
         </div>
       {/if}
     </div>
@@ -133,6 +165,23 @@
     <div class="badges">
       {#each variants as v (v.source)}<SourceBadge source={v.source} />{/each}
     </div>
+    <div class="foot-right">
+      {#if onAddToList && !selectable}
+        {#if inList}
+          <span class="add-corner is-in" title="In your list" aria-label="In your list">
+            <Check size={14} />
+          </span>
+        {:else}
+          <button
+            class="add-corner"
+            onclick={onAddToList}
+            title="Add to my list"
+            aria-label="Add to my list"
+          >
+            <Plus size={16} />
+          </button>
+        {/if}
+      {/if}
     <div class="card-action">
       {#if selectable}
         <label class="acheck selection-action">
@@ -154,11 +203,13 @@
         <InstallButton source={primary.source} id={primary.id} {name} onDone={onChanged} />
       {/if}
     </div>
+    </div>
   </div>
 </div>
 
 <style>
   .app-card {
+    position: relative;
     display: flex;
     flex-direction: column;
     padding: 14px;
@@ -238,9 +289,14 @@
     color: var(--text-muted);
     background: var(--surface-2);
     border: 1px solid var(--border);
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     padding: 1px 7px;
     white-space: nowrap;
+    cursor: pointer;
+  }
+  .tags .tag:hover {
+    color: var(--accent);
+    border-color: var(--accent);
   }
   .app-card.list .tags {
     flex-wrap: nowrap;
@@ -257,6 +313,45 @@
     display: flex;
     gap: 5px;
     flex-wrap: wrap;
+  }
+  .foot-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .add-corner {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+  }
+  button.add-corner {
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text-muted);
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  button.add-corner:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+    border-color: var(--accent);
+  }
+  .add-corner.is-in {
+    color: var(--success);
+  }
+  /* Grid tiles: pin the "+" to the top-right corner, out of the footer flow. */
+  .app-card:not(.list) .add-corner {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+  }
+  .app-card:not(.list).has-add .main {
+    padding-right: 32px;
   }
   .card-action {
     width: 104px;

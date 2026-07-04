@@ -88,6 +88,7 @@
             <button
               class="swatch"
               class:on={$settings.accent === a.name}
+              class:aurora={a.name === 'aurora'}
               style="--sw:{a.color}"
               onclick={() => setAccent(a.name)}
               title={a.label}
@@ -246,7 +247,7 @@
     color: var(--text);
   }
   .seg-btn.on {
-    background: var(--accent);
+    background: var(--accent-fill);
     color: var(--accent-contrast);
   }
 
@@ -263,10 +264,13 @@
     border: none;
     cursor: pointer;
     padding: 0;
-    transition: transform 0.1s;
+    transition: opacity 0.12s;
   }
   .swatch:hover {
-    transform: scale(1.1);
+    opacity: 0.8;
+  }
+  .swatch.aurora {
+    background: var(--aurora-gradient);
   }
   .swatch.on {
     box-shadow:
@@ -337,7 +341,7 @@
     transition: transform 0.15s;
   }
   .switch input:checked + .slider {
-    background: var(--accent);
+    background: var(--accent-fill);
   }
   .switch input:checked + .slider::before {
     transform: translateX(18px);
@@ -360,7 +364,7 @@
     margin-top: 8px;
     padding: 12px 32px;
     border: none;
-    background: var(--accent);
+    background: var(--accent-fill);
     color: var(--accent-contrast);
     border-radius: var(--radius);
     font-size: 0.95rem;

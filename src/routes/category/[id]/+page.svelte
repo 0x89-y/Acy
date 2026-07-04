@@ -198,7 +198,7 @@
     gap: 10px;
   }
   .heading h1 {
-    font-size: 1.45rem;
+    font-size: 1.4rem;
   }
   .heading .muted {
     font-size: 0.82rem;
@@ -225,9 +225,8 @@
     gap: 10px;
     padding: 10px 14px;
     margin-bottom: 18px;
-    background: color-mix(in srgb, var(--surface) 92%, transparent);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: var(--radius);
   }
   .selection-count {

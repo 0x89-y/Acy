@@ -3,7 +3,7 @@ use crate::model::{ManagerStatus, Package, SearchHit, Source};
 use crate::runner;
 use crate::sources::{self, merge};
 use crate::tray::TRAY_ID;
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_notification::NotificationExt;
 use tokio::task::JoinSet;
@@ -38,6 +38,15 @@ pub async fn get_curated(app: AppHandle) -> CuratedFile {
 #[tauri::command]
 pub async fn save_curated(app: AppHandle, file: CuratedFile) -> Result<(), String> {
     curated::save(&app, &file).map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Check the hosted catalog (apply=false) or apply it (apply=true). Manual, from Settings.
+#[tauri::command]
+pub async fn update_curated_catalog(
+    app: AppHandle,
+    apply: bool,
+) -> Result<curated::CatalogUpdate, String> {
+    curated::update_remote(&app, apply).await
 }
 
 /// Search the given managers and return merged, de-duplicated hits.
@@ -404,4 +413,62 @@ pub async fn app_icon(
 #[tauri::command]
 pub async fn clear_icon_cache(app: AppHandle) -> Result<(), String> {
     crate::icons::clear_cache(&app).map_err(|e| e.to_string())
+}
+
+/// One app to (re)fetch an icon for.
+#[derive(serde::Deserialize)]
+pub struct IconItem {
+    source: Source,
+    id: String,
+    homepage: Option<String>,
+}
+
+/// Outcome of a "re-download missing icons" pass.
+#[derive(serde::Serialize)]
+pub struct IconRefetch {
+    /// Missing icons that are now cached.
+    fetched: u32,
+    /// Missing icons that still couldn't be fetched.
+    failed: u32,
+}
+
+/// Progress event for a "re-download missing icons" pass.
+#[derive(Clone, serde::Serialize)]
+struct IconRefetchProgress {
+    current: usize,
+    total: usize,
+}
+
+const ICON_PROGRESS_EVENT: &str = "icon-refetch-progress";
+
+/// Re-fetch icons only for apps that don't already have a result — no cached
+/// icon and no fresh "no icon found" marker — one at a time so a bulk retry
+/// doesn't re-trip the favicon-service rate limit. Emits progress as it goes.
+#[tauri::command]
+pub async fn refetch_missing_icons(app: AppHandle, items: Vec<IconItem>) -> IconRefetch {
+    // Narrow to the genuinely-unresolved apps up front so progress totals and the
+    // per-item pacing only cover ones we'll actually attempt.
+    let todo: Vec<IconItem> = items
+        .into_iter()
+        .filter(|it| !crate::icons::is_resolved(&app, it.source, &it.id))
+        .collect();
+    let total = todo.len();
+
+    let mut fetched = 0;
+    let mut failed = 0;
+    for (i, item) in todo.into_iter().enumerate() {
+        let _ = app.emit(ICON_PROGRESS_EVENT, IconRefetchProgress { current: i, total });
+        match crate::icons::get_icon(&app, item.source, item.id, item.homepage).await {
+            Some(_) => fetched += 1,
+            None => failed += 1,
+        }
+    }
+    let _ = app.emit(
+        ICON_PROGRESS_EVENT,
+        IconRefetchProgress {
+            current: total,
+            total,
+        },
+    );
+    IconRefetch { fetched, failed }
 }

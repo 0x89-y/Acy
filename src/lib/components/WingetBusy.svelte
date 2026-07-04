@@ -38,7 +38,7 @@
     padding: 7px 12px;
     background: var(--surface);
     border: 1px solid var(--border-strong);
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     font-size: 0.8rem;
     color: var(--text-muted);
     box-shadow: var(--shadow);

@@ -18,7 +18,6 @@
 <header>
   <div>
     <h1>Changelog</h1>
-    <p class="muted">What changed in each Acy release.</p>
   </div>
   <span class="page-count mono">Page {page + 1} of {pageCount}</span>
 </header>
@@ -41,12 +40,14 @@
 
 {#if pageCount > 1}
   <nav class="pagination" aria-label="Changelog pages">
-    <button class="btn" onclick={() => go(page - 1)} disabled={page === 0}>
-      <ChevronLeft size={15} /> Newer
-    </button>
-    <button class="btn" onclick={() => go(page + 1)} disabled={page === pageCount - 1}>
-      Older <ChevronRight size={15} />
-    </button>
+    <div class="seg-actions">
+      <button class="seg-act" onclick={() => go(page - 1)} disabled={page === 0}>
+        <ChevronLeft size={15} /> Newer
+      </button>
+      <button class="seg-act" onclick={() => go(page + 1)} disabled={page === pageCount - 1}>
+        Older <ChevronRight size={15} />
+      </button>
+    </div>
   </nav>
 {/if}
 
@@ -69,10 +70,6 @@
     justify-content: space-between;
     gap: 16px;
     margin-bottom: 20px;
-  }
-  header p {
-    margin: 5px 0 0;
-    font-size: 0.9rem;
   }
   .page-count {
     color: var(--text-muted);
@@ -110,7 +107,7 @@
   }
   .pagination {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     margin-top: 18px;
   }
 </style>

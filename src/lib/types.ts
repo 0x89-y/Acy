@@ -62,6 +62,8 @@ export interface CuratedApp {
   tags: string[];
   /** Optional donation / support URL. */
   donate: string | null;
+  /** Optional link to the app's release notes / changelog. */
+  releaseNotes: string | null;
   /** True when the user added this app; built-in apps come from the bundled catalog. */
   custom: boolean;
 }

@@ -17,9 +17,10 @@
     homepage?: string | null;
   } = $props();
 
+  // Muted, low-chroma hues that match the calmer accent palette.
   const palette = [
-    '#2563eb', '#16a34a', '#9333ea', '#db2777',
-    '#ea580c', '#0891b2', '#ca8a04', '#dc2626'
+    '#3f6ea5', '#3f7d5a', '#6c5ab6', '#a85678',
+    '#b7663a', '#3d7d78', '#9a7b3f', '#a85450'
   ];
 
   function hash(s: string): number {
@@ -32,6 +33,7 @@
   let color = $derived(palette[hash(name) % palette.length]);
 
   let iconUrl = $state<string | null>(null);
+  let loading = $state(false);
 
   $effect(() => {
     void $iconCacheVersion; // re-run after the cache is cleared
@@ -41,10 +43,16 @@
     const h = homepage;
     iconUrl = null;
     if (enabled && s && i) {
+      loading = true;
       loadIcon(s, i, h).then((url) => {
         // Ignore if props changed while the request was in flight.
-        if (source === s && id === i) iconUrl = url;
+        if (source === s && id === i) {
+          iconUrl = url;
+          loading = false;
+        }
       });
+    } else {
+      loading = false;
     }
   });
 </script>
@@ -56,6 +64,8 @@
     alt=""
     style="width:{size}px; height:{size}px;"
   />
+{:else if loading}
+  <div class="skel skeleton" style="width:{size}px; height:{size}px;"></div>
 {:else}
   <div
     class="icon"
@@ -83,5 +93,8 @@
     padding: 5px;
     background: var(--surface-2);
     border: 1px solid var(--border);
+  }
+  .skel {
+    flex-shrink: 0;
   }
 </style>

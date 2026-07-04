@@ -35,3 +35,13 @@ export async function clearIconCache(): Promise<void> {
   }
   iconCacheVersion.update((n) => n + 1);
 }
+
+/**
+ * Drop the per-session lookup map and bump the version so icon consumers
+ * re-request — without wiping the on-disk cache. Use after re-fetching missing
+ * icons so the ones that just downloaded show up.
+ */
+export function refreshIcons(): void {
+  cache = new Map();
+  iconCacheVersion.update((n) => n + 1);
+}
