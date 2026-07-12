@@ -214,11 +214,14 @@
   .list-flow {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--surface);
   }
   .selection-bar {
     position: sticky;
-    top: 64px;
+    top: 46px;
     z-index: 15;
     display: flex;
     align-items: center;

@@ -30,7 +30,7 @@
   let backHref = $derived.by(() => {
     const requested = $page.url.searchParams.get('back');
     if (requested?.startsWith('/') && !requested.startsWith('//')) return requested;
-    return $page.url.searchParams.get('from') === 'installed' ? '/installed' : '/';
+    return $page.url.searchParams.get('from') === 'installed' ? '/?view=library' : '/';
   });
 
   // Hardcoded curated entry, if this app is one of ours.
@@ -351,7 +351,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 2px 9px;
-    font-family: inherit;
+    font-family: var(--font-mono);
     cursor: pointer;
   }
   .det-tag:hover {

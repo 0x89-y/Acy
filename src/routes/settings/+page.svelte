@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getVersion } from '@tauri-apps/api/app';
-  import { Sun, Moon, Monitor, Pipette } from '@lucide/svelte';
+  import { Sun, Moon, Monitor, Pipette, ArrowLeft } from '@lucide/svelte';
   import {
     updaterPhase,
     updaterVersion,
@@ -220,7 +220,12 @@
   let activeTab = $derived($settings.settingsTab);
 </script>
 
-<h1>Settings</h1>
+<div class="page-head">
+  <a class="back-btn" href="/" title="Back" aria-label="Back">
+    <ArrowLeft size={18} />
+  </a>
+  <h1>Settings</h1>
+</div>
 
 <div class="settings-layout">
   <nav class="side" aria-label="Settings sections">
@@ -462,32 +467,34 @@
       {#if wingetAvailable || scoopAvailable}
         <section class="group source-group">
           <h2>Maintenance</h2>
-          <div class="seg-actions">
-            {#if wingetAvailable}
-              <button
-                class="seg-act"
-                disabled={maintBusy !== null}
-                onclick={() => runMaint('Update winget sources', 'winget-src', api.wingetUpdateSources)}
-              >
-                {maintBusy === 'winget-src' ? 'Working…' : 'Update winget sources'}
-              </button>
-            {/if}
-            {#if scoopAvailable}
-              <button
-                class="seg-act"
-                disabled={maintBusy !== null}
-                onclick={() => runMaint('Update Scoop', 'scoop-up', api.scoopUpdate)}
-              >
-                {maintBusy === 'scoop-up' ? 'Working…' : 'Update Scoop'}
-              </button>
-              <button
-                class="seg-act"
-                disabled={maintBusy !== null}
-                onclick={() => runMaint('Clean up Scoop', 'scoop-clean', api.scoopCleanup)}
-              >
-                {maintBusy === 'scoop-clean' ? 'Working…' : 'Clean up Scoop'}
-              </button>
-            {/if}
+          <div class="icon-actions">
+            <div class="seg-actions">
+              {#if wingetAvailable}
+                <button
+                  class="seg-act"
+                  disabled={maintBusy !== null}
+                  onclick={() => runMaint('Update winget sources', 'winget-src', api.wingetUpdateSources)}
+                >
+                  {maintBusy === 'winget-src' ? 'Working…' : 'Update winget sources'}
+                </button>
+              {/if}
+              {#if scoopAvailable}
+                <button
+                  class="seg-act"
+                  disabled={maintBusy !== null}
+                  onclick={() => runMaint('Update Scoop', 'scoop-up', api.scoopUpdate)}
+                >
+                  {maintBusy === 'scoop-up' ? 'Working…' : 'Update Scoop'}
+                </button>
+                <button
+                  class="seg-act"
+                  disabled={maintBusy !== null}
+                  onclick={() => runMaint('Clean up Scoop', 'scoop-clean', api.scoopCleanup)}
+                >
+                  {maintBusy === 'scoop-clean' ? 'Working…' : 'Clean up Scoop'}
+                </button>
+              {/if}
+            </div>
           </div>
         </section>
       {/if}
@@ -622,6 +629,7 @@
 <style>
   .about {
     font-size: 0.9rem;
+    padding: 0 var(--settings-pad);
   }
   .about .link {
     color: var(--accent);
@@ -630,33 +638,72 @@
   .about .link:hover {
     text-decoration: underline;
   }
-  h1 {
-    margin-bottom: 24px;
+  .page-head {
+    max-width: 820px;
+    margin: 0 auto 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-head h1 {
+    margin: 0;
+  }
+  .back-btn {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text-muted);
+    line-height: 0;
+  }
+  .back-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+    border-color: var(--accent);
   }
 
+  /* One bordered master-detail panel (ncy-desktop): category rail on the left,
+     the active category's edge-to-edge content on the right. The dotted ground
+     shows only in the gutters around it. */
   .settings-layout {
     display: flex;
-    gap: 30px;
-    align-items: flex-start;
+    align-items: stretch;
+    max-width: 820px;
+    margin: 0 auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--surface);
   }
   .side {
-    position: sticky;
-    top: 74px;
     flex: 0 0 160px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    border-right: 1px solid var(--border);
+    background: var(--surface-2);
   }
   .side-link {
     text-align: left;
-    padding: 8px 12px;
+    padding: 10px 14px;
     border: none;
+    border-top: 1px solid var(--border);
     border-left: 2px solid transparent;
     background: transparent;
     color: var(--text-muted);
-    border-radius: var(--radius-sm);
+    border-radius: 0;
     font-size: 0.92rem;
     font-weight: 500;
+  }
+  .side-link:first-child {
+    border-top: none;
+  }
+  .side-link:last-child {
+    border-bottom: 1px solid var(--border);
   }
   .side-link:hover {
     background: var(--surface-hover);
@@ -670,32 +717,42 @@
   .panes {
     flex: 1;
     min-width: 0;
-    max-width: 640px;
+    --settings-pad: 20px;
+    display: flex;
+    flex-direction: column;
+    padding: 24px 0;
   }
 
   .group {
-    margin: 0 0 28px;
+    margin: 0;
   }
-  .group:last-child {
-    margin-bottom: 0;
+  /* Full-width divider between adjacent sections. */
+  .group + .group {
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
   }
   .group h2 {
     font-size: 1.05rem;
-    margin-bottom: 12px;
+    font-weight: 600;
+    margin: 0;
+    padding: 0 var(--settings-pad) 10px;
   }
   .hint {
-    font-size: 0.86rem;
-    margin: -4px 0 14px;
+    margin: 0;
+    padding: 0 var(--settings-pad) 12px;
     max-width: 520px;
+    font-size: 0.86rem;
   }
 
   .seg {
     display: inline-flex;
-    gap: 4px;
-    padding: 4px;
-    background: var(--surface);
+    align-items: stretch;
+    gap: 2px;
+    padding: 2px;
+    background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius);
+    width: fit-content;
   }
   .seg-btn {
     display: inline-flex;
@@ -718,7 +775,8 @@
   }
 
   .field {
-    margin-bottom: 18px;
+    padding: 12px var(--settings-pad);
+    border-top: 1px solid var(--border);
   }
   .field-label {
     display: block;
@@ -731,7 +789,6 @@
     grid-template-columns: 124px minmax(0, 1fr);
     align-items: center;
     gap: 6px 12px;
-    margin-bottom: 14px;
   }
   .pref .field-label {
     margin: 0;
@@ -744,28 +801,16 @@
     padding: 8px 12px;
     font-size: 0.9rem;
   }
-  .source-group {
-    margin-bottom: 20px;
-  }
-  .source-group h2 {
-    margin-bottom: 9px;
-  }
   .mgr-list {
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
   }
   .mgr-row {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 9px 12px;
+    padding: 10px var(--settings-pad);
     border-top: 1px solid var(--border);
-  }
-  .mgr-row:first-child {
-    border-top: none;
   }
   .mgr-row.is-on {
     background: var(--surface-2);
@@ -805,11 +850,23 @@
     padding: 5px 12px;
     flex-shrink: 0;
   }
-  .icon-actions {
+  /* Free-content rows in the edge-to-edge frame: inset + a hairline above. */
+  .icon-actions,
+  .reset-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
+    padding: 12px var(--settings-pad);
+    border-top: 1px solid var(--border);
+  }
+  .upd {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px var(--settings-pad);
+    border-top: 1px solid var(--border);
   }
   .icon-msg {
     font-size: 0.85rem;
@@ -818,17 +875,9 @@
     color: var(--accent);
     font-weight: 500;
   }
-  .reset-row {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  .upd {
-    margin-top: 12px;
-  }
   .upd-msg {
     font-size: 0.84rem;
-    margin: 10px 0 0;
+    margin: 0;
   }
   .upd-msg.ok {
     color: var(--success);
@@ -928,24 +977,22 @@
     transform: translateX(18px);
   }
 
+  /* Card-less: each row is separated by a full-width hairline and inset by the
+     settings pad (no bordered box). */
   .opt-list {
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
+  }
+  .opt-list > * {
+    padding: 12px var(--settings-pad);
+    border-top: 1px solid var(--border);
   }
   .opt-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 14px;
-    padding: 11px 12px;
-    border-top: 1px solid var(--border);
     cursor: pointer;
-  }
-  .opt-row:first-child {
-    border-top: none;
   }
   .opt-label {
     font-size: 0.9rem;
@@ -955,11 +1002,12 @@
 
   .log {
     text-align: left;
-    margin-bottom: 12px;
+    padding: 4px var(--settings-pad) 12px;
   }
   .log-actions {
     display: flex;
     gap: 8px;
+    padding: 0 var(--settings-pad) 12px;
   }
   .log-row {
     display: flex;
@@ -1034,12 +1082,18 @@
       flex-direction: column;
     }
     .side {
-      position: static;
       flex: none;
       flex-direction: row;
       flex-wrap: wrap;
-      gap: 4px;
-      margin-bottom: 8px;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+    .side-link {
+      border-top: none;
+      border-left: none;
+    }
+    .side-link:last-child {
+      border-bottom: none;
     }
     .pref {
       grid-template-columns: 1fr;

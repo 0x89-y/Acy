@@ -16,7 +16,7 @@
   const shortcuts: { keys: string[]; desc: string }[] = [
     { keys: ['Ctrl', 'K'], desc: 'Focus search (or /)' },
     { keys: ['Ctrl', '1'], desc: 'Go to Discover' },
-    { keys: ['Ctrl', '2'], desc: 'Go to Installed' },
+    { keys: ['Ctrl', '2'], desc: 'Go to Library (installed & updates)' },
     { keys: ['Ctrl', '3'], desc: 'Go to Settings' },
     { keys: ['↑', '↓', '←', '→'], desc: 'Move between search results' },
     { keys: ['Enter'], desc: 'Open or install the focused result' },
@@ -104,7 +104,7 @@
     z-index: 1;
     width: min(440px, 100%);
     padding: 18px 20px 20px;
-    box-shadow: var(--shadow);
+    border-radius: var(--radius-dialog);
   }
   .head {
     display: flex;

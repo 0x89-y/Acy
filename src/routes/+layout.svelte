@@ -9,6 +9,7 @@
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import Nav from '$lib/components/Nav.svelte';
   import OpStack from '$lib/components/OpStack.svelte';
   import AppUpdateToast from '$lib/components/AppUpdateToast.svelte';
@@ -21,12 +22,16 @@
   import Setup from '$lib/components/Setup.svelte';
   import { loadManagers } from '$lib/stores/managers';
   import { loadUpdates } from '$lib/stores/library';
+  import { browseView } from '$lib/stores/discover';
   import { settings } from '$lib/stores/settings';
   import { initTray } from '$lib/stores/tray';
   import { initAppUpdater } from '$lib/stores/updater';
   import '$lib/stores/theme'; // applies data-theme reactively from settings
 
   let { children } = $props();
+
+  // The home screen is a full-bleed panel; other routes keep the padded page.
+  let isHome = $derived($page.url.pathname === '/');
 
   /** How often to re-check for available updates while the app is open. */
   const UPDATE_POLL_MS = 30 * 60 * 1000;
@@ -44,10 +49,17 @@
       return;
     }
     if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
-    const dest = e.key === '1' ? '/' : e.key === '2' ? '/installed' : e.key === '3' ? '/settings' : null;
-    if (dest) {
+    if (e.key === '1') {
       e.preventDefault();
-      goto(dest);
+      browseView.set('discover');
+      goto('/');
+    } else if (e.key === '2') {
+      e.preventDefault();
+      browseView.set('library');
+      goto('/');
+    } else if (e.key === '3') {
+      e.preventDefault();
+      goto('/settings');
     }
   }
 
@@ -74,7 +86,7 @@
   <Setup />
 {:else}
   <Nav />
-  <main class="page">
+  <main class="page" class:full={isHome}>
     {@render children()}
   </main>
 {/if}
@@ -92,5 +104,14 @@
     max-width: 1180px;
     margin: 0 auto;
     padding: 26px 24px 90px;
+  }
+  /* Home: full-bleed, fills the viewport below the 32px title bar. */
+  .page.full {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    height: calc(100vh - 33px);
+    display: flex;
+    flex-direction: column;
   }
 </style>

@@ -84,7 +84,7 @@
        across the seam instead of restarting on the caret. The border-radius
        already rounds the fill; no overflow:hidden (it would clip the menu). */
     background: var(--accent-fill);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius);
   }
   /* Let the wrapper's fill show through; keep only the divider + hover feedback. */
   .split .main,
