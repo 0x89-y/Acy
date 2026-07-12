@@ -112,9 +112,6 @@
   // Detection is best-effort (name/id heuristics) and easy to tune.
   const GAMES =
     /(\\steam app\b|steam app|epic games|\bgog\b|gog galaxy|gog\.com|\bea app\b|ea desktop|origin games|ubisoft|uplay|battle\.net|blizzard|battlefield|\briot\b|riot games|riot client|valorant|league of legends|hoyoplay|genshin|honkai|zenless zone|vintage story)/i;
-  const DRIVERS =
-    /(\bdrivers?\b|nvidia|geforce|realtek|amd (chipset|radeon software|catalyst)|intel\b.*(chipset|graphics|driver|serial io|management engine))/i;
-  const FONTS = /(\bfonts?\b|font family|typeface)/i;
   const MS_SYSTEM =
     /(visual c\+\+|redistributable|webview2|windows sdk|windows software development kit|\.net\s+(runtime|sdk|host|desktop runtime|targeting pack)|microsoft edge update|windows app runtime)/i;
   // Microsoft's MSIX publisher hash — first-party Store/built-in packages.
@@ -125,9 +122,8 @@
     /(valve|blizzard|ubisoft|electronic arts|rockstar|bethesda|riot games|cd projekt|epic games|\bgog\b|square enix|activision|\bsega\b|capcom|bandai namco|2k games|xbox game studios|mojang|devolver|paradox interactive|larian|mihoyo|hoyoverse|cognosphere|anego studios)/i;
   const GAME_PATHS =
     /(steamapps|[\\/]steam[\\/]|epic games|gog galaxy|gog games|[\\/]gog[\\/]|ubisoft|uplay|riot games|battle\.net|[\\/]ea games[\\/]|origin games|[\\/]games[\\/])/i;
-  const DRIVER_PUBLISHERS = /(nvidia|realtek|advanced micro devices|intel corporation|synaptics)/i;
 
-  type BucketKey = Source | 'games' | 'drivers' | 'fonts' | 'ms-system' | 'other';
+  type BucketKey = Source | 'games' | 'ms-system' | 'other';
   function bucketKey(p: Package): BucketKey {
     if (p.source !== 'winget') return p.source;
     const idl = p.id.toLowerCase();
@@ -138,8 +134,6 @@
     const pub = (p.publisher ?? '').toLowerCase();
     const loc = (p.installLocation ?? '').toLowerCase();
     if (GAMES.test(hay) || GAME_PUBLISHERS.test(pub) || GAME_PATHS.test(loc)) return 'games';
-    if (DRIVERS.test(p.name) || DRIVER_PUBLISHERS.test(pub)) return 'drivers';
-    if (FONTS.test(p.name)) return 'fonts';
     if (MS_SYSTEM.test(p.name)) return 'ms-system';
     if (isMsix && idl.includes(MS_MSIX_PUBLISHER)) return 'ms-system';
     return 'other';
@@ -154,8 +148,6 @@
     { key: 'choco', label: null, badge: 'choco', system: false },
     { key: 'msstore', label: null, badge: 'msstore', system: false },
     { key: 'games', label: 'Games', badge: null, system: false },
-    { key: 'drivers', label: 'Drivers', badge: null, system: true },
-    { key: 'fonts', label: 'Fonts', badge: null, system: true },
     { key: 'ms-system', label: 'Windows components', badge: null, system: true },
     { key: 'other', label: 'Other apps', badge: null, system: true }
   ];
