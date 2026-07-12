@@ -79,7 +79,7 @@
     display: inline-flex;
     align-items: stretch;
     background: var(--accent-fill);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius);
   }
   .split .main,
   .split .caret {

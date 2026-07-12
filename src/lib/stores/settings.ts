@@ -20,13 +20,13 @@ export type ViewMode = 'grid' | 'list';
 export type InstalledShow = 'all' | 'hide-system' | 'managed';
 
 export const ACCENTS: { name: AccentName; label: string; color: string }[] = [
-  { name: 'purple', label: 'Purple', color: '#6c5ab6' },
-  { name: 'blue', label: 'Blue', color: '#3f6ea5' },
-  { name: 'green', label: 'Green', color: '#3f7d5a' },
-  { name: 'pink', label: 'Pink', color: '#a85678' },
-  { name: 'orange', label: 'Orange', color: '#b7663a' },
-  { name: 'teal', label: 'Teal', color: '#3d7d78' },
-  { name: 'aurora', label: 'Aurora', color: '#8b3fa8' }
+  { name: 'purple', label: 'Purple', color: '#7c3aed' },
+  { name: 'blue', label: 'Blue', color: '#2563eb' },
+  { name: 'green', label: 'Green', color: '#059669' },
+  { name: 'pink', label: 'Pink', color: '#db2777' },
+  { name: 'orange', label: 'Orange', color: '#ea580c' },
+  { name: 'teal', label: 'Teal', color: '#0d9488' },
+  { name: 'aurora', label: 'Aurora', color: '#9540b8' }
 ];
 
 export interface Settings {
@@ -60,7 +60,7 @@ const KEY = 'acy-settings';
 const DEFAULTS: Settings = {
   themeMode: 'system',
   accent: 'purple',
-  customAccent: '#7446cc',
+  customAccent: '#7c3aed',
   managers: { winget: true, scoop: true, choco: true, msstore: true, local: true },
   preferredSource: null,
   showOutput: false,

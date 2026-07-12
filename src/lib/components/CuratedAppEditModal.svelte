@@ -301,7 +301,7 @@
     z-index: 1;
     width: min(480px, 100%);
     padding: 20px;
-    box-shadow: var(--shadow);
+    border-radius: var(--radius-dialog);
     display: flex;
     flex-direction: column;
     gap: 12px;

@@ -11,7 +11,8 @@
   import { runOp, installCommand } from '$lib/install';
   import { openContextMenu, type CtxItem } from '$lib/stores/contextMenu';
   import { filterByTag } from '$lib/stores/discover';
-  import type { Variant } from '$lib/types';
+  import type { Source, Variant } from '$lib/types';
+  import type { Snippet } from 'svelte';
 
   let {
     name,
@@ -28,6 +29,8 @@
     tags = [],
     inList = false,
     ctxExtra = [],
+    action,
+    menu = null,
     onToggleSelect,
     onChanged,
     onAddToList
@@ -46,6 +49,8 @@
     backTo?: string | null;
     inList?: boolean;
     ctxExtra?: CtxItem[];
+    action?: Snippet<[{ source: Source; id: string; name: string }]>;
+    menu?: CtxItem[] | null;
     onToggleSelect?: () => void;
     onChanged?: () => void;
     onAddToList?: () => void;
@@ -88,6 +93,10 @@
 
   function onCtx(e: MouseEvent) {
     if (selectable) return;
+    if (menu) {
+      openContextMenu(e, [...menu, ...ctxExtra]);
+      return;
+    }
     const items: CtxItem[] = [];
     if (!installed) items.push({ label: 'Install', onSelect: doInstall });
     items.push({ label: 'Open details', onSelect: () => goto(href) });
@@ -185,6 +194,8 @@
           <span class="box"><Check size={13} /></span>
           <span>{selected ? 'Selected' : 'Select'}</span>
         </label>
+      {:else if action}
+        {@render action({ source: primary.source, id: primary.id, name })}
       {:else if installed}
         <span class="installed">Installed</span>
       {:else if allowPick && variants.length > 1}
@@ -204,20 +215,39 @@
     flex-direction: column;
     padding: 14px;
     gap: 12px;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    transition: background 0.15s;
   }
-  .app-card:hover {
-    border-color: var(--border-strong);
-    box-shadow: var(--shadow);
+  .app-card:not(.list) {
+    border: none;
+    border-top: 1px solid var(--border);
+    border-left: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
   }
-  .app-card.selected {
-    border-color: var(--accent);
+  .app-card:not(.list):hover {
+    background: var(--surface-hover);
+  }
+  .app-card:not(.list).selected {
+    background: color-mix(in srgb, var(--accent) 16%, var(--surface));
   }
   .app-card.list {
     flex-direction: row;
     align-items: center;
     gap: 14px;
     padding: 10px 14px;
+    border: none;
+    border-radius: 0;
+    border-top: 1px solid var(--border);
+    background: transparent;
+  }
+  .app-card.list:first-child {
+    border-top: none;
+  }
+  .app-card.list:hover {
+    background: var(--surface-hover);
+  }
+  .app-card.list.selected {
+    background: color-mix(in srgb, var(--accent) 16%, var(--surface));
   }
   .app-card.list .main {
     flex: 1;
@@ -276,6 +306,7 @@
   }
   .tags .tag {
     font-size: 0.66rem;
+    font-family: var(--font-mono);
     color: var(--text-muted);
     background: var(--surface-2);
     border: 1px solid var(--border);

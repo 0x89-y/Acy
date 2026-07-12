@@ -7,6 +7,19 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.8.0',
+    date: '2026-07-12',
+    changes: [
+      'Discover and Installed are now one screen with a Discover / Library switch. Discover browses the catalog by category; Library lists your installed apps grouped by source (winget, Scoop, Chocolatey, Microsoft Store, Games, Windows components, Other apps), plus Updates.',
+      'The home screen fills the whole window: the category/source list sits on the left and its apps on the right, in grid or list view.',
+      'Installed apps now show their catalog description and tags, and grid/list view is shared with Discover, so both look the same.',
+      'A package manager that still needs setting up appears in the Library list and opens Settings → Sources; the Library tab shows a dot when an update is available or a source needs attention.',
+      'Reworked the look to match the shared design: flat surfaces (no shadows), brighter accent colours with white text, squircle app icons, and a slimmer title bar.',
+      'Settings is now one clean panel with a back button, and the top bar no longer carries a Discover link — the logo takes you home.',
+      'Installed no longer has separate "Drivers" and "Fonts" groups; they sit under "Other apps".'
+    ]
+  },
+  {
     version: '0.7.1',
     date: '2026-07-04',
     changes: [

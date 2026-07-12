@@ -100,7 +100,7 @@
     z-index: 1;
     width: min(420px, 100%);
     padding: 22px;
-    box-shadow: var(--shadow);
+    border-radius: var(--radius-dialog);
   }
   .dialog h2 {
     font-size: 1.1rem;

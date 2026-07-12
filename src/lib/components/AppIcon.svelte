@@ -18,8 +18,8 @@
   } = $props();
 
   const palette = [
-    '#3f6ea5', '#3f7d5a', '#6c5ab6', '#a85678',
-    '#b7663a', '#3d7d78', '#9a7b3f', '#a85450'
+    '#6750a4', '#7d5260', '#1e88e5', '#43a047',
+    '#fb8c00', '#8e24aa', '#00897b', '#5e35b1'
   ];
 
   function hash(s: string): number {
@@ -77,13 +77,12 @@
   .icon {
     display: grid;
     place-items: center;
-    border-radius: var(--radius-sm);
-    background: color-mix(in srgb, var(--c) 16%, var(--surface));
-    color: var(--c);
+    border-radius: 28%;
+    background: var(--c);
+    color: #fff;
     font-weight: 600;
     font-family: var(--font-mono);
     flex-shrink: 0;
-    border: 1px solid color-mix(in srgb, var(--c) 28%, transparent);
     user-select: none;
   }
   .icon.img {
