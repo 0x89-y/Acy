@@ -3,14 +3,6 @@ export type Manager = 'winget' | 'scoop' | 'choco' | 'msstore';
 
 export type Source = Manager | 'local';
 
-export const SOURCE_LABELS: Record<Source, string> = {
-  winget: 'winget',
-  scoop: 'scoop',
-  choco: 'choco',
-  msstore: 'msstore',
-  local: 'local'
-};
-
 export interface Package {
   id: string;
   name: string;

@@ -1,5 +1,4 @@
 import type { Package, Source } from '$lib/types';
-import type { InstalledShow } from '$lib/stores/settings';
 
 export type BucketKey = Source | 'games' | 'ms-system' | 'other';
 
@@ -35,25 +34,16 @@ export type Bucket = {
   label: string;
   badge: Source | null;
   managed: boolean;
-  system: boolean;
 };
 
 export const BUCKETS: Bucket[] = [
-  { key: 'winget', label: 'winget', badge: 'winget', managed: true, system: false },
-  { key: 'scoop', label: 'Scoop', badge: 'scoop', managed: true, system: false },
-  { key: 'choco', label: 'Chocolatey', badge: 'choco', managed: true, system: false },
-  { key: 'msstore', label: 'Microsoft Store', badge: 'msstore', managed: true, system: false },
-  { key: 'games', label: 'Games', badge: null, managed: false, system: false },
-  { key: 'ms-system', label: 'Windows components', badge: null, managed: false, system: true },
-  { key: 'other', label: 'Other apps', badge: null, managed: false, system: true }
+  { key: 'winget', label: 'winget', badge: 'winget', managed: true },
+  { key: 'scoop', label: 'Scoop', badge: 'scoop', managed: true },
+  { key: 'choco', label: 'Chocolatey', badge: 'choco', managed: true },
+  { key: 'msstore', label: 'Microsoft Store', badge: 'msstore', managed: true },
+  { key: 'games', label: 'Games', badge: null, managed: false },
+  { key: 'ms-system', label: 'Windows components', badge: null, managed: false },
+  { key: 'other', label: 'Other apps', badge: null, managed: false }
 ];
 
 export const BUCKET_BY_KEY = new Map(BUCKETS.map((b) => [b.key, b] as const));
-
-export function bucketVisible(key: BucketKey, show: InstalledShow): boolean {
-  const b = BUCKET_BY_KEY.get(key);
-  if (!b) return false;
-  if (show === 'managed') return b.managed;
-  if (show === 'hide-system') return !b.system;
-  return true;
-}

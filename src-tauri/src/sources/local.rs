@@ -59,8 +59,4 @@ impl PackageSource for Local {
     fn upgrade_cmd(&self, id: &str) -> (String, Vec<String>) {
         self.install_cmd(id)
     }
-
-    fn upgrade_all_cmd(&self) -> (String, Vec<String>) {
-        (s("cmd"), vec![s("/c"), s("echo"), s("nothing to upgrade")])
-    }
 }

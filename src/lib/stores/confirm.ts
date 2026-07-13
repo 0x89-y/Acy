@@ -30,11 +30,3 @@ export function confirmRemember(
 ): Promise<{ ok: boolean; remember: boolean }> {
   return open(opts);
 }
-
-export async function alertAction(opts: {
-  title: string;
-  message?: string;
-  confirmLabel?: string;
-}): Promise<boolean> {
-  return (await open({ ...opts, alert: true, confirmLabel: opts.confirmLabel ?? 'OK' })).ok;
-}

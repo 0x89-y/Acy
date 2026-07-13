@@ -262,18 +262,6 @@ impl PackageSource for Winget {
         )
     }
 
-    fn upgrade_all_cmd(&self) -> (String, Vec<String>) {
-        (
-            s("winget"),
-            vec![
-                s("upgrade"),
-                s("--all"),
-                s("--silent"),
-                s("--accept-package-agreements"),
-                s("--accept-source-agreements"),
-            ],
-        )
-    }
 }
 
 async fn cli_list_installed() -> anyhow::Result<Vec<Package>> {

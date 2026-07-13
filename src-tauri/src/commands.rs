@@ -170,14 +170,6 @@ pub async fn upgrade(
 }
 
 #[tauri::command]
-pub async fn upgrade_all(app: AppHandle, source: Source, op_id: String) -> Result<i32, String> {
-    let (program, args) = sources::for_source(source).upgrade_all_cmd();
-    runner::stream(&app, &op_id, OP_EVENT, &program, &args)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 pub async fn bootstrap_manager(
     app: AppHandle,
     source: Source,

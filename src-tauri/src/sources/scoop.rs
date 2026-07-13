@@ -166,9 +166,6 @@ impl PackageSource for Scoop {
         (s("powershell"), runner::ps_args(&format!("scoop update {}", quote(id))))
     }
 
-    fn upgrade_all_cmd(&self) -> (String, Vec<String>) {
-        (s("powershell"), runner::ps_args("scoop update *"))
-    }
 }
 
 fn quote(value: &str) -> String {

@@ -54,9 +54,6 @@ export const uninstall = (source: Source, id: string, opId: string) =>
 export const upgrade = (source: Source, id: string, opId: string) =>
   invoke<number>('upgrade', { source, id, opId });
 
-export const upgradeAll = (source: Source, opId: string) =>
-  invoke<number>('upgrade_all', { source, opId });
-
 export const bootstrapManager = (source: Source, opId: string) =>
   invoke<number>('bootstrap_manager', { source, opId });
 

@@ -12,7 +12,6 @@
   import { page } from '$app/stores';
   import Nav from '$lib/components/Nav.svelte';
   import OpStack from '$lib/components/OpStack.svelte';
-  import AppUpdateToast from '$lib/components/AppUpdateToast.svelte';
   import ContextMenu from '$lib/components/ContextMenu.svelte';
   import CloseToTrayPrompt from '$lib/components/CloseToTrayPrompt.svelte';
   import ShortcutsHelp, { toggleShortcuts } from '$lib/components/ShortcutsHelp.svelte';
@@ -31,7 +30,7 @@
   let { children } = $props();
 
   let fullBleed = $derived(
-    ['/', '/settings', '/changelog', '/curated'].includes($page.url.pathname) ||
+    ['/', '/settings', '/changelog', '/curated', '/activity'].includes($page.url.pathname) ||
       $page.url.pathname.startsWith('/app/')
   );
 
@@ -88,7 +87,6 @@
   </main>
 {/if}
 <OpStack />
-<AppUpdateToast />
 <ContextMenu />
 <CloseToTrayPrompt />
 <ShortcutsHelp />

@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { ArrowLeft, ChevronLeft, ChevronRight } from '@lucide/svelte';
-  import { activity, clearActivity, type ActivityAction } from '$lib/stores/activity';
+  import { ArrowLeft } from '@lucide/svelte';
+  import { activity, clearActivity, type ActivityAction, type ActivityEntry } from '$lib/stores/activity';
 
-  const PAGE_SIZE = 20;
   const labels: Record<ActivityAction, string> = {
     install: 'Installed',
     update: 'Updated',
@@ -11,105 +10,241 @@
     setup: 'Set up'
   };
 
-  let page = $state(0);
-  let pageCount = $derived(Math.max(1, Math.ceil($activity.length / PAGE_SIZE)));
-  let entries = $derived($activity.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE));
+  const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
-  function when(at: number) {
-    return new Date(at).toLocaleString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  function dayLabel(d: Date): string {
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    if (sameDay(d, today)) return 'Today';
+    if (sameDay(d, yesterday)) return 'Yesterday';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
-  function go(next: number) {
-    page = Math.max(0, Math.min(pageCount - 1, next));
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  let days = $derived.by(() => {
+    const map = new Map<string, { key: string; label: string; items: ActivityEntry[] }>();
+    for (const e of $activity) {
+      const d = new Date(e.at);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      let group = map.get(key);
+      if (!group) {
+        group = { key, label: dayLabel(d), items: [] };
+        map.set(key, group);
+      }
+      group.items.push(e);
+    }
+    return [...map.values()];
+  });
+
+  let selected = $state<'all' | string>('all');
+  let visible = $derived(
+    selected === 'all' ? $activity : (days.find((d) => d.key === selected)?.items ?? [])
+  );
+  let paneLabel = $derived(
+    selected === 'all' ? 'All activity' : (days.find((d) => d.key === selected)?.label ?? 'Activity')
+  );
+
+  function timeLabel(at: number): string {
+    const d = new Date(at);
+    const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    if (selected === 'all') {
+      return `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${time}`;
+    }
+    return time;
   }
 
   function clear() {
     clearActivity();
-    page = 0;
+    selected = 'all';
   }
 </script>
 
-<a class="back" href="/settings"><ArrowLeft size={16} /> Settings</a>
-
-<header>
-  <div>
-    <h1>Activity</h1>
+<div class="browse-panel">
+  <div class="browse-rail">
+    <div class="rail-head">
+      <a class="back-btn" href="/settings" title="Back" aria-label="Back"><ArrowLeft size={17} /></a>
+      <span class="rail-title">Activity</span>
+    </div>
+    <div class="rail-links">
+      <button class="rail-link" class:active={selected === 'all'} onclick={() => (selected = 'all')}>
+        <span>All activity</span><span class="rail-count mono">{$activity.length}</span>
+      </button>
+      {#each days as d (d.key)}
+        <button class="rail-link" class:active={selected === d.key} onclick={() => (selected = d.key)}>
+          <span>{d.label}</span><span class="rail-count mono">{d.items.length}</span>
+        </button>
+      {/each}
+    </div>
   </div>
-  {#if $activity.length > 0}
-    <button class="btn btn-ghost" onclick={clear}>Clear activity</button>
-  {/if}
-</header>
 
-{#if $activity.length === 0}
-  <div class="empty card">
-    <h2>No activity yet</h2>
-    <p class="muted">Completed operations will appear here.</p>
-  </div>
-{:else}
-  <div class="activity card">
-    {#each entries as entry (entry.id)}
-      <div class="entry">
-        <span class="dot" class:ok={entry.ok} class:bad={!entry.ok}></span>
-        <div class="entry-main">
-          <span><strong>{labels[entry.action]}</strong> {entry.name}</span>
-          {#if entry.source}<span class="source mono muted">{entry.source}</span>{/if}
+  <div class="browse-main">
+    <div class="pane-head">
+      <span class="pane-title">{paneLabel}</span>
+      <span class="rail-count mono">{visible.length}</span>
+      <div class="spacer"></div>
+      {#if $activity.length > 0}
+        <button class="btn btn-ghost" onclick={clear}>Clear activity</button>
+      {/if}
+    </div>
+    <div class="pane-scroll">
+      {#if visible.length === 0}
+        <p class="empty muted">No activity yet. Completed operations will appear here.</p>
+      {:else}
+        <div class="entries">
+          {#each visible as entry (entry.id)}
+            <div class="entry">
+              <span class="dot" class:ok={entry.ok} class:bad={!entry.ok}></span>
+              <div class="entry-main">
+                <span><strong>{labels[entry.action]}</strong> {entry.name}</span>
+                {#if entry.source}<span class="source mono muted">{entry.source}</span>{/if}
+              </div>
+              <time class="mono muted" datetime={new Date(entry.at).toISOString()}>{timeLabel(entry.at)}</time>
+            </div>
+          {/each}
         </div>
-        <time class="mono muted" datetime={new Date(entry.at).toISOString()}>{when(entry.at)}</time>
-      </div>
-    {/each}
+      {/if}
+    </div>
   </div>
-
-  <nav class="pagination" aria-label="Activity pages">
-    <button class="btn" onclick={() => go(page - 1)} disabled={page === 0}>
-      <ChevronLeft size={15} /> Newer
-    </button>
-    <span class="mono muted">Page {page + 1} of {pageCount}</span>
-    <button class="btn" onclick={() => go(page + 1)} disabled={page === pageCount - 1}>
-      Older <ChevronRight size={15} />
-    </button>
-  </nav>
-{/if}
+</div>
 
 <style>
-  .back {
+  .browse-panel {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: stretch;
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .browse-rail {
+    flex: 0 0 190px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .rail-head {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .rail-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  .back-btn {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    margin-bottom: 18px;
+    justify-content: center;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
     color: var(--text-muted);
-    font-size: 0.9rem;
+    line-height: 0;
     text-decoration: none;
   }
-  .back:hover {
+  .back-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+    border-color: var(--accent);
+  }
+  .rail-links {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .rail-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    text-align: left;
+    padding: 9px 14px;
+    border: none;
+    border-top: 1px solid var(--border);
+    border-left: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+  .rail-link:first-child {
+    border-top: none;
+  }
+  .rail-link:hover {
+    background: var(--surface-hover);
     color: var(--text);
   }
-  header {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 20px;
+  .rail-link.active {
+    background: var(--surface);
+    color: var(--text);
+    border-left-color: var(--accent);
   }
-  .activity {
-    padding: 4px 18px;
+  .rail-count {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+  .rail-link.active .rail-count {
+    color: var(--accent);
+  }
+  .browse-main {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .pane-head {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 34px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .pane-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  .spacer {
+    flex: 1;
+  }
+  .pane-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .empty {
+    padding: 20px 16px;
+    font-size: 0.9rem;
+  }
+  .entries {
+    display: flex;
+    flex-direction: column;
   }
   .entry {
     display: flex;
     align-items: center;
     gap: 11px;
-    padding: 11px 0;
-    border-bottom: 1px solid var(--border);
+    padding: 11px 16px;
+    border-top: 1px solid var(--border);
     font-size: 0.88rem;
   }
-  .entry:last-child {
-    border-bottom: 0;
+  .entry:first-child {
+    border-top: none;
   }
   .dot {
     width: 8px;
@@ -136,24 +271,6 @@
   }
   time {
     flex-shrink: 0;
-  }
-  .pagination {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-top: 18px;
-    font-size: 0.76rem;
-  }
-  .empty {
-    padding: 34px;
-    text-align: center;
-  }
-  .empty h2 {
-    font-size: 1.05rem;
-  }
-  .empty p {
-    margin: 7px 0 0;
   }
   @media (max-width: 620px) {
     .entry {

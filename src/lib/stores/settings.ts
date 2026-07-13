@@ -17,8 +17,6 @@ export type SettingsTab = 'general' | 'appearance' | 'sources' | 'updates' | 'ab
 
 export type ViewMode = 'grid' | 'list';
 
-export type InstalledShow = 'all' | 'hide-system' | 'managed';
-
 export const ACCENTS: { name: AccentName; label: string; color: string }[] = [
   { name: 'purple', label: 'Purple', color: '#7c3aed' },
   { name: 'blue', label: 'Blue', color: '#2563eb' },
@@ -45,14 +43,9 @@ export interface Settings {
   refreshOnStartup: boolean;
   autoCheckUpdates: boolean;
   warnChocoAdmin: boolean;
-  installedSort: 'name' | 'source';
-  installedGroup: boolean;
-  installedShow: InstalledShow;
-  collapsedGroups: string[];
   hiddenApps: string[];
   settingsTab: SettingsTab;
   discoverView: ViewMode;
-  installedView: ViewMode;
 }
 
 const KEY = 'acy-settings';
@@ -73,14 +66,9 @@ const DEFAULTS: Settings = {
   refreshOnStartup: true,
   autoCheckUpdates: false,
   warnChocoAdmin: true,
-  installedSort: 'name',
-  installedGroup: true,
-  installedShow: 'all',
-  collapsedGroups: ['games', 'drivers', 'fonts', 'ms-system', 'other'],
   hiddenApps: [],
   settingsTab: 'general',
-  discoverView: 'grid',
-  installedView: 'list'
+  discoverView: 'grid'
 };
 
 function load(): Settings {
@@ -169,27 +157,6 @@ export function setWarnChocoAdmin(value: boolean) {
   settings.update((s) => ({ ...s, warnChocoAdmin: value }));
 }
 
-export function setInstalledSort(value: Settings['installedSort']) {
-  settings.update((s) => ({ ...s, installedSort: value }));
-}
-
-export function setInstalledGroup(value: boolean) {
-  settings.update((s) => ({ ...s, installedGroup: value }));
-}
-
-export function setInstalledShow(value: InstalledShow) {
-  settings.update((s) => ({ ...s, installedShow: value }));
-}
-
-export function setGroupCollapsed(key: string, collapsed: boolean) {
-  settings.update((s) => {
-    const set = new Set(s.collapsedGroups);
-    if (collapsed) set.add(key);
-    else set.delete(key);
-    return { ...s, collapsedGroups: [...set] };
-  });
-}
-
 export function hideApp(key: string) {
   settings.update((s) =>
     s.hiddenApps.includes(key) ? s : { ...s, hiddenApps: [...s.hiddenApps, key] }
@@ -206,10 +173,6 @@ export function setSettingsTab(value: SettingsTab) {
 
 export function setDiscoverView(value: ViewMode) {
   settings.update((s) => ({ ...s, discoverView: value }));
-}
-
-export function setInstalledView(value: ViewMode) {
-  settings.update((s) => ({ ...s, installedView: value }));
 }
 
 export function completeSetup() {
