@@ -15,7 +15,8 @@ export const CHANGELOG: ChangelogEntry[] = [
     changes: [
       'The app page, the curated catalog editor, the changelog, and Settings now use the same full-window panel as the home screen, so every screen looks consistent.',
       'Editing a curated app now happens in place on its app page — the details swap to an edit form instead of opening a separate window.',
-      'Redesigned the first-run setup to match: a welcome panel with the choices on the right and Get started on the left.'
+      'Redesigned the first-run setup to match: a welcome panel with the choices on the right and Get started on the left.',
+      'Removed the floating "Acy update available" pop-up — an Acy update now shows only in the Updates list, alongside your app updates.'
     ]
   },
   {

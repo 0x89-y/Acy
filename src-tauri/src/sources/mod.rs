@@ -28,8 +28,6 @@ pub trait PackageSource: Send + Sync {
     fn install_cmd(&self, id: &str) -> (String, Vec<String>);
     fn uninstall_cmd(&self, id: &str) -> (String, Vec<String>);
     fn upgrade_cmd(&self, id: &str) -> (String, Vec<String>);
-    /// Command to upgrade every outdated package from this manager at once.
-    fn upgrade_all_cmd(&self) -> (String, Vec<String>);
 }
 
 pub fn for_source(source: Source) -> Box<dyn PackageSource> {

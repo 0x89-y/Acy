@@ -1,7 +1,6 @@
 // Bucketing for the installed library — used by the home screen's Library rail
 // (buckets as categories) and its installed-apps pane.
 import type { Package, Source } from '$lib/types';
-import type { InstalledShow } from '$lib/stores/settings';
 
 export type BucketKey = Source | 'games' | 'ms-system' | 'other';
 
@@ -43,34 +42,23 @@ export function bucketKey(p: Package): BucketKey {
   return 'other';
 }
 
-// `system: true` buckets are hidden in the "Hide system" show mode; only
-// `managed` buckets (a real package manager) survive "Managed only".
+// `managed` buckets (a real package manager) drive the cross-manager dupe note.
 export type Bucket = {
   key: BucketKey;
   label: string;
   /** The manager badge to draw, if this bucket is a real package manager. */
   badge: Source | null;
   managed: boolean;
-  system: boolean;
 };
 
 export const BUCKETS: Bucket[] = [
-  { key: 'winget', label: 'winget', badge: 'winget', managed: true, system: false },
-  { key: 'scoop', label: 'Scoop', badge: 'scoop', managed: true, system: false },
-  { key: 'choco', label: 'Chocolatey', badge: 'choco', managed: true, system: false },
-  { key: 'msstore', label: 'Microsoft Store', badge: 'msstore', managed: true, system: false },
-  { key: 'games', label: 'Games', badge: null, managed: false, system: false },
-  { key: 'ms-system', label: 'Windows components', badge: null, managed: false, system: true },
-  { key: 'other', label: 'Other apps', badge: null, managed: false, system: true }
+  { key: 'winget', label: 'winget', badge: 'winget', managed: true },
+  { key: 'scoop', label: 'Scoop', badge: 'scoop', managed: true },
+  { key: 'choco', label: 'Chocolatey', badge: 'choco', managed: true },
+  { key: 'msstore', label: 'Microsoft Store', badge: 'msstore', managed: true },
+  { key: 'games', label: 'Games', badge: null, managed: false },
+  { key: 'ms-system', label: 'Windows components', badge: null, managed: false },
+  { key: 'other', label: 'Other apps', badge: null, managed: false }
 ];
 
 export const BUCKET_BY_KEY = new Map(BUCKETS.map((b) => [b.key, b] as const));
-
-// Does a bucket survive the current show-scope (all / hide system / managed)?
-export function bucketVisible(key: BucketKey, show: InstalledShow): boolean {
-  const b = BUCKET_BY_KEY.get(key);
-  if (!b) return false;
-  if (show === 'managed') return b.managed;
-  if (show === 'hide-system') return !b.system;
-  return true;
-}

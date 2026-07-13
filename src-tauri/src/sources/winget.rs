@@ -290,18 +290,6 @@ impl PackageSource for Winget {
         )
     }
 
-    fn upgrade_all_cmd(&self) -> (String, Vec<String>) {
-        (
-            s("winget"),
-            vec![
-                s("upgrade"),
-                s("--all"),
-                s("--silent"),
-                s("--accept-package-agreements"),
-                s("--accept-source-agreements"),
-            ],
-        )
-    }
 }
 
 /// Read the installed list via the `winget list` CLI — the fallback when the

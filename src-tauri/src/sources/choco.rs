@@ -114,9 +114,6 @@ impl PackageSource for Choco {
         (s("choco"), vec![s("upgrade"), s(id), s("-y"), s("--no-progress")])
     }
 
-    fn upgrade_all_cmd(&self) -> (String, Vec<String>) {
-        (s("choco"), vec![s("upgrade"), s("all"), s("-y"), s("--no-progress")])
-    }
 }
 
 #[cfg(test)]

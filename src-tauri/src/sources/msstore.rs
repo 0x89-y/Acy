@@ -142,17 +142,4 @@ impl PackageSource for Msstore {
         )
     }
 
-    fn upgrade_all_cmd(&self) -> (String, Vec<String>) {
-        (
-            s("winget"),
-            vec![
-                s("upgrade"),
-                s("--all"),
-                s("--source"),
-                s("msstore"),
-                s("--accept-package-agreements"),
-                s("--accept-source-agreements"),
-            ],
-        )
-    }
 }

@@ -63,7 +63,6 @@ pub fn run() {
             commands::scoop_needed_bucket,
             commands::uninstall,
             commands::upgrade,
-            commands::upgrade_all,
             commands::bootstrap_manager,
             commands::app_icon,
             commands::clear_icon_cache,
