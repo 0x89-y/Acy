@@ -25,7 +25,7 @@
   let error = $state('');
   let saving = $state(false);
   let showMore = $state(false);
-  let dialog = $state<HTMLDivElement | null>(null);
+  let root = $state<HTMLDivElement | null>(null);
 
   // Editable copy of the app's fields.
   let name = $state('');
@@ -60,7 +60,7 @@
             isCustom = app.custom;
             loaded = true;
             await tick();
-            dialog?.querySelector<HTMLInputElement>('input')?.focus();
+            root?.querySelector<HTMLInputElement>('input')?.focus();
             return;
           }
         }
@@ -168,157 +168,146 @@
       saving = false;
     }
   }
-
-  function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      onClose();
-    }
-  }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<div class="edit-pane" bind:this={root}>
+  <div class="pane-head">
+    <span class="pane-title">Edit app</span>
+    <div class="spacer"></div>
+    <button class="icon-btn" onclick={onClose} aria-label="Close edit" title="Close"><X size={16} /></button>
+  </div>
 
-<div class="backdrop">
-  <button class="backdrop-close" onclick={onClose} aria-label="Close editor"></button>
-  <div class="dialog card" role="dialog" aria-modal="true" aria-labelledby="edit-title" bind:this={dialog}>
-    <div class="head">
-      <h2 id="edit-title">Edit app</h2>
-      <button class="icon-btn" onclick={onClose} aria-label="Close"><X size={18} /></button>
-    </div>
+  {#if !loaded && !error}
+    <p class="muted pad">Loading…</p>
+  {:else if error && !loaded}
+    <p class="err pad">{error}</p>
+  {:else}
+    <div class="pane-scroll">
+      <div class="form">
+        {#if !isCustom}
+          <p class="note">
+            Built-in app — your changes are kept as a personal override on top of the catalog.
+          </p>
+        {/if}
 
-    {#if !loaded && !error}
-      <p class="muted">Loading…</p>
-    {:else if error && !loaded}
-      <p class="err">{error}</p>
-    {:else}
-      {#if !isCustom}
-        <p class="note">
-          Built-in app — your changes are kept as a personal override on top of the catalog.
-        </p>
-      {/if}
-
-      <label class="f">
-        <span class="fl">Name</span>
-        <input class="in" placeholder="optional" bind:value={name} />
-      </label>
-      <label class="f">
-        <span class="fl">Description</span>
-        <input class="in" placeholder="optional" bind:value={description} />
-      </label>
-      <label class="f">
-        <span class="fl">Tags (comma-separated)</span>
-        <input class="in" placeholder="open source, free, chromium" bind:value={tags} />
-      </label>
-      <label class="f">
-        <span class="fl">Category</span>
-        <select class="in" bind:value={categoryId} disabled={!isCustom} title={isCustom ? '' : 'Built-in apps stay in their category'}>
-          {#each file?.categories ?? [] as c (c.id)}
-            <option value={c.id}>{c.title || c.id}</option>
-          {/each}
-        </select>
-      </label>
-
-      {#if showMore}
-        <div class="more">
-          <div class="src-block">
-            <span class="fl">Sources</span>
-            {#each srcs as s, i (i)}
-              <div class="src-row">
-                <select class="in src" bind:value={s.source}>
-                  {#each allSources as src (src)}<option value={src}>{src}</option>{/each}
-                </select>
-                <input class="in mono" placeholder="package id" bind:value={s.id} />
-                <button
-                  class="icon-btn danger"
-                  title="Remove source"
-                  disabled={srcs.length === 1}
-                  onclick={() => removeSource(i)}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
+        <label class="f">
+          <span class="fl">Name</span>
+          <input class="in" placeholder="optional" bind:value={name} />
+        </label>
+        <label class="f">
+          <span class="fl">Description</span>
+          <input class="in" placeholder="optional" bind:value={description} />
+        </label>
+        <label class="f">
+          <span class="fl">Tags (comma-separated)</span>
+          <input class="in" placeholder="open source, free, chromium" bind:value={tags} />
+        </label>
+        <label class="f">
+          <span class="fl">Category</span>
+          <select class="in" bind:value={categoryId} disabled={!isCustom} title={isCustom ? '' : 'Built-in apps stay in their category'}>
+            {#each file?.categories ?? [] as c (c.id)}
+              <option value={c.id}>{c.title || c.id}</option>
             {/each}
-            <button class="btn btn-ghost add-src" onclick={addSource}>
-              <Plus size={14} /> Add source
-            </button>
+          </select>
+        </label>
+
+        {#if showMore}
+          <div class="more">
+            <div class="src-block">
+              <span class="fl">Sources</span>
+              {#each srcs as s, i (i)}
+                <div class="src-row">
+                  <select class="in src" bind:value={s.source}>
+                    {#each allSources as src (src)}<option value={src}>{src}</option>{/each}
+                  </select>
+                  <input class="in mono" placeholder="package id" bind:value={s.id} />
+                  <button class="icon-btn danger" title="Remove source" disabled={srcs.length === 1} onclick={() => removeSource(i)}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              {/each}
+              <button class="btn btn-ghost add-src" onclick={addSource}>
+                <Plus size={14} /> Add source
+              </button>
+            </div>
+            <label class="f">
+              <span class="fl">Homepage</span>
+              <input class="in" placeholder="optional" bind:value={homepage} />
+            </label>
+            <label class="f">
+              <span class="fl">Icon URL</span>
+              <input class="in" placeholder="optional" bind:value={icon} />
+            </label>
+            <label class="f">
+              <span class="fl">Donate URL</span>
+              <input class="in" placeholder="optional" bind:value={donate} />
+            </label>
+            <label class="f">
+              <span class="fl">Release notes URL</span>
+              <input class="in" placeholder="optional" bind:value={releaseNotes} />
+            </label>
           </div>
-          <label class="f">
-            <span class="fl">Homepage</span>
-            <input class="in" placeholder="optional" bind:value={homepage} />
-          </label>
-          <label class="f">
-            <span class="fl">Icon URL</span>
-            <input class="in" placeholder="optional" bind:value={icon} />
-          </label>
-          <label class="f">
-            <span class="fl">Donate URL</span>
-            <input class="in" placeholder="optional" bind:value={donate} />
-          </label>
-          <label class="f">
-            <span class="fl">Release notes URL</span>
-            <input class="in" placeholder="optional" bind:value={releaseNotes} />
-          </label>
-        </div>
-      {/if}
+        {/if}
 
-      {#if error}<p class="err">{error}</p>{/if}
-
-      <div class="actions">
-        <button class="btn btn-ghost" onclick={() => (showMore = !showMore)}>
+        <button class="btn btn-ghost more-toggle" onclick={() => (showMore = !showMore)}>
           {showMore ? 'Fewer options' : 'More options'}
         </button>
-        {#if isCustom}
-          <button class="btn btn-ghost danger" onclick={remove} disabled={saving}>
-            <Trash2 size={14} /> Remove
-          </button>
-        {/if}
-        <div class="spacer"></div>
-        <button class="btn btn-ghost" onclick={onClose}>Cancel</button>
-        <button class="btn btn-accent" onclick={save} disabled={saving}>
-          {saving ? 'Saving…' : 'Save'}
-        </button>
+
+        {#if error}<p class="err">{error}</p>{/if}
       </div>
-    {/if}
-  </div>
+    </div>
+
+    <div class="foot">
+      {#if isCustom}
+        <button class="btn btn-ghost danger" onclick={remove} disabled={saving}>
+          <Trash2 size={14} /> Remove
+        </button>
+      {/if}
+      <div class="spacer"></div>
+      <button class="btn btn-ghost" onclick={onClose}>Cancel</button>
+      <button class="btn btn-accent" onclick={save} disabled={saving}>
+        {saving ? 'Saving…' : 'Save'}
+      </button>
+    </div>
+  {/if}
 </div>
 
 <style>
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 80;
-    background: rgba(0, 0, 0, 0.45);
+  .edit-pane {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .pane-head {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
-    justify-content: center;
-    padding: 24px;
-    overflow: auto;
+    gap: 10px;
+    min-height: 34px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
   }
-  .backdrop-close {
-    position: absolute;
-    inset: 0;
-    border: 0;
-    background: transparent;
-    cursor: default;
+  .pane-title {
+    font-size: 0.95rem;
+    font-weight: 600;
   }
-  .dialog {
-    position: relative;
-    z-index: 1;
-    width: min(480px, 100%);
-    padding: 20px;
-    border-radius: var(--radius-dialog);
+  .spacer {
+    flex: 1;
+  }
+  .pane-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .form {
     display: flex;
     flex-direction: column;
     gap: 12px;
-  }
-  .head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .head h2 {
-    font-size: 1.1rem;
+    padding: 18px 20px;
+    max-width: 640px;
   }
   .note {
     font-size: 0.82rem;
@@ -332,7 +321,7 @@
   .f {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
   }
   .fl {
     font-size: 0.72rem;
@@ -341,9 +330,14 @@
   .more {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding-top: 4px;
+    gap: 10px;
+    padding-top: 12px;
+    margin-top: 2px;
     border-top: 1px solid var(--border);
+  }
+  .more-toggle {
+    align-self: flex-start;
+    font-size: 0.82rem;
   }
   .src-block {
     display: flex;
@@ -373,8 +367,8 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     color: var(--text);
-    padding: 8px 10px;
-    font-size: 0.88rem;
+    padding: 7px 10px;
+    font-size: 0.86rem;
     outline: none;
     width: 100%;
     min-width: 0;
@@ -410,14 +404,16 @@
     color: var(--danger);
     margin: 0;
   }
-  .actions {
+  .pad {
+    padding: 20px;
+  }
+  .foot {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-top: 4px;
-  }
-  .actions .spacer {
-    flex: 1;
+    padding: 10px 20px;
+    border-top: 1px solid var(--border);
   }
   .danger {
     color: var(--danger);

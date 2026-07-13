@@ -380,6 +380,11 @@
           out.push(a);
         }
       }
+    // "All apps" spans every category, so sort it alphabetically; a single
+    // category keeps its curated order.
+    if (selectedCat === 'all') {
+      out.sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
+    }
     return out;
   });
   let paneTitle = $derived(

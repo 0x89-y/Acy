@@ -220,20 +220,19 @@
   let activeTab = $derived($settings.settingsTab);
 </script>
 
-<div class="page-head">
-  <a class="back-btn" href="/" title="Back" aria-label="Back">
-    <ArrowLeft size={18} />
-  </a>
-  <h1>Settings</h1>
-</div>
-
 <div class="settings-layout">
   <nav class="side" aria-label="Settings sections">
-    {#each tabs as t (t.id)}
-      <button class="side-link" class:active={activeTab === t.id} onclick={() => setSettingsTab(t.id)}>
-        {t.label}
-      </button>
-    {/each}
+    <div class="rail-head">
+      <a class="back-btn" href="/" title="Back" aria-label="Back"><ArrowLeft size={17} /></a>
+      <span class="rail-title">Settings</span>
+    </div>
+    <div class="rail-links">
+      {#each tabs as t (t.id)}
+        <button class="side-link" class:active={activeTab === t.id} onclick={() => setSettingsTab(t.id)}>
+          {t.label}
+        </button>
+      {/each}
+    </div>
   </nav>
 
   <div class="panes">
@@ -638,25 +637,46 @@
   .about .link:hover {
     text-decoration: underline;
   }
-  .page-head {
-    max-width: 820px;
-    margin: 0 auto 20px;
+  /* Full-bleed master-detail panel: the settings rail on the left, the active
+     section's content on the right, filling the window like the home screen. */
+  .settings-layout {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: stretch;
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .side {
+    flex: 0 0 190px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  /* Back button + title live at the top of the rail (like Discover's switch). */
+  .rail-head {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
   }
-  .page-head h1 {
-    margin: 0;
+  .rail-title {
+    font-size: 0.95rem;
+    font-weight: 600;
   }
   .back-btn {
     flex-shrink: 0;
-    width: 34px;
-    height: 34px;
+    width: 30px;
+    height: 30px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border: 1px solid var(--border-strong);
-    border-radius: var(--radius);
+    border-radius: var(--radius-sm);
     background: var(--surface);
     color: var(--text-muted);
     line-height: 0;
@@ -666,26 +686,12 @@
     color: var(--text);
     border-color: var(--accent);
   }
-
-  /* One bordered master-detail panel (ncy-desktop): category rail on the left,
-     the active category's edge-to-edge content on the right. The dotted ground
-     shows only in the gutters around it. */
-  .settings-layout {
-    display: flex;
-    align-items: stretch;
-    max-width: 820px;
-    margin: 0 auto;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
-    background: var(--surface);
-  }
-  .side {
-    flex: 0 0 160px;
+  .rail-links {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
-    border-right: 1px solid var(--border);
-    background: var(--surface-2);
   }
   .side-link {
     text-align: left;
@@ -702,9 +708,6 @@
   .side-link:first-child {
     border-top: none;
   }
-  .side-link:last-child {
-    border-bottom: 1px solid var(--border);
-  }
   .side-link:hover {
     background: var(--surface-hover);
     color: var(--text);
@@ -717,6 +720,8 @@
   .panes {
     flex: 1;
     min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
     --settings-pad: 20px;
     display: flex;
     flex-direction: column;
@@ -1083,17 +1088,17 @@
     }
     .side {
       flex: none;
-      flex-direction: row;
-      flex-wrap: wrap;
       border-right: none;
       border-bottom: 1px solid var(--border);
+    }
+    .rail-links {
+      flex-direction: row;
+      flex-wrap: wrap;
+      overflow: visible;
     }
     .side-link {
       border-top: none;
       border-left: none;
-    }
-    .side-link:last-child {
-      border-bottom: none;
     }
     .pref {
       grid-template-columns: 1fr;

@@ -25,6 +25,24 @@
   let saving = $state(false);
   let status = $state<{ kind: 'ok' | 'err'; msg: string } | null>(null);
 
+  // The rail selection: 'all' (every app, flat) or a category index.
+  let selectedCat = $state<number | 'all'>('all');
+  let activeCat = $derived(
+    typeof selectedCat === 'number' ? (file?.categories[selectedCat] ?? null) : null
+  );
+  // Every app across all categories, tagged with its location so edits/moves
+  // still target the right category.
+  let allApps = $derived.by(() => {
+    const out: { cat: CuratedCategory; ci: number; app: CuratedApp; ai: number }[] = [];
+    file?.categories.forEach((cat, ci) => cat.apps.forEach((app, ai) => out.push({ cat, ci, app, ai })));
+    return out;
+  });
+  // If the selected category is removed, fall back to All apps.
+  $effect(() => {
+    const n = file?.categories.length ?? 0;
+    if (typeof selectedCat === 'number' && selectedCat > n - 1) selectedCat = 'all';
+  });
+
   // Search: hides non-matching apps (and empty categories) without touching the
   // underlying arrays, so the index-based edit/move/remove actions stay correct.
   let filter = $state('');
@@ -47,11 +65,9 @@
   const catShown = (cat: CuratedCategory) => catMatches(cat) || cat.apps.some(matchesApp);
   const appShown = (cat: CuratedCategory, app: CuratedApp) => catMatches(cat) || matchesApp(app);
 
-  // Expansion state. Categories default open; apps default collapsed so the page
-  // reads as a tidy outline you expand only to edit.
-  let openCat = $state<Record<number, boolean>>({});
+  // Apps default collapsed so the pane reads as a tidy list you expand to edit.
+  // Keyed by category index + app index so All apps has no collisions.
   let openApp = $state<Record<string, boolean>>({});
-  const catOpen = (ci: number) => openCat[ci] ?? true;
   const appOpen = (ci: number, ai: number) => openApp[`${ci}-${ai}`] ?? false;
 
   onMount(async () => {
@@ -71,13 +87,17 @@
   }
 
   function addCategory() {
-    file?.categories.push({ id: '', title: '', apps: [] });
+    if (!file) return;
+    file.categories.push({ id: '', title: '', apps: [] });
+    selectedCat = file.categories.length - 1;
   }
   function removeCategory(ci: number) {
     file?.categories.splice(ci, 1);
   }
   function moveCategory(ci: number, delta: number) {
-    if (file) move(file.categories, ci, delta);
+    if (!file) return;
+    move(file.categories, ci, delta);
+    if (selectedCat === ci) selectedCat = Math.max(0, Math.min(file.categories.length - 1, ci + delta));
   }
   function addApp(cat: CuratedCategory, ci: number) {
     cat.apps.push({
@@ -186,228 +206,288 @@
   let appCount = $derived(file?.categories.reduce((n, c) => n + c.apps.length, 0) ?? 0);
 </script>
 
-<div class="head">
-  <a class="btn btn-ghost" href="/settings"><ArrowLeft size={16} /> Settings</a>
-  <h1>Curated catalog</h1>
-  <div class="spacer"></div>
-  <button class="btn btn-accent" onclick={save} disabled={saving || !file}>
-    {saving ? 'Saving…' : 'Save'}
-  </button>
-</div>
-
-{#if status}
-  <p class="status" class:ok={status.kind === 'ok'} class:err={status.kind === 'err'}>{status.msg}</p>
-{/if}
-
-{#if loading}
-  <p class="muted">Loading…</p>
-{:else if file}
-  <div class="toolbar">
-    <p class="muted count">{file.categories.length} categories · {appCount} apps</p>
-    <input class="in search" placeholder="Search apps…" bind:value={filter} />
-  </div>
-
-  {#each file.categories as cat, ci (ci)}
-    {#if !filtering || catShown(cat)}
-    <section class="cat card">
-      <div class="cat-head">
-        <button class="disclose" onclick={() => (openCat[ci] = !catOpen(ci))} aria-label="Toggle category">
-          {#if catOpen(ci)}<ChevronDown size={16} />{:else}<ChevronRight size={16} />{/if}
+{#snippet appRow(cat: CuratedCategory, ci: number, app: CuratedApp, ai: number, showCat: boolean)}
+  <div class="app" class:open={appOpen(ci, ai)}>
+    <div class="app-row">
+      <button class="disclose" onclick={() => (openApp[`${ci}-${ai}`] = !appOpen(ci, ai))} aria-label="Toggle app">
+        {#if appOpen(ci, ai)}<ChevronDown size={15} />{:else}<ChevronRight size={15} />{/if}
+      </button>
+      <span class="tag" class:custom={app.custom}>{app.custom ? 'custom' : 'built-in'}</span>
+      <button class="app-name" onclick={() => (openApp[`${ci}-${ai}`] = !appOpen(ci, ai))}>
+        {app.name || app.id || 'Untitled app'}
+      </button>
+      {#if showCat}<span class="app-cat">{cat.title || cat.id || '—'}</span>{/if}
+      <div class="app-sources">
+        {#if app.id || app.alternates.length}<SourceBadge source={app.source} />{/if}
+        {#each app.alternates as alt, k (k)}<SourceBadge source={alt.source} />{/each}
+      </div>
+      <div class="row-actions">
+        <button class="icon-btn" title="Move up" onclick={() => move(cat.apps, ai, -1)}>
+          <ArrowUp size={14} />
         </button>
-        <input class="in title" placeholder="Category title" bind:value={cat.title} />
-        <input class="in id" placeholder="id (slug)" bind:value={cat.id} />
-        <span class="chip">{cat.apps.length}</span>
-        <div class="row-actions">
-          <button class="icon-btn" title="Move up" onclick={() => moveCategory(ci, -1)}>
-            <ArrowUp size={15} />
+        <button class="icon-btn" title="Move down" onclick={() => move(cat.apps, ai, 1)}>
+          <ArrowDown size={14} />
+        </button>
+        <button class="icon-btn danger" title="Remove app" onclick={() => removeApp(cat, ai)}>
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </div>
+
+    {#if appOpen(ci, ai)}
+      <div class="app-edit">
+        <div class="src-block">
+          <span class="fl">Sources</span>
+          <div class="src-list">
+            <div class="src-row">
+              <select class="in src" bind:value={app.source}>
+                {#each sources as s (s)}<option value={s}>{s}</option>{/each}
+              </select>
+              <input
+                class="in mono"
+                placeholder={app.source === 'local' ? 'installer path (.exe / .msi) — optional' : 'package id for this manager'}
+                bind:value={app.id}
+              />
+              {#if app.source === 'local'}
+                <button class="btn btn-ghost browse" onclick={() => browse((p) => (app.id = p))}>Browse…</button>
+              {/if}
+              <button
+                class="icon-btn danger"
+                title="Remove source"
+                disabled={app.alternates.length === 0}
+                onclick={() => removePrimary(app)}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+            {#each app.alternates as alt, k (k)}
+              <div class="src-row">
+                <select class="in src" bind:value={alt.source}>
+                  {#each sources as s (s)}<option value={s}>{s}</option>{/each}
+                </select>
+                <input
+                  class="in mono"
+                  placeholder={alt.source === 'local' ? 'installer path (.exe / .msi) — optional' : 'package id for this manager'}
+                  bind:value={alt.id}
+                />
+                {#if alt.source === 'local'}
+                  <button class="btn btn-ghost browse" onclick={() => browse((p) => (alt.id = p))}>Browse…</button>
+                {/if}
+                <button class="icon-btn danger" title="Remove source" onclick={() => removeAlternate(app, k)}>
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            {/each}
+            <button class="btn btn-ghost add-src" onclick={() => addAlternate(app)}>
+              <Plus size={14} /> Add source
+            </button>
+          </div>
+        </div>
+
+        <div class="fields three">
+          <label class="f">
+            <span class="fl">Name</span>
+            <input class="in" placeholder="optional" bind:value={app.name} />
+          </label>
+          <label class="f">
+            <span class="fl">Homepage</span>
+            <input class="in" placeholder="optional" bind:value={app.homepage} />
+          </label>
+          <label class="f">
+            <span class="fl">Icon URL</span>
+            <input class="in" placeholder="optional" bind:value={app.icon} />
+          </label>
+        </div>
+        <label class="f">
+          <span class="fl">Description</span>
+          <input class="in" placeholder="optional" bind:value={app.description} />
+        </label>
+        <div class="fields two">
+          <label class="f">
+            <span class="fl">Tags (comma-separated)</span>
+            <input
+              class="in"
+              placeholder="open source, free, chromium"
+              value={(app.tags ?? []).join(', ')}
+              onchange={(e) => (app.tags = e.currentTarget.value.split(',').map((t) => t.trim()).filter(Boolean))}
+            />
+          </label>
+          <label class="f">
+            <span class="fl">Donate URL</span>
+            <input class="in" placeholder="optional" bind:value={app.donate} />
+          </label>
+        </div>
+        <label class="f">
+          <span class="fl">Release notes URL</span>
+          <input class="in" placeholder="optional" bind:value={app.releaseNotes} />
+        </label>
+      </div>
+    {/if}
+  </div>
+{/snippet}
+
+<div class="screen">
+  {#if loading}
+    <p class="pane-msg muted">Loading…</p>
+  {:else if file}
+    <div class="browse-panel">
+      <div class="browse-rail">
+        <div class="rail-head">
+          <a class="back-btn" href="/settings" title="Back" aria-label="Back"><ArrowLeft size={17} /></a>
+          <span class="rail-title">Curated catalog</span>
+        </div>
+        <div class="rail-tools">
+          <input class="head-filter" placeholder="Search apps…" bind:value={filter} />
+          <button class="btn btn-accent save-btn" onclick={save} disabled={saving || !file}>
+            {saving ? 'Saving…' : 'Save'}
           </button>
-          <button class="icon-btn" title="Move down" onclick={() => moveCategory(ci, 1)}>
-            <ArrowDown size={15} />
+        </div>
+        {#if status}
+          <p class="status" class:ok={status.kind === 'ok'} class:err={status.kind === 'err'}>{status.msg}</p>
+        {/if}
+        <div class="rail-links">
+          <button class="rail-link" class:active={selectedCat === 'all'} onclick={() => (selectedCat = 'all')}>
+            <span>All apps</span><span class="rail-count mono">{appCount}</span>
           </button>
-          <button class="icon-btn danger" title="Remove category" onclick={() => removeCategory(ci)}>
-            <Trash2 size={15} />
+          {#each file.categories as cat, ci (ci)}
+            {#if !filtering || catShown(cat)}
+              <button class="rail-link" class:active={selectedCat === ci} onclick={() => (selectedCat = ci)}>
+                <span>{cat.title || cat.id || 'Untitled'}</span>
+                <span class="rail-count mono">{cat.apps.length}</span>
+              </button>
+            {/if}
+          {/each}
+          <button class="rail-link add-rail" onclick={addCategory}>
+            <Plus size={15} /> Add category
           </button>
         </div>
       </div>
 
-      {#if catOpen(ci) || filtering}
-        <div class="apps">
-          {#each cat.apps as app, ai (ai)}
-            {#if !filtering || appShown(cat, app)}
-            <div class="app" class:open={appOpen(ci, ai)}>
-              <div class="app-row">
-                <button
-                  class="disclose"
-                  onclick={() => (openApp[`${ci}-${ai}`] = !appOpen(ci, ai))}
-                  aria-label="Toggle app"
-                >
-                  {#if appOpen(ci, ai)}<ChevronDown size={15} />{:else}<ChevronRight size={15} />{/if}
-                </button>
-                <span class="tag" class:custom={app.custom}>{app.custom ? 'custom' : 'built-in'}</span>
-                <button
-                  class="app-name"
-                  onclick={() => (openApp[`${ci}-${ai}`] = !appOpen(ci, ai))}
-                >
-                  {app.name || app.id || 'Untitled app'}
-                </button>
-                <div class="app-sources">
-                  {#if app.id || app.alternates.length}<SourceBadge source={app.source} />{/if}
-                  {#each app.alternates as alt, k (k)}<SourceBadge source={alt.source} />{/each}
-                </div>
-                <div class="row-actions">
-                  <button class="icon-btn" title="Move up" onclick={() => move(cat.apps, ai, -1)}>
-                    <ArrowUp size={14} />
-                  </button>
-                  <button class="icon-btn" title="Move down" onclick={() => move(cat.apps, ai, 1)}>
-                    <ArrowDown size={14} />
-                  </button>
-                  <button class="icon-btn danger" title="Remove app" onclick={() => removeApp(cat, ai)}>
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-
-              {#if appOpen(ci, ai)}
-                <div class="app-edit">
-                  <div class="src-block">
-                    <span class="fl">Sources</span>
-                    <div class="src-list">
-                      <div class="src-row">
-                        <select class="in src" bind:value={app.source}>
-                          {#each sources as s (s)}<option value={s}>{s}</option>{/each}
-                        </select>
-                        <input
-                          class="in mono"
-                          placeholder={app.source === 'local'
-                            ? 'installer path (.exe / .msi) — optional'
-                            : 'package id for this manager'}
-                          bind:value={app.id}
-                        />
-                        {#if app.source === 'local'}
-                          <button class="btn btn-ghost browse" onclick={() => browse((p) => (app.id = p))}>
-                            Browse…
-                          </button>
-                        {/if}
-                        <button
-                          class="icon-btn danger"
-                          title="Remove source"
-                          disabled={app.alternates.length === 0}
-                          onclick={() => removePrimary(app)}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                      {#each app.alternates as alt, k (k)}
-                        <div class="src-row">
-                          <select class="in src" bind:value={alt.source}>
-                            {#each sources as s (s)}<option value={s}>{s}</option>{/each}
-                          </select>
-                          <input
-                            class="in mono"
-                            placeholder={alt.source === 'local'
-                              ? 'installer path (.exe / .msi) — optional'
-                              : 'package id for this manager'}
-                            bind:value={alt.id}
-                          />
-                          {#if alt.source === 'local'}
-                            <button class="btn btn-ghost browse" onclick={() => browse((p) => (alt.id = p))}>
-                              Browse…
-                            </button>
-                          {/if}
-                          <button
-                            class="icon-btn danger"
-                            title="Remove source"
-                            onclick={() => removeAlternate(app, k)}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      {/each}
-                      <button class="btn btn-ghost add-src" onclick={() => addAlternate(app)}>
-                        <Plus size={14} /> Add source
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="fields three">
-                    <label class="f">
-                      <span class="fl">Name</span>
-                      <input class="in" placeholder="optional" bind:value={app.name} />
-                    </label>
-                    <label class="f">
-                      <span class="fl">Homepage</span>
-                      <input class="in" placeholder="optional" bind:value={app.homepage} />
-                    </label>
-                    <label class="f">
-                      <span class="fl">Icon URL</span>
-                      <input class="in" placeholder="optional" bind:value={app.icon} />
-                    </label>
-                  </div>
-                  <label class="f">
-                    <span class="fl">Description</span>
-                    <input class="in" placeholder="optional" bind:value={app.description} />
-                  </label>
-                  <div class="fields two">
-                    <label class="f">
-                      <span class="fl">Tags (comma-separated)</span>
-                      <input
-                        class="in"
-                        placeholder="open source, free, chromium"
-                        value={(app.tags ?? []).join(', ')}
-                        onchange={(e) =>
-                          (app.tags = e.currentTarget.value
-                            .split(',')
-                            .map((t) => t.trim())
-                            .filter(Boolean))}
-                      />
-                    </label>
-                    <label class="f">
-                      <span class="fl">Donate URL</span>
-                      <input class="in" placeholder="optional" bind:value={app.donate} />
-                    </label>
-                  </div>
-                  <label class="f">
-                    <span class="fl">Release notes URL</span>
-                    <input class="in" placeholder="optional" bind:value={app.releaseNotes} />
-                  </label>
-                </div>
-              {/if}
+      <div class="browse-main">
+        {#if selectedCat === 'all'}
+          <div class="pane-head">
+            <span class="pane-title">All apps</span>
+            <span class="rail-count mono">{appCount}</span>
+          </div>
+          <div class="pane-scroll">
+            <div class="apps">
+              {#each allApps as e (e.ci + '-' + e.ai)}
+                {#if !filtering || appShown(e.cat, e.app)}
+                  {@render appRow(e.cat, e.ci, e.app, e.ai, true)}
+                {/if}
+              {/each}
             </div>
-            {/if}
-          {/each}
-
-          <button class="btn btn-ghost add" onclick={() => addApp(cat, ci)}>
-            <Plus size={15} /> Add app
-          </button>
-        </div>
-      {/if}
-    </section>
-    {/if}
-  {/each}
-
-  <button class="btn add-cat" onclick={addCategory}>
-    <Plus size={16} /> Add category
-  </button>
-{/if}
+          </div>
+        {:else if activeCat}
+          <div class="pane-head">
+            <input class="in title" placeholder="Category title" bind:value={activeCat.title} />
+            <input class="in id" placeholder="id (slug)" bind:value={activeCat.id} />
+            <div class="spacer"></div>
+            <button class="icon-btn" title="Move up" onclick={() => moveCategory(selectedCat as number, -1)}>
+              <ArrowUp size={15} />
+            </button>
+            <button class="icon-btn" title="Move down" onclick={() => moveCategory(selectedCat as number, 1)}>
+              <ArrowDown size={15} />
+            </button>
+            <button class="icon-btn danger" title="Remove category" onclick={() => removeCategory(selectedCat as number)}>
+              <Trash2 size={15} />
+            </button>
+          </div>
+          <div class="pane-scroll">
+            <div class="apps">
+              {#each activeCat.apps as app, ai (ai)}
+                {#if !filtering || appShown(activeCat, app)}
+                  {@render appRow(activeCat, selectedCat as number, app, ai, false)}
+                {/if}
+              {/each}
+            </div>
+            <button class="btn btn-ghost add" onclick={() => activeCat && addApp(activeCat, selectedCat as number)}>
+              <Plus size={15} /> Add app
+            </button>
+          </div>
+        {:else}
+          <p class="pane-msg muted">No categories yet — add one on the left.</p>
+        {/if}
+      </div>
+    </div>
+  {/if}
+</div>
 
 <style>
-  .head {
+  .screen {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  /* Back + title + tools live at the top of the rail (part of the panel). */
+  .rail-head {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: 14px;
-    margin-bottom: 14px;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
   }
-  .head h1 {
-    font-size: 1.4rem;
+  .rail-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .rail-tools {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .head-filter {
+    flex: 1;
+    min-width: 0;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    outline: none;
+  }
+  .head-filter:focus {
+    border-color: var(--accent);
+  }
+  .save-btn {
+    flex-shrink: 0;
+  }
+  .back-btn {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text-muted);
+    line-height: 0;
+    text-decoration: none;
+  }
+  .back-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+    border-color: var(--accent);
   }
   .spacer {
     flex: 1;
   }
   .status {
-    font-size: 0.88rem;
+    flex-shrink: 0;
+    font-size: 0.78rem;
     padding: 8px 12px;
-    border-radius: var(--radius-sm);
-    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border);
   }
   .status.ok {
     color: var(--success);
@@ -417,54 +497,126 @@
     color: var(--danger);
     background: color-mix(in srgb, var(--danger) 12%, transparent);
   }
-  .toolbar {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 14px;
-  }
-  .count {
-    font-size: 0.82rem;
-    flex-shrink: 0;
-  }
-  .search {
-    max-width: 300px;
-    margin-left: auto;
+  .pane-msg {
+    padding: 24px 20px;
   }
 
-  .cat {
-    padding: 10px 12px;
-    margin-bottom: 12px;
+  /* Master-detail panel: category rail + the selected category's apps. */
+  .browse-panel {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: stretch;
+    overflow: hidden;
+    background: var(--surface);
   }
-  .cat-head {
+  .browse-rail {
+    flex: 0 0 200px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .rail-links {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .rail-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    text-align: left;
+    padding: 9px 14px;
+    border: none;
+    border-top: 1px solid var(--border);
+    border-left: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+  .rail-link:first-child {
+    border-top: none;
+  }
+  .rail-link span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .rail-link:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+  }
+  .rail-link.active {
+    background: var(--surface);
+    color: var(--text);
+    border-left-color: var(--accent);
+  }
+  .rail-count {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+  .rail-link.active .rail-count {
+    color: var(--accent);
+  }
+  .add-rail {
+    margin-top: auto;
+    color: var(--accent);
+    gap: 6px;
+    justify-content: flex-start;
+  }
+  .browse-main {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .pane-head {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
   }
-  .chip {
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 1px 9px;
-    flex-shrink: 0;
+  .pane-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
   }
 
+  /* Apps are a flush divided list, edge-to-edge in the pane (no box). */
   .apps {
-    margin-top: 10px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
   }
   .app {
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-2);
+    border-top: 1px solid var(--border);
+  }
+  .app:first-child {
+    border-top: none;
   }
   .app.open {
-    border-color: var(--border-strong);
+    background: var(--surface-2);
+  }
+  .app-cat {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .pane-title {
+    font-size: 0.95rem;
+    font-weight: 600;
   }
   .app-row {
     display: flex;
@@ -582,7 +734,7 @@
     font-family: var(--font-mono);
     font-size: 0.8rem;
   }
-  .cat-head .in {
+  .pane-head .in {
     width: auto;
   }
   .title {
@@ -646,11 +798,7 @@
   }
 
   .add {
-    align-self: flex-start;
-    margin-top: 4px;
+    margin: 12px 14px;
     font-size: 0.85rem;
-  }
-  .add-cat {
-    margin-top: 4px;
   }
 </style>

@@ -30,8 +30,11 @@
 
   let { children } = $props();
 
-  // The home screen is a full-bleed panel; other routes keep the padded page.
-  let isHome = $derived($page.url.pathname === '/');
+  // These screens are full-bleed panels that fill the window.
+  let fullBleed = $derived(
+    ['/', '/settings', '/changelog', '/curated'].includes($page.url.pathname) ||
+      $page.url.pathname.startsWith('/app/')
+  );
 
   /** How often to re-check for available updates while the app is open. */
   const UPDATE_POLL_MS = 30 * 60 * 1000;
@@ -86,7 +89,7 @@
   <Setup />
 {:else}
   <Nav />
-  <main class="page" class:full={isHome}>
+  <main class="page" class:full={fullBleed}>
     {@render children()}
   </main>
 {/if}
