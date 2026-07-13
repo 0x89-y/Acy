@@ -2,7 +2,7 @@
   import { page } from '$app/stores';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { ExternalLink, ArrowLeft, Heart, Plus, Pencil, FileText } from '@lucide/svelte';
-  import CuratedAppEditModal from '$lib/components/CuratedAppEditModal.svelte';
+  import CuratedAppEditForm from '$lib/components/CuratedAppEditForm.svelte';
   import { filterByTag } from '$lib/stores/discover';
   import AppIcon from '$lib/components/AppIcon.svelte';
   import SourceBadge from '$lib/components/SourceBadge.svelte';
@@ -134,57 +134,53 @@
   }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && history.back()} />
+<svelte:window
+  onkeydown={(e) => {
+    if (e.key !== 'Escape') return;
+    if (editing) editing = false;
+    else history.back();
+  }}
+/>
 
-<div class="topbar">
-  <a class="back" href={backHref}><ArrowLeft size={16} /> Back</a>
-  {#if curatedApp}
-    <button class="edit-btn" onclick={() => (editing = true)} title="Edit this app" aria-label="Edit this app">
-      <Pencil size={17} />
-    </button>
-  {/if}
-</div>
-
-{#if !curatedKnown}
-  <p class="muted">Loading…</p>
-{:else}
-  <div class="header" oncontextmenu={headerMenu} role="group">
-    <AppIcon {name} size={72} {source} {id} homepage={iconSource} />
-    <div class="title">
-      <h1>{name}</h1>
-      <div class="meta">
-        {#each variants as v (v.source)}<SourceBadge source={v.source} />{/each}
-        <span class="mono id">{id}</span>
-        {#if publisher}<span class="muted">· {publisher}</span>{/if}
-      </div>
-      {#if tags.length}
-        <div class="det-tags">
-          {#each tags as t (t)}
-            <button class="det-tag" onclick={() => filterByTag(t)} title={`Filter Discover by "${t}"`}>
-              {t}
-            </button>
-          {/each}
-        </div>
+<div class="browse-panel">
+  <div class="side">
+    <div class="rail-head">
+      <a class="back-btn" href={backHref} title="Back" aria-label="Back"><ArrowLeft size={17} /></a>
+      <div class="spacer"></div>
+      {#if curatedApp}
+        <button class="icon-btn" onclick={() => (editing = true)} title="Edit this app" aria-label="Edit this app">
+          <Pencil size={16} />
+        </button>
       {/if}
+    </div>
+
+    {#if !curatedKnown}
+      <p class="muted pad">Loading…</p>
+    {:else}
+      <div class="ident" oncontextmenu={headerMenu} role="group">
+        <AppIcon {name} size={64} {source} {id} homepage={iconSource} />
+        <h1>{name}</h1>
+        <div class="meta">
+          {#each variants as v (v.source)}<SourceBadge source={v.source} />{/each}
+        </div>
+        <div class="sub mono">{id}</div>
+        {#if publisher}<div class="sub muted">{publisher}</div>{/if}
+        {#if tags.length}
+          <div class="det-tags">
+            {#each tags as t (t)}
+              <button class="det-tag" onclick={() => filterByTag(t)} title={`Filter Discover by "${t}"`}>{t}</button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+
       <div class="actions">
         {#if $installedReady}
           {#if updatable && updateVariant}
-            <InstallButton
-              source={updateVariant.source}
-              id={updateVariant.id}
-              {name}
-              kind="update"
-              onDone={onChanged}
-            />
+            <InstallButton source={updateVariant.source} id={updateVariant.id} {name} kind="update" onDone={onChanged} />
           {/if}
           {#if isInstalled && installedVariant}
-            <InstallButton
-              source={installedVariant.source}
-              id={installedVariant.id}
-              {name}
-              kind="uninstall"
-              onDone={onChanged}
-            />
+            <InstallButton source={installedVariant.source} id={installedVariant.id} {name} kind="uninstall" onDone={onChanged} />
           {:else if !isInstalled}
             {#if variants.length > 1}
               <InstallSplitButton {variants} {name} preferred={$settings.preferredSource} onDone={onChanged} />
@@ -196,19 +192,13 @@
           <span class="muted small">Checking status…</span>
         {/if}
         {#if homepage}
-          <button class="btn btn-ghost" onclick={() => openUrl(homepage!)}>
-            <ExternalLink size={15} /> Website
-          </button>
+          <button class="btn btn-ghost" onclick={() => openUrl(homepage!)}><ExternalLink size={15} /> Website</button>
         {/if}
         {#if donate}
-          <button class="btn btn-ghost" onclick={() => openUrl(donate!)}>
-            <Heart size={15} /> Donate
-          </button>
+          <button class="btn btn-ghost" onclick={() => openUrl(donate!)}><Heart size={15} /> Donate</button>
         {/if}
         {#if releaseNotes}
-          <button class="btn btn-ghost" onclick={() => openUrl(releaseNotes!)}>
-            <FileText size={15} /> Release notes
-          </button>
+          <button class="btn btn-ghost" onclick={() => openUrl(releaseNotes!)}><FileText size={15} /> Release notes</button>
         {/if}
         {#if !curatedApp}
           <button class="btn btn-ghost" onclick={addThis} disabled={adding}>
@@ -216,131 +206,161 @@
           </button>
         {/if}
       </div>
-    </div>
-  </div>
-
-  <div class="facts card">
-    <div class="fact">
-      <span class="k">Status</span>
-      <span class="v">
-        {$installedReady ? (isInstalled ? 'Installed' : 'Not installed') : 'Checking…'}
-      </span>
-    </div>
-    {#if installedPkg?.version}
-      <div class="fact">
-        <span class="k">Installed version</span>
-        <span class="v mono">{installedPkg.version}</span>
-      </div>
-    {/if}
-    {#if updatePkg?.availableVersion}
-      <div class="fact">
-        <span class="k">Update available</span>
-        <span class="v mono">{updatePkg.availableVersion}</span>
-      </div>
-    {:else if latestVersion}
-      <div class="fact">
-        <span class="k">Latest version</span>
-        <span class="v mono">{latestVersion}</span>
-      </div>
-    {/if}
-    {#if homepage}
-      <div class="fact">
-        <span class="k">Website</span>
-        <button class="link-btn mono" onclick={() => openUrl(homepage!)}>{homepage}</button>
-      </div>
     {/if}
   </div>
 
-  {#if description}
-    <section class="desc-block">
-      <h2>About</h2>
-      <p>{description}</p>
-    </section>
-  {:else if loadingInfo}
-    <p class="muted small">Loading details…</p>
-  {:else}
-    <p class="muted small">No description available.</p>
-  {/if}
-{/if}
+  <div class="browse-main">
+    {#if editing}
+      <CuratedAppEditForm {source} {id} onClose={() => (editing = false)} onSaved={onChanged} />
+    {:else if curatedKnown}
+      <div class="pane-scroll">
+        <div class="facts">
+          <div class="fact">
+            <span class="k">Status</span>
+            <span class="v">
+              {$installedReady ? (isInstalled ? 'Installed' : 'Not installed') : 'Checking…'}
+            </span>
+          </div>
+          {#if installedPkg?.version}
+            <div class="fact">
+              <span class="k">Installed version</span>
+              <span class="v mono">{installedPkg.version}</span>
+            </div>
+          {/if}
+          {#if updatePkg?.availableVersion}
+            <div class="fact">
+              <span class="k">Update available</span>
+              <span class="v mono">{updatePkg.availableVersion}</span>
+            </div>
+          {:else if latestVersion}
+            <div class="fact">
+              <span class="k">Latest version</span>
+              <span class="v mono">{latestVersion}</span>
+            </div>
+          {/if}
+          {#if homepage}
+            <div class="fact">
+              <span class="k">Website</span>
+              <button class="link-btn mono" onclick={() => openUrl(homepage!)}>{homepage}</button>
+            </div>
+          {/if}
+        </div>
 
-{#if editing}
-  <CuratedAppEditModal {source} {id} onClose={() => (editing = false)} />
-{/if}
+        {#if description}
+          <section class="desc-block">
+            <h2>About</h2>
+            <p>{description}</p>
+          </section>
+        {:else if loadingInfo}
+          <p class="muted small pad">Loading details…</p>
+        {:else}
+          <p class="muted small pad">No description available.</p>
+        {/if}
+      </div>
+    {/if}
+  </div>
+</div>
 
 <style>
-  .topbar {
+  .browse-panel {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: stretch;
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .side {
+    flex: 0 0 260px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .rail-head {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 20px;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
   }
-  .back {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    color: var(--text-muted);
-    text-decoration: none;
-    font-size: 0.9rem;
+  .spacer {
+    flex: 1;
   }
-  .back:hover {
-    color: var(--text);
-  }
-  .edit-btn {
+  .back-btn {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 7px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text-muted);
+    line-height: 0;
+    text-decoration: none;
+  }
+  .back-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+    border-color: var(--accent);
+  }
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
     border: 1px solid transparent;
     background: transparent;
     color: var(--text-muted);
     border-radius: var(--radius-sm);
     line-height: 0;
   }
-  .edit-btn:hover {
+  .icon-btn:hover {
     background: var(--surface-hover);
     color: var(--text);
     border-color: var(--border);
   }
-  .header {
-    display: flex;
-    gap: 18px;
-    margin-bottom: 24px;
-  }
-  .title {
+  .ident {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    min-width: 0;
+    gap: 6px;
+    padding: 18px 16px 14px;
   }
-  .title h1 {
-    font-size: 1.4rem;
+  .ident h1 {
+    font-size: 1.15rem;
+    margin: 4px 0 0;
   }
   .meta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    font-size: 0.85rem;
-  }
-  .meta .id {
-    color: var(--text-muted);
-    font-size: 0.78rem;
-  }
-  .det-tags {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
   }
-  .det-tag {
-    font-size: 0.72rem;
+  .sub {
+    font-size: 0.76rem;
     color: var(--text-muted);
-    background: var(--surface-2);
+    word-break: break-all;
+  }
+  .det-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 4px;
+  }
+  .det-tag {
+    font-size: 0.66rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    padding: 2px 9px;
-    font-family: var(--font-mono);
+    padding: 1px 7px;
     cursor: pointer;
+    white-space: nowrap;
   }
   .det-tag:hover {
     color: var(--accent);
@@ -348,23 +368,35 @@
   }
   .actions {
     display: flex;
+    flex-direction: column;
     gap: 8px;
-    flex-wrap: wrap;
-    align-items: center;
-    margin-top: 4px;
+    padding: 0 16px 18px;
+  }
+  .browse-main {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .pane-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
   }
   .facts {
-    padding: 4px 16px;
-    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
   }
   .fact {
     display: flex;
     gap: 16px;
-    padding: 11px 0;
-    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
   }
-  .fact:last-child {
-    border-bottom: none;
+  .fact:first-child {
+    border-top: none;
   }
   .fact .k {
     width: 150px;
@@ -389,6 +421,10 @@
   .link-btn:hover {
     text-decoration: underline;
   }
+  .desc-block {
+    border-top: 1px solid var(--border);
+    padding: 20px;
+  }
   .desc-block h2 {
     font-size: 1.05rem;
     margin-bottom: 8px;
@@ -396,9 +432,22 @@
   .desc-block p {
     color: var(--text);
     line-height: 1.6;
-    max-width: 70ch;
+    max-width: 72ch;
+  }
+  .pad {
+    padding: 20px;
   }
   .small {
     font-size: 0.85rem;
+  }
+  @media (max-width: 720px) {
+    .browse-panel {
+      flex-direction: column;
+    }
+    .side {
+      flex: none;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
   }
 </style>

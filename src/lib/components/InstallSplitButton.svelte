@@ -94,6 +94,7 @@
     background: rgba(0, 0, 0, 0.14);
   }
   .main {
+    flex: 1;
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
   }

@@ -30,7 +30,10 @@
 
   let { children } = $props();
 
-  let isHome = $derived($page.url.pathname === '/');
+  let fullBleed = $derived(
+    ['/', '/settings', '/changelog', '/curated'].includes($page.url.pathname) ||
+      $page.url.pathname.startsWith('/app/')
+  );
 
   const UPDATE_POLL_MS = 30 * 60 * 1000;
 
@@ -80,7 +83,7 @@
   <Setup />
 {:else}
   <Nav />
-  <main class="page" class:full={isHome}>
+  <main class="page" class:full={fullBleed}>
     {@render children()}
   </main>
 {/if}

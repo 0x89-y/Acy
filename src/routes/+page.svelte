@@ -349,6 +349,9 @@
           out.push(a);
         }
       }
+    if (selectedCat === 'all') {
+      out.sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
+    }
     return out;
   });
   let paneTitle = $derived(

@@ -32,6 +32,13 @@
   };
   const allManagers: Manager[] = ['winget', 'scoop', 'choco', 'msstore'];
 
+  const MANAGER_INFO: Record<Manager, string> = {
+    winget: "Windows Package Manager — Microsoft's built-in catalog",
+    scoop: 'Portable apps and developer tools',
+    choco: 'Chocolatey — large community catalog',
+    msstore: 'Microsoft Store apps'
+  };
+
   let busy = $state<Source | null>(null);
 
   onMount(() => {
@@ -57,75 +64,85 @@
     <WindowControls />
   </div>
 
-  <div class="scroll">
-    <div class="content">
-      <header class="intro">
-        <h1>Welcome to <span class="brand mono">acy</span></h1>
-        <p class="muted">A quick setup before you get started. You can change all of this later in Settings.</p>
-      </header>
+  <div class="browse-panel">
+    <aside class="side">
+      <div class="ident">
+        <div class="mark mono">acy</div>
+        <p class="lede">A quick setup before you start.</p>
+        <p class="sub muted">You can change all of this later in Settings.</p>
+      </div>
+      <div class="grow"></div>
+      <button class="btn btn-accent start" onclick={completeSetup}>Get started</button>
+    </aside>
 
+    <div class="panes">
       <section class="group">
-        <h2>Theme</h2>
-        <div class="seg">
-          {#each modes as m (m.value)}
-            {@const Icon = m.icon}
-            <button
-              class="seg-btn"
-              class:on={$settings.themeMode === m.value}
-              onclick={() => setThemeMode(m.value)}
-            >
-              <Icon size={16} />
-              {m.label}
-            </button>
-          {/each}
-        </div>
-      </section>
-
-      <section class="group">
-        <h2>Accent</h2>
-        <div class="accents">
-          {#each ACCENTS as a (a.name)}
-            <button
-              class="swatch"
-              class:on={$settings.accent === a.name}
-              class:aurora={a.name === 'aurora'}
-              style="--sw:{a.color}"
-              onclick={() => setAccent(a.name)}
-              title={a.label}
-              aria-label={a.label}
-            ></button>
-          {/each}
+        <h2>Appearance</h2>
+        <div class="opt-list">
+          <div class="opt-row">
+            <span class="opt-label">Theme</span>
+            <div class="seg">
+              {#each modes as m (m.value)}
+                {@const Icon = m.icon}
+                <button
+                  class="seg-btn"
+                  class:on={$settings.themeMode === m.value}
+                  onclick={() => setThemeMode(m.value)}
+                >
+                  <Icon size={16} />
+                  {m.label}
+                </button>
+              {/each}
+            </div>
+          </div>
+          <div class="opt-row">
+            <span class="opt-label">Accent</span>
+            <div class="accents">
+              {#each ACCENTS as a (a.name)}
+                <button
+                  class="swatch"
+                  class:on={$settings.accent === a.name}
+                  class:aurora={a.name === 'aurora'}
+                  style="--sw:{a.color}"
+                  onclick={() => setAccent(a.name)}
+                  title={a.label}
+                  aria-label={a.label}
+                ></button>
+              {/each}
+            </div>
+          </div>
         </div>
       </section>
 
       <section class="group">
         <h2>Package managers</h2>
-        <p class="muted hint">
-          Choose which managers Acy should use. You can install any that are missing right now.
-        </p>
-        <div class="list">
+        <div class="mgr-list">
           {#each allManagers as s (s)}
             {@const st = statusOf(s)}
-            <div class="row card">
-              <div class="info">
-                <span class="name">{names[s]}</span>
-                <span class="state mono" class:ok={st?.available} class:off={!st?.available}>
-                  {st?.available ? 'available' : 'not installed'}
-                </span>
+            <div class="mgr-row" class:is-on={$settings.managers[s] !== false}>
+              <div class="mgr-meta">
+                <span class="mgr-name">{names[s]}</span>
+                <span class="mgr-desc muted">{MANAGER_INFO[s]}</span>
               </div>
-              {#if st && !st.available}
-                <button class="btn" onclick={() => install(s)} disabled={busy === s}>
-                  {busy === s ? 'Working…' : 'Install'}
-                </button>
-              {/if}
-              <label class="switch" title="Enable {names[s]}">
-                <input
-                  type="checkbox"
-                  checked={$settings.managers[s] !== false}
-                  onchange={(e) => setManagerEnabled(s, e.currentTarget.checked)}
-                />
-                <span class="slider"></span>
-              </label>
+              <div class="mgr-actions">
+                {#if st && !st.available}
+                  <button class="btn mgr-btn" onclick={() => install(s)} disabled={busy === s}>
+                    {busy === s ? 'Working…' : 'Install'}
+                  </button>
+                {:else}
+                  <span class="mgr-state mono" class:ok={st?.available} class:off={!st?.available}>
+                    {st?.available ? 'available' : 'not installed'}
+                  </span>
+                {/if}
+                <label class="switch" title="Enable {names[s]}">
+                  <input
+                    type="checkbox"
+                    checked={$settings.managers[s] !== false}
+                    onchange={(e) => setManagerEnabled(s, e.currentTarget.checked)}
+                  />
+                  <span class="slider"></span>
+                </label>
+              </div>
             </div>
           {/each}
         </div>
@@ -133,21 +150,20 @@
 
       <section class="group">
         <h2>App icons</h2>
-        <label class="opt">
-          <input
-            type="checkbox"
-            checked={$settings.downloadIcons}
-            onchange={(e) => setDownloadIcons(e.currentTarget.checked)}
-          />
-          <span>Download app icons from the web and cache them</span>
-        </label>
-        <p class="muted hint">
-          Off by default. When on, icons are fetched from each app's website as you browse and
-          stored on disk. Apps without a known website keep the lettered tile.
-        </p>
+        <div class="opt-list">
+          <label class="opt-row">
+            <span class="opt-label">Download &amp; cache app icons from the web</span>
+            <span class="switch">
+              <input
+                type="checkbox"
+                checked={$settings.downloadIcons}
+                onchange={(e) => setDownloadIcons(e.currentTarget.checked)}
+              />
+              <span class="slider"></span>
+            </span>
+          </label>
+        </div>
       </section>
-
-      <button class="start" onclick={completeSetup}>Get started</button>
     </div>
   </div>
 </div>
@@ -159,17 +175,20 @@
     z-index: 100;
     display: flex;
     flex-direction: column;
-    background: var(--bg);
+    background: var(--surface);
   }
   .titlebar {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 8px 8px 20px;
-    flex-shrink: 0;
+    gap: 10px;
+    height: 32px;
+    padding: 0 4px 0 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
   }
   .titlebar .logo {
-    font-size: 1.05rem;
+    font-size: 1.02rem;
     font-weight: 600;
     letter-spacing: 0.02em;
   }
@@ -182,54 +201,116 @@
     align-self: stretch;
   }
 
-  .scroll {
+  .browse-panel {
     flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: stretch;
+    overflow: hidden;
+  }
+  .side {
+    flex: 0 0 260px;
+    display: flex;
+    flex-direction: column;
     overflow-y: auto;
-    padding: 12px 24px 60px;
+    padding: 28px 24px 24px;
+    border-right: 1px solid var(--border);
+    background: var(--surface-2);
   }
-  .content {
-    max-width: 560px;
-    margin: 0 auto;
-    text-align: center;
+  .ident {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
-
-  .intro {
-    margin-bottom: 40px;
+  .mark {
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    margin-bottom: 10px;
   }
-  .intro h1 {
-    font-size: 1.7rem;
-    margin-bottom: 8px;
-  }
-  .intro .brand::before {
+  .mark::before {
     content: '0x';
     color: var(--accent);
   }
-  .intro p {
-    font-size: 0.92rem;
-    margin: 0 auto;
-    max-width: 420px;
+  .lede {
+    margin: 0;
+    font-size: 0.98rem;
+    font-weight: 500;
+  }
+  .sub {
+    margin: 0;
+    font-size: 0.86rem;
+    line-height: 1.45;
+  }
+  .grow {
+    flex: 1;
+    min-height: 24px;
+  }
+  .start {
+    width: 100%;
+    justify-content: center;
+    padding: 11px 16px;
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+
+  .panes {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    --settings-pad: 20px;
+    display: flex;
+    flex-direction: column;
+    padding: 24px 0;
+    background: var(--surface);
   }
 
   .group {
-    margin-bottom: 32px;
+    margin: 0;
+  }
+  .group + .group {
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
   }
   .group h2 {
     font-size: 1.05rem;
-    margin-bottom: 12px;
+    font-weight: 600;
+    margin: 0;
+    padding: 0 var(--settings-pad) 10px;
   }
-  .hint {
-    font-size: 0.86rem;
-    margin: -4px auto 14px;
-    max-width: 440px;
+
+  .opt-list {
+    display: flex;
+    flex-direction: column;
+  }
+  .opt-list > * {
+    padding: 12px var(--settings-pad);
+    border-top: 1px solid var(--border);
+  }
+  .opt-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    cursor: pointer;
+  }
+  .opt-label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    min-width: 0;
   }
 
   .seg {
     display: inline-flex;
-    gap: 4px;
-    padding: 4px;
-    background: var(--surface);
+    align-items: stretch;
+    gap: 2px;
+    padding: 2px;
+    background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius);
+    width: fit-content;
   }
   .seg-btn {
     display: inline-flex;
@@ -254,7 +335,7 @@
   .accents {
     display: flex;
     gap: 12px;
-    justify-content: center;
+    flex-wrap: wrap;
   }
   .swatch {
     width: 28px;
@@ -274,39 +355,58 @@
   }
   .swatch.on {
     box-shadow:
-      0 0 0 2px var(--bg),
+      0 0 0 2px var(--surface),
       0 0 0 4px var(--sw);
   }
 
-  .list {
+  .mgr-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    text-align: left;
   }
-  .row {
+  .mgr-row {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 12px 16px;
+    gap: 12px;
+    padding: 10px var(--settings-pad);
+    border-top: 1px solid var(--border);
   }
-  .info {
-    flex: 1;
+  .mgr-row.is-on {
+    background: var(--surface-2);
+  }
+  .mgr-meta {
     display: flex;
-    align-items: baseline;
-    gap: 10px;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    flex: 1;
   }
-  .name {
+  .mgr-name {
+    font-size: 0.84rem;
     font-weight: 600;
+    color: var(--text);
   }
-  .state {
+  .mgr-desc {
+    font-size: 0.76rem;
+  }
+  .mgr-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .mgr-state {
     font-size: 0.74rem;
   }
-  .state.ok {
+  .mgr-state.ok {
     color: var(--success);
   }
-  .state.off {
+  .mgr-state.off {
     color: var(--text-muted);
+  }
+  .mgr-btn {
+    font-size: 0.8rem;
+    padding: 5px 12px;
+    flex-shrink: 0;
   }
 
   .switch {
@@ -347,31 +447,17 @@
     transform: translateX(18px);
   }
 
-  .opt {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    cursor: pointer;
-    font-size: 0.92rem;
-  }
-  .opt input {
-    width: 16px;
-    height: 16px;
-    accent-color: var(--accent);
-  }
-
-  .start {
-    margin-top: 8px;
-    padding: 12px 32px;
-    border: none;
-    background: var(--accent-fill);
-    color: var(--accent-contrast);
-    border-radius: var(--radius);
-    font-size: 0.95rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .start:hover {
-    filter: brightness(1.05);
+  @media (max-width: 720px) {
+    .browse-panel {
+      flex-direction: column;
+    }
+    .side {
+      flex: none;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+    .grow {
+      min-height: 16px;
+    }
   }
 </style>
