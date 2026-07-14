@@ -12,7 +12,7 @@ import { settings } from './settings';
 //
 // The lists are also persisted to localStorage and hydrated on startup, so a
 // cold launch shows the last known installed apps (and curated install marks)
-// instantly while a fresh scan runs in the background — stale-while-revalidate.
+// instantly while a fresh scan runs in the background - stale-while-revalidate.
 // We deliberately leave the in-memory signatures empty after hydrating, so the
 // first load() of the session always revalidates against the live managers.
 
@@ -27,7 +27,7 @@ function sig(sources: Source[]): string {
 // Acy installs into Windows' ARP, so winget lists Acy itself (id like
 // `ARP\User\X64\Acy`). The Installed page already shows a dedicated "current
 // app" row and self-update is handled separately, so drop Acy's own package
-// from the managed lists to avoid a duplicate entry / update — and, critically,
+// from the managed lists to avoid a duplicate entry / update - and, critically,
 // so Acy can never be uninstalled/switched through its own UI. Matched broadly
 // (name, id, or install folder) so it can't slip through and remove itself.
 export function isAcyPackage(p: Package): boolean {
@@ -59,7 +59,7 @@ function writeCache(key: string, value: Package[]): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    // ignore quota / serialization errors — the cache is best-effort
+    // ignore quota / serialization errors - the cache is best-effort
   }
 }
 
@@ -89,8 +89,8 @@ export async function loadInstalled(force = false): Promise<void> {
   if (!force && get(installedReady) && current === installedSig) return;
 
   // Instant registry paint so the list isn't blank on a fresh launch / forced
-  // refresh. This touches only the registry — no winget, no lock, no scanning
-  // indicator — so it's safe to always do.
+  // refresh. This touches only the registry - no winget, no lock, no scanning
+  // indicator - so it's safe to always do.
   if (sources.includes('winget') && (force || !get(installedReady))) {
     try {
       const fast = withoutSelf(await api.listInstalledFast());
@@ -99,7 +99,7 @@ export async function loadInstalled(force = false): Promise<void> {
         installedReady.set(true);
       }
     } catch {
-      // ignore — the authoritative pass (if it runs) is what matters
+      // ignore - the authoritative pass (if it runs) is what matters
     }
   }
 
@@ -160,7 +160,7 @@ export async function loadUpdates(force = false): Promise<void> {
   if (!force && get(updatesReady) && current === updatesSig) return;
   if (get(updatesLoading)) return;
   // Skip the winget update check on launch when the user disabled startup
-  // refresh — regardless of whether anything is cached.
+  // refresh - regardless of whether anything is cached.
   if (!force && !get(settings).refreshOnStartup) return;
 
   updatesLoading.set(true);

@@ -11,7 +11,9 @@ let cache = new Map<string, Promise<string | null>>();
 export function loadIcon(
   source: Source,
   id: string,
-  homepage?: string | null
+  homepage?: string | null,
+  steamGridKey?: string | null,
+  gameName?: string | null
 ): Promise<string | null> {
   const key = `${source}:${id.toLowerCase()}`;
   let pending = cache.get(key);
@@ -19,7 +21,9 @@ export function loadIcon(
     pending = invoke<string | null>('app_icon', {
       source,
       id,
-      homepage: homepage ?? null
+      homepage: homepage ?? null,
+      steamgridKey: steamGridKey || null,
+      gameName: gameName || null
     }).catch(() => null);
     cache.set(key, pending);
   }
@@ -38,7 +42,7 @@ export async function clearIconCache(): Promise<void> {
 
 /**
  * Drop the per-session lookup map and bump the version so icon consumers
- * re-request — without wiping the on-disk cache. Use after re-fetching missing
+ * re-request - without wiping the on-disk cache. Use after re-fetching missing
  * icons so the ones that just downloaded show up.
  */
 export function refreshIcons(): void {

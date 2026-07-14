@@ -92,7 +92,7 @@
     <div class="err-actions">
       {#if needsAdmin}
         <span class="admin">
-          <ShieldAlert size={13} /> Needs administrator — relaunch Acy as admin, then retry.
+          <ShieldAlert size={13} /> Needs administrator - relaunch Acy as admin, then retry.
         </span>
       {/if}
       <div class="spacer"></div>

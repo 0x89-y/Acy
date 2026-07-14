@@ -28,7 +28,7 @@ export async function ensureCanWrite(source: Source): Promise<boolean> {
 
 /**
  * Scoop apps live in "buckets" that must be added before their manifest
- * resolves — most curated apps are in `extras`, which isn't added by default.
+ * resolves - most curated apps are in `extras`, which isn't added by default.
  * If the needed bucket is missing, ask before adding it (rather than silently
  * changing the user's scoop setup), then add it. Returns false if they decline
  * or the add fails.
@@ -97,11 +97,11 @@ export async function runOp(
   id: string,
   name = id
 ): Promise<boolean> {
-  // Chocolatey writes need admin — bail out early with a clear message rather
+  // Chocolatey writes need admin - bail out early with a clear message rather
   // than running and failing with a permissions error.
   if (!(await ensureCanWrite(source))) return false;
 
-  // A scoop install may need its bucket added first — ask before doing so.
+  // A scoop install may need its bucket added first - ask before doing so.
   if (source === 'scoop' && kind === 'install' && !(await ensureScoopBucket(id, name))) {
     return false;
   }

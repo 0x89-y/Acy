@@ -27,6 +27,28 @@ export const updateCuratedCatalog = (apply: boolean) =>
     message: string;
   }>('update_curated_catalog', { apply });
 
+/** A user-supplied catalog that replaces the official one. */
+export interface CustomCatalogInfo {
+  source: string;
+  isUrl: boolean;
+  version: number;
+  appCount: number;
+}
+
+/** Metadata about the active custom catalog, or null when the official one is used. */
+export const customCatalogInfo = () =>
+  invoke<CustomCatalogInfo | null>('custom_catalog_info');
+
+/** Point Acy at a custom catalog (a local file path or a URL). Validates + caches it. */
+export const setCustomCatalog = (source: string, isUrl: boolean) =>
+  invoke<CustomCatalogInfo>('set_custom_catalog', { source, isUrl });
+
+/** Remove the custom catalog and revert to the official one. */
+export const clearCustomCatalog = () => invoke<void>('clear_custom_catalog');
+
+/** Open a file picker for a custom catalog JSON; resolves to the path or null. */
+export const pickCatalogFile = () => invoke<string | null>('pick_catalog_file');
+
 export const search = (query: string, sources: Source[]) =>
   invoke<SearchHit[]>('search', { query, sources });
 
@@ -51,10 +73,16 @@ export const install = (source: Source, id: string, opId: string) =>
 export const scoopNeededBucket = (id: string) =>
   invoke<string | null>('scoop_needed_bucket', { id });
 
-/** Re-fetch icons only for apps missing one, gently. Returns fetched/failed counts. */
+/** Re-fetch icons for apps missing one, gently. `steamGridKey` (optional) is used
+ * for Steam game icons. Returns fetched/failed counts. */
 export const refetchMissingIcons = (
-  items: { source: Source; id: string; homepage: string | null }[]
-) => invoke<{ fetched: number; failed: number }>('refetch_missing_icons', { items });
+  items: { source: Source; id: string; homepage: string | null; gameName?: string | null }[],
+  steamGridKey?: string | null
+) =>
+  invoke<{ fetched: number; failed: number }>('refetch_missing_icons', {
+    items,
+    steamgridKey: steamGridKey || null
+  });
 
 export const uninstall = (source: Source, id: string, opId: string) =>
   invoke<number>('uninstall', { source, id, opId });

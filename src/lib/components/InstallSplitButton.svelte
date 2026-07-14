@@ -101,7 +101,7 @@
   }
   .main {
     /* Fill the wrapper so a stretched split (e.g. the detail sidebar) keeps the
-       label centered with the caret at the right edge — no empty accent gap. */
+       label centered with the caret at the right edge - no empty accent gap. */
     flex: 1;
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;

@@ -20,6 +20,7 @@
     variants,
     installed = false,
     homepage = null,
+    gameName = null,
     allowPick = false,
     selectable = false,
     selected = false,
@@ -40,6 +41,8 @@
     variants: Variant[];
     installed?: boolean;
     homepage?: string | null;
+    /** Display name for a Games-bucket app; enables SteamGridDB-by-name icons. */
+    gameName?: string | null;
     allowPick?: boolean;
     /** Free-form labels shown as small chips on the card. */
     tags?: string[];
@@ -140,7 +143,14 @@
       }
     }}
   >
-    <AppIcon {name} source={primary.source} id={primary.id} {homepage} size={layout === 'list' ? 34 : 44} />
+    <AppIcon
+      {name}
+      source={primary.source}
+      id={primary.id}
+      {homepage}
+      {gameName}
+      size={layout === 'list' ? 34 : 44}
+    />
     <div class="meta">
       <div class="name">
         {#each nameParts as p, i (i)}{#if p.hit}<mark>{p.t}</mark>{:else}{p.t}{/if}{/each}
@@ -248,7 +258,7 @@
     background: color-mix(in srgb, var(--accent) 16%, var(--surface));
   }
   /* List layout is a divided list: flush rows inside one bordered container
-     (.list-flow), separated by hairlines — no per-card border or radius. */
+     (.list-flow), separated by hairlines - no per-card border or radius. */
   .app-card.list {
     flex-direction: row;
     align-items: center;

@@ -292,7 +292,7 @@ impl PackageSource for Winget {
 
 }
 
-/// Read the installed list via the `winget list` CLI — the fallback when the
+/// Read the installed list via the `winget list` CLI - the fallback when the
 /// PowerShell module is absent or present-but-broken.
 async fn cli_list_installed() -> anyhow::Result<Vec<Package>> {
     let out = runner::capture("winget", &[s("list"), s("--accept-source-agreements")]).await?;

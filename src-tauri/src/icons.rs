@@ -164,6 +164,139 @@ fn pick_icon(html: &str, base: &reqwest::Url) -> Option<reqwest::Url> {
     base.join(&best?.1).ok()
 }
 
+/// Extract a Steam appid from a winget ARP id like
+/// `ARP\Machine\X64\Steam App 1621690`. Steam is the only thing that surfaces
+/// these entries, so we match winget ids whose final `\`-segment is
+/// `Steam App <digits>` (case-insensitive).
+fn steam_appid(source: Source, id: &str) -> Option<String> {
+    if source != Source::Winget {
+        return None;
+    }
+    const PREFIX: &str = "Steam App ";
+    let last = id.rsplit('\\').next().unwrap_or(id).trim();
+    let head = last.get(..PREFIX.len())?;
+    if !head.eq_ignore_ascii_case(PREFIX) {
+        return None;
+    }
+    let digits = &last[PREFIX.len()..];
+    (!digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())).then(|| digits.to_string())
+}
+
+/// Fetch Steam box art for an appid from Steam's public CDN (keyed only by
+/// appid - no API key or auth). Falls back to the header banner for the odd app
+/// that lacks the newer library asset.
+async fn steam_art(appid: &str) -> Option<Vec<u8>> {
+    let client = http_client().await;
+    for asset in ["library_600x900.jpg", "header.jpg"] {
+        let url = format!("https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/{asset}");
+        if let Ok(url) = reqwest::Url::parse(&url) {
+            if let Some(bytes) = fetch_bytes(client, url).await {
+                return Some(bytes);
+            }
+        }
+    }
+    None
+}
+
+const SGDB_API: &str = "https://www.steamgriddb.com/api/v2";
+
+/// GET a SteamGridDB endpoint with the user's key and parse the JSON body.
+async fn sgdb_get(client: &Client, key: &str, url: reqwest::Url) -> Option<serde_json::Value> {
+    let resp = client.get(url).bearer_auth(key).send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    serde_json::from_str(&resp.text().await.ok()?).ok()
+}
+
+/// Strip trademark glyphs and surrounding whitespace so store display names line
+/// up with SteamGridDB's titles (e.g. `HELLDIVERS™ 2` -> `HELLDIVERS 2`).
+fn clean_game_name(name: &str) -> String {
+    name.chars()
+        .filter(|c| !matches!(c, '™' | '®' | '©'))
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Choose a game id from a SteamGridDB search `data` array: prefer a result whose
+/// (cleaned) name matches the query exactly, else fall back to the first hit.
+fn pick_game_id(data: &serde_json::Value, query: &str) -> Option<i64> {
+    let arr = data.as_array()?;
+    let want = clean_game_name(query).to_lowercase();
+    arr.iter()
+        .find(|g| {
+            g.get("name")
+                .and_then(|n| n.as_str())
+                .map(|n| clean_game_name(n).to_lowercase() == want)
+                .unwrap_or(false)
+        })
+        .or_else(|| arr.first())
+        .and_then(|g| g.get("id"))
+        .and_then(|v| v.as_i64())
+}
+
+/// Resolve a Steam appid to a SteamGridDB game id (`data` is a single object).
+async fn sgdb_game_id_from_steam(client: &Client, key: &str, appid: &str) -> Option<i64> {
+    let url = reqwest::Url::parse(&format!("{SGDB_API}/games/steam/{appid}")).ok()?;
+    let v = sgdb_get(client, key, url).await?;
+    let data = v.get("data")?;
+    data.get("id").and_then(|v| v.as_i64()).or_else(|| {
+        // Tolerate an array response just in case.
+        data.as_array()
+            .and_then(|a| a.first())
+            .and_then(|g| g.get("id"))
+            .and_then(|v| v.as_i64())
+    })
+}
+
+/// Search SteamGridDB by name and pick the best-matching game id.
+/// Build the SteamGridDB autocomplete URL for a title, percent-encoding it as a
+/// single path segment. No trailing slash on the base + `pop_if_empty` so the
+/// term never lands after an empty segment (which would produce a `//`).
+fn sgdb_search_url(name: &str) -> Option<reqwest::Url> {
+    let mut url = reqwest::Url::parse(&format!("{SGDB_API}/search/autocomplete")).ok()?;
+    url.path_segments_mut()
+        .ok()?
+        .pop_if_empty()
+        .push(&clean_game_name(name));
+    Some(url)
+}
+
+async fn sgdb_game_id_from_name(client: &Client, key: &str, name: &str) -> Option<i64> {
+    let v = sgdb_get(client, key, sgdb_search_url(name)?).await?;
+    pick_game_id(v.get("data")?, name)
+}
+
+/// Fetch the first square icon asset for a SteamGridDB game id.
+async fn sgdb_icon(client: &Client, key: &str, game_id: i64) -> Option<Vec<u8>> {
+    let url = reqwest::Url::parse(&format!("{SGDB_API}/icons/game/{game_id}")).ok()?;
+    let v = sgdb_get(client, key, url).await?;
+    let asset = v
+        .get("data")?
+        .as_array()?
+        .iter()
+        .find_map(|it| it.get("url").and_then(|u| u.as_str()))?;
+    fetch_bytes(client, reqwest::Url::parse(asset).ok()?).await
+}
+
+/// Square game icon from SteamGridDB for a Steam appid. Returns None on any miss
+/// (bad key, no game, no icons).
+async fn steamgriddb_icon(appid: &str, key: &str) -> Option<Vec<u8>> {
+    let client = http_client().await;
+    let game_id = sgdb_game_id_from_steam(client, key, appid).await?;
+    sgdb_icon(client, key, game_id).await
+}
+
+/// Square game icon from SteamGridDB matched by name - for non-Steam launcher
+/// games (Epic, GOG, EA, Ubisoft, Battle.net, …) that have no usable id.
+async fn steamgriddb_icon_by_name(name: &str, key: &str) -> Option<Vec<u8>> {
+    let client = http_client().await;
+    let game_id = sgdb_game_id_from_name(client, key, name).await?;
+    sgdb_icon(client, key, game_id).await
+}
+
 async fn fetch_bytes(client: &Client, url: reqwest::Url) -> Option<Vec<u8>> {
     let resp = client.get(url).send().await.ok()?;
     if !resp.status().is_success() {
@@ -245,6 +378,8 @@ pub async fn get_icon(
     source: Source,
     id: String,
     homepage: Option<String>,
+    steamgrid_key: Option<String>,
+    game_name: Option<String>,
 ) -> Option<String> {
     let path = cache_path(app, source, &id)?;
 
@@ -264,19 +399,44 @@ pub async fn get_icon(
 
     let _permit = FETCH_SEM.acquire().await.ok()?;
 
-    let homepage = match homepage {
-        Some(h) if !h.trim().is_empty() => Some(h),
-        _ => sources::for_source(source)
-            .info(&id)
-            .await
-            .ok()
-            .flatten()
-            .and_then(|p| p.homepage),
+    // Game icons. Steam entries carry their appid in the id: with a key pull a
+    // square SteamGridDB icon, else (or on miss) box art from Steam's own CDN.
+    // Other launchers (Epic/GOG/EA/Ubisoft/Battle.net) have no usable id, so with
+    // a key we match them on name via SteamGridDB (square icon only, no CDN). Both
+    // fall through to the normal homepage/favicon resolution on a miss.
+    let key = steamgrid_key.as_deref().map(str::trim).filter(|k| !k.is_empty());
+    let bytes = if let Some(appid) = steam_appid(source, &id) {
+        let mut art = match key {
+            Some(key) => steamgriddb_icon(&appid, key).await,
+            None => None,
+        };
+        if art.is_none() {
+            art = steam_art(&appid).await;
+        }
+        art
+    } else if let (Some(key), Some(name)) = (key, game_name.as_deref()) {
+        steamgriddb_icon_by_name(name, key).await
+    } else {
+        None
     };
 
-    let bytes = match homepage {
-        Some(h) => resolve_icon(&h).await,
-        None => None,
+    let bytes = match bytes {
+        Some(b) => Some(b),
+        None => {
+            let homepage = match homepage {
+                Some(h) if !h.trim().is_empty() => Some(h),
+                _ => sources::for_source(source)
+                    .info(&id)
+                    .await
+                    .ok()
+                    .flatten()
+                    .and_then(|p| p.homepage),
+            };
+            match homepage {
+                Some(h) => resolve_icon(&h).await,
+                None => None,
+            }
+        }
     };
 
     match bytes {
@@ -298,20 +458,22 @@ pub async fn get_icon(
     }
 }
 
-/// Whether this app already has a result — a cached icon, or a still-fresh "no
-/// icon found" marker. The "re-download missing icons" pass skips these so it
-/// converges to only the genuinely-retryable apps.
-pub fn is_resolved(app: &AppHandle, source: Source, id: &str) -> bool {
-    let has_icon = cache_path(app, source, id)
+/// Whether this app has a real cached icon on disk. The manual "re-download
+/// missing icons" pass skips these, but - unlike the lazy path - ignores the "no
+/// icon found" marker, so a user-triggered retry re-tries apps that previously
+/// missed (e.g. Steam games from before this fetch path existed).
+pub fn has_icon(app: &AppHandle, source: Source, id: &str) -> bool {
+    cache_path(app, source, id)
         .and_then(|p| std::fs::metadata(p).ok())
         .map(|m| m.len() > 0)
-        .unwrap_or(false);
-    if has_icon {
-        return true;
-    }
-    none_path(app, source, id)
-        .map(|p| no_icon_marker_fresh(&p))
         .unwrap_or(false)
+}
+
+/// Drop just the "no icon found" marker so the next fetch re-hits the network.
+pub fn clear_miss_marker(app: &AppHandle, source: Source, id: &str) {
+    if let Some(none) = none_path(app, source, id) {
+        let _ = std::fs::remove_file(none);
+    }
 }
 
 /// Delete every cached icon so they are re-fetched on next use.
@@ -323,4 +485,76 @@ pub fn clear_cache(app: &AppHandle) -> std::io::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn steam_appid_matches_only_winget_arp_steam_ids() {
+        assert_eq!(
+            steam_appid(Source::Winget, r"ARP\Machine\X64\Steam App 1621690").as_deref(),
+            Some("1621690")
+        );
+        // case-insensitive prefix
+        assert_eq!(
+            steam_appid(Source::Winget, r"ARP\User\X64\steam app 42").as_deref(),
+            Some("42")
+        );
+        // non-Steam ARP entry
+        assert_eq!(steam_appid(Source::Winget, r"ARP\Machine\X64\Some.App"), None);
+        // a real winget-managed id
+        assert_eq!(steam_appid(Source::Winget, "Mozilla.Firefox"), None);
+        // right shape, wrong source
+        assert_eq!(
+            steam_appid(Source::Choco, r"ARP\Machine\X64\Steam App 1621690"),
+            None
+        );
+        // trailing non-digits
+        assert_eq!(
+            steam_appid(Source::Winget, r"ARP\Machine\X64\Steam App 12ab"),
+            None
+        );
+        // prefix but no number
+        assert_eq!(steam_appid(Source::Winget, r"ARP\Machine\X64\Steam App "), None);
+    }
+
+    #[test]
+    fn clean_game_name_strips_trademarks_and_whitespace() {
+        assert_eq!(clean_game_name("HELLDIVERS™ 2"), "HELLDIVERS 2");
+        assert_eq!(clean_game_name("  Diablo® IV  "), "Diablo IV");
+        assert_eq!(clean_game_name("Overwatch©"), "Overwatch");
+    }
+
+    #[test]
+    fn pick_game_id_prefers_exact_then_first() {
+        let data = serde_json::json!([
+            { "id": 10, "name": "Diablo" },
+            { "id": 20, "name": "Diablo IV" },
+        ]);
+        // exact (cleaned, case-insensitive) match wins over order
+        assert_eq!(pick_game_id(&data, "diablo iv"), Some(20));
+        assert_eq!(pick_game_id(&data, "Diablo IV™"), Some(20));
+        // no exact match -> first result
+        assert_eq!(pick_game_id(&data, "Diablo II"), Some(10));
+        // empty / wrong shape -> None
+        assert_eq!(pick_game_id(&serde_json::json!([]), "x"), None);
+        assert_eq!(pick_game_id(&serde_json::json!({}), "x"), None);
+    }
+
+    #[test]
+    fn sgdb_search_url_has_no_double_slash() {
+        // The title becomes one percent-encoded segment, directly after
+        // `autocomplete/` with no empty segment in between.
+        assert_eq!(
+            sgdb_search_url("League of Legends").unwrap().as_str(),
+            "https://www.steamgriddb.com/api/v2/search/autocomplete/League%20of%20Legends"
+        );
+        // Trademark glyphs are stripped before encoding.
+        assert_eq!(
+            sgdb_search_url("HELLDIVERS™ 2").unwrap().as_str(),
+            "https://www.steamgriddb.com/api/v2/search/autocomplete/HELLDIVERS%202"
+        );
+    }
 }

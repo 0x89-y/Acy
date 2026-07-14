@@ -35,7 +35,7 @@
   // One-line descriptions for the well-known buckets.
   const BUCKET_INFO: Record<string, string> = {
     main: 'Core command-line tools',
-    extras: 'GUI apps — Firefox, VLC, Discord, VS Code…',
+    extras: 'GUI apps - Firefox, VLC, Discord, VS Code…',
     versions: 'Alternate and older app versions',
     nirsoft: 'NirSoft utilities',
     games: 'Games and game tools',
@@ -46,7 +46,7 @@
   };
 
   // Every bucket (added + well-known), sorted: main first, then added, then the
-  // rest alphabetically — each with its added state and a description.
+  // rest alphabetically - each with its added state and a description.
   let bucketRows = $derived.by(() => {
     const added = buckets ?? [];
     const names = [...new Set([...added, ...knownBuckets])];
@@ -63,6 +63,19 @@
         return a.name.localeCompare(b.name);
       });
   });
+
+  let addedRows = $derived(bucketRows.filter((r) => r.added));
+  let availableRows = $derived(bucketRows.filter((r) => !r.added));
+
+  // 'all' | 'added' | 'available'
+  let selected = $state<'all' | 'added' | 'available'>('all');
+  let visibleRows = $derived(
+    selected === 'added' ? addedRows : selected === 'available' ? availableRows : bucketRows
+  );
+  let paneLabel = $derived(
+    selected === 'added' ? 'Added' : selected === 'available' ? 'Available' : 'All buckets'
+  );
+  let loading = $derived(!ready || (scoopAvailable && buckets === null));
 
   async function addBucket(name: string) {
     bucketBusy = name;
@@ -88,78 +101,204 @@
   }
 </script>
 
-<a class="back" href="/settings"><ArrowLeft size={16} /> Settings</a>
-
-<header>
-  <h1>Scoop buckets</h1>
-</header>
-
-{#if !ready}
-  <p class="muted">Loading…</p>
-{:else if !scoopAvailable}
-  <p class="muted">Scoop isn't installed, so it has no buckets to manage.</p>
-{:else if buckets === null}
-  <p class="muted">Loading…</p>
-{:else}
-  <div class="bucket-list">
-    {#each bucketRows as row (row.name)}
-      <div class="bucket-row" class:is-added={row.added}>
-        <div class="bucket-meta">
-          <span class="bucket-name mono">{row.name}</span>
-          {#if row.description}<span class="bucket-desc muted">{row.description}</span>{/if}
-        </div>
-        {#if row.added && row.name === 'main'}
-          <span class="bucket-state">Added</span>
-        {:else if row.added}
-          <button
-            class="btn btn-ghost bucket-btn"
-            onclick={() => removeBucket(row.name)}
-            disabled={bucketBusy !== null}
-          >
-            {bucketBusy === row.name ? 'Removing…' : 'Remove'}
-          </button>
-        {:else}
-          <button
-            class="btn bucket-btn"
-            onclick={() => addBucket(row.name)}
-            disabled={bucketBusy !== null}
-          >
-            {bucketBusy === row.name ? 'Adding…' : 'Add'}
-          </button>
-        {/if}
-      </div>
-    {/each}
+<div class="browse-panel">
+  <div class="browse-rail">
+    <div class="rail-head">
+      <a class="back-btn" href="/settings" title="Back" aria-label="Back"><ArrowLeft size={17} /></a>
+      <span class="rail-title">Scoop buckets</span>
+    </div>
+    <div class="rail-links">
+      <button class="rail-link" class:active={selected === 'all'} onclick={() => (selected = 'all')}>
+        <span>All buckets</span><span class="rail-count mono">{bucketRows.length}</span>
+      </button>
+      <button class="rail-link" class:active={selected === 'added'} onclick={() => (selected = 'added')}>
+        <span>Added</span><span class="rail-count mono">{addedRows.length}</span>
+      </button>
+      <button class="rail-link" class:active={selected === 'available'} onclick={() => (selected = 'available')}>
+        <span>Available</span><span class="rail-count mono">{availableRows.length}</span>
+      </button>
+    </div>
   </div>
-{/if}
+
+  <div class="browse-main">
+    <div class="pane-head">
+      <span class="pane-title">{paneLabel}</span>
+      <span class="rail-count mono">{visibleRows.length}</span>
+    </div>
+    <div class="pane-scroll">
+      {#if loading}
+        <p class="note muted">Loading…</p>
+      {:else if !scoopAvailable}
+        <p class="note muted">Scoop isn't installed, so it has no buckets to manage.</p>
+      {:else if visibleRows.length === 0}
+        <p class="note muted">
+          {selected === 'available' ? 'Every known bucket is already added.' : 'No buckets here.'}
+        </p>
+      {:else}
+        <div class="bucket-list">
+          {#each visibleRows as row (row.name)}
+            <div class="bucket-row" class:is-added={row.added}>
+              <div class="bucket-meta">
+                <span class="bucket-name mono">{row.name}</span>
+                {#if row.description}<span class="bucket-desc muted">{row.description}</span>{/if}
+              </div>
+              {#if row.added && row.name === 'main'}
+                <span class="bucket-state">Added</span>
+              {:else if row.added}
+                <button
+                  class="btn btn-ghost bucket-btn"
+                  onclick={() => removeBucket(row.name)}
+                  disabled={bucketBusy !== null}
+                >
+                  {bucketBusy === row.name ? 'Removing…' : 'Remove'}
+                </button>
+              {:else}
+                <button
+                  class="btn bucket-btn"
+                  onclick={() => addBucket(row.name)}
+                  disabled={bucketBusy !== null}
+                >
+                  {bucketBusy === row.name ? 'Adding…' : 'Add'}
+                </button>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  </div>
+</div>
 
 <style>
-  .back {
+  .browse-panel {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: stretch;
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .browse-rail {
+    flex: 0 0 190px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .rail-head {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .rail-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  .back-btn {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    margin-bottom: 18px;
+    justify-content: center;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
     color: var(--text-muted);
-    font-size: 0.9rem;
+    line-height: 0;
     text-decoration: none;
   }
-  .back:hover {
+  .back-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+    border-color: var(--accent);
+  }
+  .rail-links {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .rail-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    text-align: left;
+    padding: 9px 14px;
+    border: none;
+    border-top: 1px solid var(--border);
+    border-left: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+  .rail-link:first-child {
+    border-top: none;
+  }
+  .rail-link:hover {
+    background: var(--surface-hover);
     color: var(--text);
   }
-  header {
-    margin-bottom: 20px;
+  .rail-link.active {
+    background: var(--surface);
+    color: var(--text);
+    border-left-color: var(--accent);
   }
+  .rail-count {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+  .rail-link.active .rail-count {
+    color: var(--accent);
+  }
+  .browse-main {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .pane-head {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 34px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .pane-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  .pane-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .note {
+    padding: 20px 16px;
+    font-size: 0.9rem;
+  }
+  /* Flush divided list, edge-to-edge in the pane. */
   .bucket-list {
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
   }
   .bucket-row {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 9px 12px;
+    padding: 10px 16px;
     border-top: 1px solid var(--border);
   }
   .bucket-row:first-child {

@@ -9,7 +9,7 @@ export function curatedKey(source: Source, id: string): string {
   return `${source}:${id.trim().toLowerCase()}`;
 }
 
-/** Every (source, id) already in the catalog — primaries and alternates. */
+/** Every (source, id) already in the catalog - primaries and alternates. */
 export function curatedKeys(file: CuratedFile | null): Set<string> {
   const set = new Set<string>();
   if (!file) return set;

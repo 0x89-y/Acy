@@ -181,10 +181,10 @@ fn quote(value: &str) -> String {
 }
 
 /// The scoop bucket an app needs added before it will install, if it isn't added
-/// yet — so the UI can ask first instead of silently changing scoop's config.
+/// yet - so the UI can ask first instead of silently changing scoop's config.
 /// Returns None when the app already resolves in an added bucket (or scoop isn't
 /// set up). Most curated apps live in `extras`, which isn't added by default.
-/// Checked on the filesystem — fast, and no extra scoop invocation.
+/// Checked on the filesystem - fast, and no extra scoop invocation.
 pub fn needed_bucket(id: &str) -> Option<String> {
     let buckets = scoop_home()?.join("buckets");
     if let Some((bucket, _)) = id.split_once('/') {

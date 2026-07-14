@@ -69,11 +69,11 @@ pub struct CuratedFile {
 const DEFAULT: &str = include_str!("../../curated.json");
 
 /// Where the hosted catalog + its signature live. Updating the catalog is a
-/// matter of uploading these two files — no app rebuild needed.
+/// matter of uploading these two files - no app rebuild needed.
 const CATALOG_URL: &str = "https://0x89-y.xyz/acy/curated.json";
 const CATALOG_SIG_URL: &str = "https://0x89-y.xyz/acy/curated.json.sig";
 
-/// minisign public key that signs the catalog — the same key used for app
+/// minisign public key that signs the catalog - the same key used for app
 /// updates. It is the decoded form of the `pubkey` in tauri.conf.json (that
 /// base64 decodes to a two-line pubkey file whose key line is this).
 const CATALOG_PUBKEY: &str = "RWS3VEM6J8kwYA+2cJgsbaR1llGwi+f10sRCXZU4w9SrP47w+9je9SBo";
@@ -148,6 +148,10 @@ fn pick_base(bundled: CuratedFile, remote: Option<CuratedFile>) -> CuratedFile {
 /// catalog and the bundled one. Deliberately does NOT include the per-user
 /// AppData file (that holds only the user's `custom` additions).
 fn load_base(app: &AppHandle) -> CuratedFile {
+    // A user-supplied custom catalog replaces the official one entirely.
+    if let Some(custom) = read_custom_catalog(app) {
+        return custom.catalog;
+    }
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("curated.json");
@@ -196,7 +200,7 @@ fn same_content(a: &CuratedApp, b: &CuratedApp) -> bool {
 /// Overlay the user's apps from `saved` onto the current hardcoded `base`.
 /// Apps the user hasn't touched come from `base` (so built-ins refresh on
 /// update). A `custom` app either **overrides** a built-in in place (same
-/// source+id, keeps its category/position — used when the user edits a built-in)
+/// source+id, keeps its category/position - used when the user edits a built-in)
 /// or is **added** to its saved category when it isn't a built-in. A stale
 /// removed built-in (not custom, not in base) never resurrects.
 fn merge(base: CuratedFile, saved: &CuratedFile) -> CuratedFile {
@@ -378,6 +382,113 @@ pub async fn update_remote(app: &AppHandle, apply: bool) -> Result<CatalogUpdate
     })
 }
 
+/// A user-supplied catalog that replaces the official one. Holds the source it
+/// came from (a file path or a URL) plus the parsed catalog itself, so the app
+/// can display/refresh it without re-reading the original on every load.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomCatalog {
+    /// The file path or URL the catalog was loaded from.
+    pub source: String,
+    /// True when `source` is a URL (vs a local file path).
+    pub is_url: bool,
+    pub catalog: CuratedFile,
+}
+
+/// What the UI shows about the active custom catalog (no app list).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomCatalogInfo {
+    pub source: String,
+    pub is_url: bool,
+    pub version: u32,
+    pub app_count: usize,
+}
+
+fn custom_catalog_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|dir| dir.join("custom-catalog.json"))
+}
+
+fn read_custom_catalog(app: &AppHandle) -> Option<CustomCatalog> {
+    let text = std::fs::read_to_string(custom_catalog_path(app)?).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+fn info_of(c: &CustomCatalog) -> CustomCatalogInfo {
+    CustomCatalogInfo {
+        source: c.source.clone(),
+        is_url: c.is_url,
+        version: c.catalog.version,
+        app_count: app_count(&c.catalog),
+    }
+}
+
+/// The active custom catalog's metadata, or None when the official one is in use.
+pub fn custom_info(app: &AppHandle) -> Option<CustomCatalogInfo> {
+    read_custom_catalog(app).as_ref().map(info_of)
+}
+
+/// Point Acy at a custom catalog (a local file or a URL). The bytes are fetched/
+/// read, validated as a `CuratedFile` (the user's responsibility to format), and
+/// cached; from then on `load` uses it in place of the official catalog. Any
+/// failure (missing file, network error, invalid JSON) leaves the current catalog
+/// untouched and returns a message for the UI. No signature check - it's the
+/// user's own catalog.
+pub async fn set_custom(
+    app: &AppHandle,
+    source: String,
+    is_url: bool,
+) -> Result<CustomCatalogInfo, String> {
+    let bytes = if is_url {
+        let client = reqwest::Client::builder()
+            .user_agent(concat!("Acy/", env!("CARGO_PKG_VERSION")))
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .map_err(|e| e.to_string())?;
+        client
+            .get(source.trim())
+            .send()
+            .await
+            .and_then(|r| r.error_for_status())
+            .map_err(|e| format!("Couldn't download the catalog: {e}"))?
+            .bytes()
+            .await
+            .map_err(|e| format!("Couldn't read the catalog: {e}"))?
+            .to_vec()
+    } else {
+        std::fs::read(source.trim()).map_err(|e| format!("Couldn't read the file: {e}"))?
+    };
+
+    let catalog: CuratedFile = serde_json::from_slice(&bytes)
+        .map_err(|e| format!("That's not a valid catalog (same format as the built-in one): {e}"))?;
+
+    let custom = CustomCatalog {
+        source: source.trim().to_string(),
+        is_url,
+        catalog,
+    };
+    let path = custom_catalog_path(app).ok_or("Couldn't find a place to store the catalog.")?;
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let text = serde_json::to_string(&custom).map_err(|e| e.to_string())?;
+    std::fs::write(&path, text).map_err(|e| format!("Couldn't save the catalog: {e}"))?;
+    Ok(info_of(&custom))
+}
+
+/// Remove the custom catalog, reverting to the official one.
+pub fn clear_custom(app: &AppHandle) -> Result<(), String> {
+    if let Some(path) = custom_catalog_path(app) {
+        if path.exists() {
+            std::fs::remove_file(path).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -461,7 +572,7 @@ mod tests {
                 {"id":"Google.Chrome","source":"winget"}
             ]}]}"#,
         );
-        // User edited Firefox's name — saved as a custom override (same key).
+        // User edited Firefox's name - saved as a custom override (same key).
         let saved = parse(
             r#"{"version":1,"categories":[{"id":"browsers","title":"Browsers","apps":[
                 {"id":"Mozilla.Firefox","source":"winget","name":"Firefox (mine)","custom":true}

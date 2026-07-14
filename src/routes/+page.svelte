@@ -37,7 +37,7 @@
   import { pendingTag, browseView } from '$lib/stores/discover';
   import type { CtxItem } from '$lib/stores/contextMenu';
 
-  // Full install options for a curated app — its primary source plus alternates —
+  // Full install options for a curated app - its primary source plus alternates -
   // limited to sources the user hasn't disabled, de-duplicated by source.
   function curatedVariants(app: CuratedApp, managers: Record<Source, boolean>): Variant[] {
     const seen = new Set<Source>();
@@ -85,7 +85,7 @@
   let railUpdateCount = $derived($actionableUpdates.length + (acyUpdatePending ? 1 : 0));
 
   // Installed buckets as Library rail categories: every non-empty bucket, with
-  // counts (hidden apps excluded). The show-scope only trims "All apps" below —
+  // counts (hidden apps excluded). The show-scope only trims "All apps" below -
   // the individual buckets always stay reachable from the rail.
   let installedBuckets = $derived.by(() => {
     const hidden = new Set($settings.hiddenApps);
@@ -110,7 +110,7 @@
     }
   });
 
-  // Enabled managers that aren't available / still need setup — shown as rail
+  // Enabled managers that aren't available / still need setup - shown as rail
   // entries that jump to Settings → Sources (where they're actually managed).
   const managerNames: Record<Source, string> = {
     winget: 'winget',
@@ -268,10 +268,21 @@
   // pressed Enter / Search for exactly what's in the box).
   let searchedCurrent = $derived(showSearch && searchedQuery === trimmed);
 
+  // The catalog as browsed on Discover: drops the built-in curated apps (and any
+  // now-empty category) when the user chose to see only apps they added. The full
+  // `curated` file is still used for installed-row info and search-hit dedupe.
+  let browseCats = $derived.by(() => {
+    const cats = curated?.categories ?? [];
+    if ($settings.showCuratedApps) return cats;
+    return cats
+      .map((cat) => ({ ...cat, apps: cat.apps.filter((a) => a.custom) }))
+      .filter((cat) => cat.apps.length > 0);
+  });
+
   // ---- Tag filter (home browse) ----
   let allTags = $derived.by(() => {
     const set = new Set<string>();
-    for (const cat of curated?.categories ?? [])
+    for (const cat of browseCats)
       for (const app of cat.apps)
         if (curatedVariants(app, $settings.managers).length > 0)
           for (const t of app.tags ?? []) set.add(t);
@@ -293,7 +304,7 @@
   );
   let tagCounts = $derived.by(() => {
     const counts = new Map<string, number>();
-    for (const cat of curated?.categories ?? []) {
+    for (const cat of browseCats) {
       for (const app of cat.apps) {
         if (curatedVariants(app, $settings.managers).length === 0) continue;
         for (const tag of new Set(app.tags ?? [])) counts.set(tag, (counts.get(tag) ?? 0) + 1);
@@ -345,7 +356,7 @@
   // Hide curated apps whose manager is disabled or that don't match the active
   // tag filter, and drop empty categories.
   let visibleCategories = $derived(
-    (curated?.categories ?? [])
+    browseCats
       .map((cat) => ({
         ...cat,
         apps: cat.apps.filter(
@@ -409,10 +420,10 @@
   // Curated apps matching the query, shown before the package-manager results.
   let curatedMatches = $derived.by(() => {
     const q = query.trim().toLowerCase();
-    if (!q || !curated) return [] as CuratedApp[];
+    if (!q) return [] as CuratedApp[];
     const seen = new Set<string>();
     const out: CuratedApp[] = [];
-    for (const cat of curated.categories) {
+    for (const cat of browseCats) {
       for (const app of cat.apps) {
         if (curatedVariants(app, $settings.managers).length === 0) continue;
         const name = (app.name ?? app.id).toLowerCase();
@@ -1002,6 +1013,7 @@
                     description={descFor(p) + dupeSuffix(p)}
                     variants={[{ source: p.source, id: p.id }]}
                     homepage={p.homepage}
+                    gameName={bucketKey(p) === 'games' ? p.name : null}
                     tags={tagsFor(p)}
                     layout={rowLayout}
                     backTo="/?view=library"
@@ -1087,6 +1099,14 @@
               <p class="muted">Try fewer tags or switch between matching all and matching any.</p>
               <button class="btn" onclick={clearTags}>Clear filters</button>
             </div>
+          {:else if visibleCategories.length === 0 && !$settings.showCuratedApps}
+            <div class="filter-empty">
+              <h2>No apps in your list yet</h2>
+              <p class="muted">
+                You're showing only apps you've added. Search for an app to add it, or turn on
+                “Show curated apps” in Settings → Sources.
+              </p>
+            </div>
           {:else}
             <div class={rightClass}>
               {#each paneApps as app (app.source + app.id)}
@@ -1169,7 +1189,7 @@
     flex-shrink: 0;
     white-space: nowrap;
   }
-  /* Library filter input — sits in the pane-head like Discover's search. */
+  /* Library filter input - sits in the pane-head like Discover's search. */
   .lib-filter {
     flex: 1;
     min-width: 180px;
@@ -1449,7 +1469,7 @@
   .updates-link {
     margin-top: auto;
   }
-  /* Managers that still need installing — muted rail entries with a status dot. */
+  /* Managers that still need installing - muted rail entries with a status dot. */
   .setup-name {
     display: inline-flex;
     align-items: center;

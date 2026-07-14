@@ -49,6 +49,45 @@ pub async fn update_curated_catalog(
     curated::update_remote(&app, apply).await
 }
 
+/// Metadata about the active custom catalog, or null when the official one is used.
+#[tauri::command]
+pub async fn custom_catalog_info(app: AppHandle) -> Option<curated::CustomCatalogInfo> {
+    curated::custom_info(&app)
+}
+
+/// Point Acy at a custom catalog (a local file path or a URL). Validates + caches it.
+#[tauri::command]
+pub async fn set_custom_catalog(
+    app: AppHandle,
+    source: String,
+    is_url: bool,
+) -> Result<curated::CustomCatalogInfo, String> {
+    curated::set_custom(&app, source, is_url).await
+}
+
+/// Remove the custom catalog and revert to the official one.
+#[tauri::command]
+pub async fn clear_custom_catalog(app: AppHandle) -> Result<(), String> {
+    curated::clear_custom(&app)
+}
+
+/// Open a file picker for a custom catalog JSON; resolves to the path or null.
+#[tauri::command]
+pub async fn pick_catalog_file(app: AppHandle) -> Option<String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .add_filter("Catalog", &["json"])
+        .pick_file(move |path| {
+            let _ = tx.send(path);
+        });
+    rx.await
+        .ok()
+        .flatten()
+        .and_then(|fp| fp.into_path().ok())
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
 /// Search the given managers and return merged, de-duplicated hits.
 #[tauri::command]
 pub async fn search(query: String, sources: Vec<Source>) -> Result<Vec<SearchHit>, String> {
@@ -254,8 +293,8 @@ pub async fn set_update_count(app: AppHandle, count: u32) {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
         let tip = match count {
             0 => "Acy".to_string(),
-            1 => "Acy — 1 update available".to_string(),
-            n => format!("Acy — {n} updates available"),
+            1 => "Acy - 1 update available".to_string(),
+            n => format!("Acy - {n} updates available"),
         };
         let _ = tray.set_tooltip(Some(&tip));
     }
@@ -397,8 +436,10 @@ pub async fn app_icon(
     source: Source,
     id: String,
     homepage: Option<String>,
+    steamgrid_key: Option<String>,
+    game_name: Option<String>,
 ) -> Option<String> {
-    crate::icons::get_icon(&app, source, id, homepage).await
+    crate::icons::get_icon(&app, source, id, homepage, steamgrid_key, game_name).await
 }
 
 /// Delete all cached icons.
@@ -409,10 +450,14 @@ pub async fn clear_icon_cache(app: AppHandle) -> Result<(), String> {
 
 /// One app to (re)fetch an icon for.
 #[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct IconItem {
     source: Source,
     id: String,
     homepage: Option<String>,
+    /// Display name, set only for apps in the Games bucket, so the backend can
+    /// match non-Steam launcher games on SteamGridDB by name.
+    game_name: Option<String>,
 }
 
 /// Outcome of a "re-download missing icons" pass.
@@ -433,16 +478,22 @@ struct IconRefetchProgress {
 
 const ICON_PROGRESS_EVENT: &str = "icon-refetch-progress";
 
-/// Re-fetch icons only for apps that don't already have a result — no cached
-/// icon and no fresh "no icon found" marker — one at a time so a bulk retry
-/// doesn't re-trip the favicon-service rate limit. Emits progress as it goes.
+/// Re-fetch icons for every app that lacks a real cached icon - one at a time so
+/// a bulk retry doesn't re-trip the favicon-service rate limit. Unlike the lazy
+/// path this is user-triggered, so it clears each app's "no icon found" marker
+/// first and retries (rather than trusting the 30-day miss cache). Emits progress
+/// as it goes. `steamgrid_key`, when set, is used for Steam game icons.
 #[tauri::command]
-pub async fn refetch_missing_icons(app: AppHandle, items: Vec<IconItem>) -> IconRefetch {
-    // Narrow to the genuinely-unresolved apps up front so progress totals and the
+pub async fn refetch_missing_icons(
+    app: AppHandle,
+    items: Vec<IconItem>,
+    steamgrid_key: Option<String>,
+) -> IconRefetch {
+    // Narrow to apps without a real icon up front so progress totals and the
     // per-item pacing only cover ones we'll actually attempt.
     let todo: Vec<IconItem> = items
         .into_iter()
-        .filter(|it| !crate::icons::is_resolved(&app, it.source, &it.id))
+        .filter(|it| !crate::icons::has_icon(&app, it.source, &it.id))
         .collect();
     let total = todo.len();
 
@@ -450,7 +501,18 @@ pub async fn refetch_missing_icons(app: AppHandle, items: Vec<IconItem>) -> Icon
     let mut failed = 0;
     for (i, item) in todo.into_iter().enumerate() {
         let _ = app.emit(ICON_PROGRESS_EVENT, IconRefetchProgress { current: i, total });
-        match crate::icons::get_icon(&app, item.source, item.id, item.homepage).await {
+        // Manual retry: forget any prior miss so get_icon actually re-hits the net.
+        crate::icons::clear_miss_marker(&app, item.source, &item.id);
+        match crate::icons::get_icon(
+            &app,
+            item.source,
+            item.id,
+            item.homepage,
+            steamgrid_key.clone(),
+            item.game_name,
+        )
+        .await
+        {
             Some(_) => fetched += 1,
             None => failed += 1,
         }

@@ -3,8 +3,8 @@ use crate::model::{ManagerStatus, Package, Source};
 use async_trait::async_trait;
 
 /// "Install from a file" source. The `id` is a path to a local or network
-/// installer (.exe / .msi). It only installs — there is nothing to search,
-/// list, or update — so the read methods return empty.
+/// installer (.exe / .msi). It only installs - there is nothing to search,
+/// list, or update - so the read methods return empty.
 pub struct Local;
 
 fn s(v: &str) -> String {

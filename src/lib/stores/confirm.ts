@@ -2,7 +2,7 @@ import { writable } from 'svelte/store';
 
 // A tiny app-wide confirmation modal, imperatively awaited like `window.confirm`
 // but rendered as a custom dialog (the native one is routed through the dialog
-// plugin, which we don't grant, and is async — easy to misuse).
+// plugin, which we don't grant, and is async - easy to misuse).
 export interface ConfirmRequest {
   title: string;
   message?: string;

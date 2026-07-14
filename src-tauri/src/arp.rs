@@ -5,12 +5,12 @@
 //! categorize; the registry has `Publisher = "Blizzard Entertainment"` and an
 //! install path under the game library, which is a reliable signal.
 //!
-//! The map is keyed by the registry **subkey name** — which is exactly the last
-//! segment of winget's `ARP\Scope\Arch\<subkey>` id — so correlation is exact
+//! The map is keyed by the registry **subkey name** - which is exactly the last
+//! segment of winget's `ARP\Scope\Arch\<subkey>` id - so correlation is exact
 //! and immune to display-name mangling (e.g. "Battlefield™" vs "BattlefieldTM").
 //!
 //! The scan is local and cheap (a few hundred keys, a couple of string reads
-//! each) — milliseconds next to a `winget list`.
+//! each) - milliseconds next to a `winget list`.
 
 use std::collections::HashMap;
 
@@ -76,7 +76,7 @@ pub fn scan() -> HashMap<String, ArpInfo> {
     HashMap::new()
 }
 
-/// Build the installed-app list straight from the ARP registry — near-instant,
+/// Build the installed-app list straight from the ARP registry - near-instant,
 /// vs. `winget list`'s ~80s. Ids use winget's `ARP\Scope\Arch\<subkey>` shape so
 /// they line up with (and can be uninstalled the same way as) winget's own ARP
 /// entries. This is a fast first paint; the authoritative winget/managers list

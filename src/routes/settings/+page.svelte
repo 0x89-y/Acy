@@ -1,7 +1,18 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getVersion } from '@tauri-apps/api/app';
-  import { Sun, Moon, Monitor, Pipette, ArrowLeft } from '@lucide/svelte';
+  import {
+    Sun,
+    Moon,
+    Monitor,
+    Pipette,
+    ArrowLeft,
+    RefreshCw,
+    Trash2,
+    Link,
+    FileText,
+    SquarePen
+  } from '@lucide/svelte';
   import {
     updaterPhase,
     updaterVersion,
@@ -18,11 +29,13 @@
     setPreferredSource,
     setShowOutput,
     setDownloadIcons,
+    setSteamGridKey,
     setCloseToTray,
     setNotifyUpdates,
     setNotifyOperations,
     setRefreshOnStartup,
     setAutoCheckUpdates,
+    setShowCuratedApps,
     setSettingsTab,
     restartSetup,
     resetSettings,
@@ -31,7 +44,10 @@
     type ThemeMode,
     type SettingsTab
   } from '$lib/stores/settings';
+  import { get } from 'svelte/store';
   import { managers, loadManagers } from '$lib/stores/managers';
+  import { installed } from '$lib/stores/library';
+  import { bucketKey } from '$lib/installedGroups';
   import { clearIconCache, refreshIcons } from '$lib/stores/icons';
   import { reloadCurated } from '$lib/stores/curated';
   import { confirmAction } from '$lib/stores/confirm';
@@ -76,9 +92,9 @@
 
   // One-line descriptions shown under each manager in the Sources list.
   const MANAGER_INFO: Record<Source, string> = {
-    winget: "Windows Package Manager — Microsoft's built-in catalog",
+    winget: "Windows Package Manager - Microsoft's built-in catalog",
     scoop: 'Portable apps and developer tools',
-    choco: 'Chocolatey — large community catalog',
+    choco: 'Chocolatey - large community catalog',
     msstore: 'Microsoft Store apps',
     local: 'Install directly from a downloaded .exe or .msi'
   };
@@ -91,6 +107,11 @@
   let catalogPhase = $state<'idle' | 'checking' | 'available' | 'applying'>('idle');
   let catalogMsg = $state('');
   let catalogVersion = $state(0);
+  // Custom catalog (a user-supplied file or URL that replaces the official one).
+  let customCat = $state<api.CustomCatalogInfo | null>(null);
+  let customUrl = $state('');
+  let customMsg = $state('');
+  let customBusy = $state(false);
   let appVersion = $state('');
   /** Number of recent activity rows shown in the About preview. */
   const ACTIVITY_PREVIEW = 6;
@@ -101,7 +122,56 @@
     } catch {
       appVersion = '';
     }
+    try {
+      customCat = await api.customCatalogInfo();
+    } catch {
+      customCat = null;
+    }
   });
+
+  /** Load a custom catalog from a file path or URL, validate + apply it, and
+   * refresh the shared catalog so Discover reflects it. */
+  async function applyCustomCatalog(source: string, isUrl: boolean) {
+    customBusy = true;
+    customMsg = '';
+    try {
+      customCat = await api.setCustomCatalog(source, isUrl);
+      customUrl = '';
+      await reloadCurated();
+      customMsg = `Loaded ${customCat.appCount} apps (catalog v${customCat.version}).`;
+    } catch (e) {
+      customMsg = typeof e === 'string' ? e : 'Could not load that catalog.';
+    }
+    customBusy = false;
+  }
+
+  async function chooseCustomFile() {
+    const path = await api.pickCatalogFile();
+    if (path) await applyCustomCatalog(path, false);
+  }
+
+  async function useCustomUrl() {
+    const url = customUrl.trim();
+    if (url) await applyCustomCatalog(url, true);
+  }
+
+  async function refreshCustomCatalog() {
+    if (customCat) await applyCustomCatalog(customCat.source, customCat.isUrl);
+  }
+
+  async function removeCustomCatalog() {
+    customBusy = true;
+    customMsg = '';
+    try {
+      await api.clearCustomCatalog();
+      customCat = null;
+      await reloadCurated();
+      customMsg = 'Reverted to the official catalog.';
+    } catch (e) {
+      customMsg = typeof e === 'string' ? e : 'Could not remove the custom catalog.';
+    }
+    customBusy = false;
+  }
 
   async function clearIcons() {
     clearing = true;
@@ -109,9 +179,10 @@
     clearing = false;
   }
 
-  /** Re-fetch icons only for curated apps that are missing one (skips the ones
-   * already cached), then repaint. Gentle by design so it doesn't re-hit the
-   * favicon-service rate limit that made them blank in the first place. */
+  /** Re-fetch icons for every app that's missing one - curated apps plus every
+   * installed app Acy classifies as a game (so Steam + other launcher games get
+   * retried without wiping the cache). Skips ones already cached; gentle, one at a
+   * time, so it doesn't re-hit the favicon-service rate limit. */
   async function refetchMissingIcons() {
     refetchingIcons = true;
     iconRefetchMsg = '';
@@ -119,10 +190,32 @@
     const unlisten = await api.onIconRefetchProgress((p) => (iconProgress = p));
     try {
       const file = await api.getCurated();
-      const items = file.categories.flatMap((c) =>
-        c.apps.map((a) => ({ source: a.source, id: a.id, homepage: a.icon ?? a.homepage }))
+      const curatedItems = file.categories.flatMap((c) =>
+        c.apps.map((a) => ({
+          source: a.source,
+          id: a.id,
+          homepage: a.icon ?? a.homepage ?? null,
+          gameName: null as string | null
+        }))
       );
-      const { fetched, failed } = await api.refetchMissingIcons(items);
+      // Only installed apps Acy classifies as games - their name drives the
+      // SteamGridDB-by-name match. (Other installed apps are left for later.)
+      const installedGames = get(installed)
+        .filter((p) => bucketKey(p) === 'games')
+        .map((p) => ({
+          source: p.source,
+          id: p.id,
+          homepage: p.homepage ?? null,
+          gameName: p.name as string | null
+        }));
+      // Dedupe by source:id so an app in both lists is only fetched once.
+      const byKey = new Map<string, (typeof curatedItems)[number]>();
+      for (const it of [...curatedItems, ...installedGames]) {
+        const k = `${it.source}:${it.id.toLowerCase()}`;
+        if (!byKey.has(k)) byKey.set(k, it);
+      }
+      const items = [...byKey.values()];
+      const { fetched, failed } = await api.refetchMissingIcons(items, $settings.steamGridKey);
       refreshIcons();
       if (fetched === 0 && failed === 0) iconRefetchMsg = 'No missing icons.';
       else if (failed === 0) iconRefetchMsg = `Downloaded ${fetched} missing ${fetched === 1 ? 'icon' : 'icons'}.`;
@@ -137,7 +230,7 @@
   }
 
   /** Check for a newer hosted catalog (signature-verified in Rust) without
-   * applying it — like the app updater, it only reports what's available. */
+   * applying it - like the app updater, it only reports what's available. */
   async function checkCatalog() {
     catalogPhase = 'checking';
     catalogMsg = '';
@@ -192,9 +285,6 @@
     loadManagers(true);
   }
 
-  let scoopAvailable = $derived(statusOf('scoop')?.available ?? false);
-  let wingetAvailable = $derived(statusOf('winget')?.available ?? false);
-
   // ---- Manager maintenance ----
   let maintBusy = $state<string | null>(null);
   async function runMaint(label: string, k: string, fn: (opId: string) => Promise<number>) {
@@ -238,7 +328,7 @@
   <div class="panes">
     {#if activeTab === 'general'}
       <section class="group">
-        <h2>Operations</h2>
+        <h2>Behavior</h2>
         <div class="opt-list">
           <label class="opt-row">
             <span class="opt-label">Show command output while installing</span>
@@ -247,28 +337,6 @@
                 type="checkbox"
                 checked={$settings.showOutput}
                 onchange={(e) => setShowOutput(e.currentTarget.checked)}
-              />
-              <span class="slider"></span>
-            </span>
-          </label>
-          <label class="opt-row">
-            <span class="opt-label">Check for updates on startup</span>
-            <span class="switch">
-              <input
-                type="checkbox"
-                checked={$settings.refreshOnStartup}
-                onchange={(e) => setRefreshOnStartup(e.currentTarget.checked)}
-              />
-              <span class="slider"></span>
-            </span>
-          </label>
-          <label class="opt-row">
-            <span class="opt-label">Notify when long operations finish</span>
-            <span class="switch">
-              <input
-                type="checkbox"
-                checked={$settings.notifyOperations}
-                onchange={(e) => setNotifyOperations(e.currentTarget.checked)}
               />
               <span class="slider"></span>
             </span>
@@ -291,12 +359,12 @@
             </span>
           </label>
           <label class="opt-row">
-            <span class="opt-label">Notify when new updates are found</span>
+            <span class="opt-label">Notify when long operations finish</span>
             <span class="switch">
               <input
                 type="checkbox"
-                checked={$settings.notifyUpdates}
-                onchange={(e) => setNotifyUpdates(e.currentTarget.checked)}
+                checked={$settings.notifyOperations}
+                onchange={(e) => setNotifyOperations(e.currentTarget.checked)}
               />
               <span class="slider"></span>
             </span>
@@ -305,7 +373,7 @@
       </section>
 
       <section class="group">
-        <h2>First-run setup</h2>
+        <h2>Setup &amp; reset</h2>
         <div class="reset-row">
           <button class="btn btn-accent" onclick={restartSetup}>Run setup again</button>
           <button class="btn" onclick={resetAll}>Reset all settings</button>
@@ -365,7 +433,36 @@
       </section>
 
       <section class="group">
-        <h2>App icons</h2>
+        <div class="group-head">
+          <h2>App icons</h2>
+          <div class="head-actions">
+            {#if refetchingIcons && iconProgress && iconProgress.total > 0}
+              <span class="icon-msg muted"
+                >{Math.min(iconProgress.current + 1, iconProgress.total)} / {iconProgress.total}</span
+              >
+            {:else if iconRefetchMsg}
+              <span class="icon-msg muted">{iconRefetchMsg}</span>
+            {/if}
+            <button
+              class="icon-btn"
+              title="Re-download missing icons"
+              aria-label="Re-download missing icons"
+              onclick={refetchMissingIcons}
+              disabled={!$settings.downloadIcons || refetchingIcons || clearing}
+            >
+              <RefreshCw size={16} class={refetchingIcons ? 'icon-spin' : ''} />
+            </button>
+            <button
+              class="icon-btn"
+              title="Clear icon cache"
+              aria-label="Clear icon cache"
+              onclick={clearIcons}
+              disabled={clearing || refetchingIcons}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        </div>
         <div class="opt-list">
           <label class="opt-row">
             <span class="opt-label">Download &amp; cache app icons</span>
@@ -378,27 +475,24 @@
               <span class="slider"></span>
             </span>
           </label>
-        </div>
-        <div class="icon-actions">
-          <div class="seg-actions">
-            <button
-              class="seg-act"
-              onclick={refetchMissingIcons}
-              disabled={!$settings.downloadIcons || refetchingIcons || clearing}
-            >
-              {#if refetchingIcons}
-                {iconProgress && iconProgress.total > 0
-                  ? `Downloading ${Math.min(iconProgress.current + 1, iconProgress.total)} of ${iconProgress.total}…`
-                  : 'Downloading…'}
-              {:else}
-                Re-download missing icons
-              {/if}
-            </button>
-            <button class="seg-act" onclick={clearIcons} disabled={clearing || refetchingIcons}>
-              {clearing ? 'Clearing…' : 'Clear icon cache'}
-            </button>
+          <div class="key-row">
+            <div class="key-head">
+              <span class="opt-label">SteamGridDB API key</span>
+              <span class="key-hint muted"
+                >Optional - fetches icons for Steam and other launcher games (Epic, GOG, EA,
+                Ubisoft, Battle.net).</span
+              >
+            </div>
+            <input
+              class="key-input mono"
+              type="password"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Paste key…"
+              value={$settings.steamGridKey}
+              onchange={(e) => setSteamGridKey(e.currentTarget.value)}
+            />
           </div>
-          {#if iconRefetchMsg}<span class="icon-msg muted">{iconRefetchMsg}</span>{/if}
         </div>
       </section>
     {:else if activeTab === 'sources'}
@@ -427,9 +521,39 @@
                 <span class="mgr-desc muted">{MANAGER_INFO[s]}</span>
               </div>
               <div class="mgr-actions">
+                {#if s === 'winget' && st?.available}
+                  <button
+                    class="icon-btn"
+                    title="Update winget sources"
+                    aria-label="Update winget sources"
+                    disabled={maintBusy !== null}
+                    onclick={() =>
+                      runMaint('Update winget sources', 'winget-src', api.wingetUpdateSources)}
+                  >
+                    <RefreshCw size={16} class={maintBusy === 'winget-src' ? 'icon-spin' : ''} />
+                  </button>
+                {/if}
                 {#if s === 'scoop'}
                   {#if st?.available}
                     <a class="btn btn-ghost mgr-btn" href="/scoop-buckets">Manage buckets</a>
+                    <button
+                      class="icon-btn"
+                      title="Update Scoop"
+                      aria-label="Update Scoop"
+                      disabled={maintBusy !== null}
+                      onclick={() => runMaint('Update Scoop', 'scoop-up', api.scoopUpdate)}
+                    >
+                      <RefreshCw size={16} class={maintBusy === 'scoop-up' ? 'icon-spin' : ''} />
+                    </button>
+                    <button
+                      class="icon-btn"
+                      title="Clean up Scoop"
+                      aria-label="Clean up Scoop"
+                      disabled={maintBusy !== null}
+                      onclick={() => runMaint('Clean up Scoop', 'scoop-clean', api.scoopCleanup)}
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   {:else}
                     <button class="btn btn-ghost mgr-btn" disabled title="Install Scoop first">
                       Manage buckets
@@ -463,77 +587,163 @@
         </div>
       </section>
 
-      {#if wingetAvailable || scoopAvailable}
-        <section class="group source-group">
-          <h2>Maintenance</h2>
-          <div class="icon-actions">
-            <div class="seg-actions">
-              {#if wingetAvailable}
-                <button
-                  class="seg-act"
-                  disabled={maintBusy !== null}
-                  onclick={() => runMaint('Update winget sources', 'winget-src', api.wingetUpdateSources)}
-                >
-                  {maintBusy === 'winget-src' ? 'Working…' : 'Update winget sources'}
-                </button>
-              {/if}
-              {#if scoopAvailable}
-                <button
-                  class="seg-act"
-                  disabled={maintBusy !== null}
-                  onclick={() => runMaint('Update Scoop', 'scoop-up', api.scoopUpdate)}
-                >
-                  {maintBusy === 'scoop-up' ? 'Working…' : 'Update Scoop'}
-                </button>
-                <button
-                  class="seg-act"
-                  disabled={maintBusy !== null}
-                  onclick={() => runMaint('Clean up Scoop', 'scoop-clean', api.scoopCleanup)}
-                >
-                  {maintBusy === 'scoop-clean' ? 'Working…' : 'Clean up Scoop'}
-                </button>
-              {/if}
-            </div>
-          </div>
-        </section>
-      {/if}
-
       <section class="group source-group">
-        <h2>Curated catalog</h2>
-        <div class="icon-actions">
-          <div class="seg-actions">
-            <a class="seg-act" href="/curated">Open catalog editor</a>
-            {#if catalogPhase === 'available'}
-              <button class="seg-act" onclick={applyCatalog}>Update to v{catalogVersion}</button>
-            {:else}
+        <div class="group-head">
+          <h2>Curated catalog</h2>
+          <div class="head-actions">
+            {#if !customCat && catalogPhase !== 'available' && catalogMsg}
+              <span class="icon-msg muted">{catalogMsg}</span>
+            {/if}
+            <a
+              class="icon-btn"
+              href="/curated"
+              title="Open catalog editor"
+              aria-label="Open catalog editor"
+            >
+              <SquarePen size={16} />
+            </a>
+            {#if !customCat}
               <button
-                class="seg-act"
+                class="icon-btn"
+                title="Check for catalog updates"
+                aria-label="Check for catalog updates"
                 onclick={checkCatalog}
                 disabled={catalogPhase === 'checking' || catalogPhase === 'applying'}
               >
-                {catalogPhase === 'checking'
-                  ? 'Checking…'
-                  : catalogPhase === 'applying'
-                    ? 'Updating…'
-                    : 'Check for catalog updates'}
+                <RefreshCw
+                  size={16}
+                  class={catalogPhase === 'checking' || catalogPhase === 'applying'
+                    ? 'icon-spin'
+                    : ''}
+                />
               </button>
             {/if}
           </div>
-          {#if catalogPhase === 'available'}
+        </div>
+        <div class="opt-list">
+          <label class="opt-row">
+            <span class="opt-label">Show curated apps</span>
+            <span class="switch">
+              <input
+                type="checkbox"
+                checked={$settings.showCuratedApps}
+                onchange={(e) => setShowCuratedApps(e.currentTarget.checked)}
+              />
+              <span class="slider"></span>
+            </span>
+          </label>
+        </div>
+        {#if catalogPhase === 'available'}
+          <div class="icon-actions">
+            <div class="seg-actions">
+              <button class="seg-act" onclick={applyCatalog}>Update to v{catalogVersion}</button>
+            </div>
             <span class="icon-msg accent-msg">Catalog v{catalogVersion} is available.</span>
-          {:else if catalogMsg}
-            <span class="icon-msg muted">{catalogMsg}</span>
+          </div>
+        {/if}
+        <div class="custom-cat">
+          {#if customCat}
+            <div class="custom-active">
+              <span class="custom-src">
+                {#if customCat.isUrl}<Link size={14} />{:else}<FileText size={14} />{/if}
+                <span class="custom-path mono">{customCat.source}</span>
+              </span>
+              <span class="custom-meta muted">v{customCat.version} · {customCat.appCount} apps</span
+              >
+            </div>
+            <div class="seg-actions">
+              <button class="seg-act" onclick={refreshCustomCatalog} disabled={customBusy}>
+                {customBusy ? 'Working…' : 'Refresh'}
+              </button>
+              <button class="seg-act" onclick={removeCustomCatalog} disabled={customBusy}>
+                Remove
+              </button>
+            </div>
+          {:else}
+            <span class="opt-label">Use custom catalog</span>
+            <div class="custom-row">
+              <button class="seg-act" onclick={chooseCustomFile} disabled={customBusy}>
+                Choose file…
+              </button>
+              <input
+                class="key-input mono custom-input"
+                type="text"
+                placeholder="https://…/curated.json"
+                autocomplete="off"
+                spellcheck="false"
+                bind:value={customUrl}
+                onkeydown={(e) => e.key === 'Enter' && useCustomUrl()}
+              />
+              <button
+                class="seg-act"
+                onclick={useCustomUrl}
+                disabled={customBusy || !customUrl.trim()}
+              >
+                Use URL
+              </button>
+            </div>
           {/if}
+          {#if customMsg}<span class="icon-msg muted">{customMsg}</span>{/if}
         </div>
       </section>
     {:else if activeTab === 'updates'}
       <section class="group">
-        <h2>Software updates</h2>
-        <p class="muted hint">Acy <span class="mono">v{appVersion || '…'}</span>.</p>
+        <h2>App updates</h2>
+        <div class="opt-list">
+          <label class="opt-row">
+            <span class="opt-label">Check for updates on startup</span>
+            <span class="switch">
+              <input
+                type="checkbox"
+                checked={$settings.refreshOnStartup}
+                onchange={(e) => setRefreshOnStartup(e.currentTarget.checked)}
+              />
+              <span class="slider"></span>
+            </span>
+          </label>
+          <label class="opt-row">
+            <span class="opt-label">Notify when new updates are found</span>
+            <span class="switch">
+              <input
+                type="checkbox"
+                checked={$settings.notifyUpdates}
+                onchange={(e) => setNotifyUpdates(e.currentTarget.checked)}
+              />
+              <span class="slider"></span>
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <section class="group">
+        <div class="group-head">
+          <h2>Acy updates</h2>
+          <div class="head-actions">
+            {#if $updaterPhase === 'available'}
+              <span class="head-status accent">v{$updaterVersion} available</span>
+            {:else if $updaterPhase === 'uptodate'}
+              <span class="head-status ok">You're on the latest version.</span>
+            {:else if $updaterPhase === 'error'}
+              <span class="head-status err" title="Update check failed: {$updaterError}"
+                >Update check failed</span
+              >
+            {/if}
+            <span class="head-ver muted">Acy <span class="mono">v{appVersion || '…'}</span></span>
+            <button
+              class="icon-btn"
+              title="Check for updates"
+              aria-label="Check for updates"
+              onclick={checkForUpdate}
+              disabled={$updaterPhase === 'checking' || $updaterPhase === 'downloading'}
+            >
+              <RefreshCw size={16} class={$updaterPhase === 'checking' ? 'icon-spin' : ''} />
+            </button>
+          </div>
+        </div>
 
         <div class="opt-list">
           <label class="opt-row">
-            <span class="opt-label">Automatically check for updates</span>
+            <span class="opt-label">Automatically check for Acy updates</span>
             <span class="switch">
               <input
                 type="checkbox"
@@ -545,25 +755,17 @@
           </label>
         </div>
 
-        <div class="upd">
-          {#if $updaterPhase === 'available'}
+        {#if $updaterPhase === 'available'}
+          <div class="upd">
             <button class="btn btn-accent" onclick={installUpdate}>
               Download &amp; install v{$updaterVersion}
             </button>
-            <p class="upd-msg accent">Version {$updaterVersion} is available.</p>
-          {:else if $updaterPhase === 'downloading'}
+          </div>
+        {:else if $updaterPhase === 'downloading'}
+          <div class="upd">
             <button class="btn btn-accent" disabled>Downloading…</button>
-          {:else}
-            <button class="btn btn-accent" onclick={checkForUpdate} disabled={$updaterPhase === 'checking'}>
-              {$updaterPhase === 'checking' ? 'Checking…' : 'Check for updates'}
-            </button>
-            {#if $updaterPhase === 'uptodate'}
-              <p class="upd-msg ok">You're on the latest version.</p>
-            {:else if $updaterPhase === 'error'}
-              <p class="upd-msg err">Update check failed: {$updaterError}</p>
-            {/if}
-          {/if}
-        </div>
+          </div>
+        {/if}
       </section>
     {:else if activeTab === 'about'}
       <section class="group">
@@ -742,6 +944,68 @@
     margin: 0;
     padding: 0 var(--settings-pad) 10px;
   }
+  /* Section header with inline actions (e.g. App icons). */
+  .group-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 var(--settings-pad) 10px;
+  }
+  .group-head h2 {
+    padding: 0;
+  }
+  .head-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  /* Version label sitting next to a header action (Acy updates). */
+  .head-ver {
+    font-size: 0.86rem;
+  }
+  /* Updater status shown inline in the Acy-updates header. */
+  .head-status {
+    font-size: 0.86rem;
+    font-weight: 500;
+  }
+  .head-status.ok {
+    color: var(--success);
+  }
+  .head-status.accent {
+    color: var(--accent);
+  }
+  .head-status.err {
+    color: var(--danger);
+  }
+  .icon-btn {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .icon-btn:hover:not(:disabled) {
+    color: var(--text);
+    border-color: var(--accent);
+  }
+  .icon-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  :global(.icon-spin) {
+    animation: icon-spin 0.8s linear infinite;
+  }
+  @keyframes icon-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
   .hint {
     margin: 0;
     padding: 0 var(--settings-pad) 12px;
@@ -880,24 +1144,6 @@
     color: var(--accent);
     font-weight: 500;
   }
-  .upd-msg {
-    font-size: 0.84rem;
-    margin: 0;
-  }
-  .upd-msg.ok {
-    color: var(--success);
-    font-weight: 500;
-  }
-  .upd-msg.accent {
-    color: var(--accent);
-    font-weight: 500;
-  }
-  .upd-msg.err {
-    color: var(--danger);
-    font-family: var(--font-mono);
-    font-size: 0.8rem;
-    white-space: pre-wrap;
-  }
   .accents {
     display: flex;
     gap: 12px;
@@ -1003,6 +1249,80 @@
     font-size: 0.9rem;
     font-weight: 500;
     min-width: 0;
+  }
+  .key-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    /* horizontal inset comes from `.opt-list > *` so it lines up with the rows above */
+  }
+  .key-head {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .key-hint {
+    font-size: 0.78rem;
+  }
+  .key-input {
+    flex: 0 0 200px;
+    max-width: 200px;
+    padding: 6px 9px;
+    font-size: 0.82rem;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .key-input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  /* Custom catalog block (Sources → Curated catalog). */
+  .custom-cat {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px var(--settings-pad);
+    border-top: 1px solid var(--border);
+  }
+  .custom-active {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .custom-src {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--text);
+  }
+  .custom-path {
+    font-size: 0.82rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 380px;
+  }
+  .custom-meta {
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+  .custom-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .custom-input {
+    flex: 1 1 220px;
+    max-width: 320px;
   }
 
   .log {

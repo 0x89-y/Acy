@@ -48,7 +48,7 @@ async function runCheck(silent: boolean) {
   }
 }
 
-/** Manual check from Settings — surfaces checking / up-to-date / available. */
+/** Manual check from Settings - surfaces checking / up-to-date / available. */
 export const checkForUpdate = () => runCheck(false);
 
 /** Silent background check; only notifies (and arms the download) if found. */

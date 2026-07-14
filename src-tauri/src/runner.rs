@@ -7,7 +7,7 @@ use tokio::process::Command;
 
 /// Upper bound for read commands (list/search/show/detection). A healthy
 /// `winget list` on a machine with hundreds of apps can take ~80s, so this is
-/// deliberately generous — it exists only to break true deadlocks (e.g. a
+/// deliberately generous - it exists only to break true deadlocks (e.g. a
 /// winget waiting on an un-accepted source agreement) instead of hanging the
 /// UI forever. Write operations (install/uninstall) stream and are NOT bounded
 /// here, since installers can legitimately run for many minutes.
@@ -63,7 +63,7 @@ async fn output_with_timeout(
     {
         Ok(res) => res.map_err(|e| anyhow::anyhow!("failed to run `{program}`: {e}")),
         Err(_) => anyhow::bail!(
-            "`{program}` did not respond within {READ_TIMEOUT_SECS}s — it may be waiting on a \
+            "`{program}` did not respond within {READ_TIMEOUT_SECS}s - it may be waiting on a \
              source agreement or prompt. Try running `{program}` once in a terminal (e.g. \
              `winget list`), or install the WinGet PowerShell module in Settings \u{2192} Sources."
         ),

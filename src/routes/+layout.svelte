@@ -31,8 +31,9 @@
 
   // These screens are full-bleed panels that fill the window.
   let fullBleed = $derived(
-    ['/', '/settings', '/changelog', '/curated', '/activity'].includes($page.url.pathname) ||
-      $page.url.pathname.startsWith('/app/')
+    ['/', '/settings', '/changelog', '/curated', '/activity', '/scoop-buckets'].includes(
+      $page.url.pathname
+    ) || $page.url.pathname.startsWith('/app/')
   );
 
   /** How often to re-check for available updates while the app is open. */

@@ -41,6 +41,8 @@ export interface Settings {
   showOutput: boolean;
   /** Fetch + cache app icons from the web (off by default). */
   downloadIcons: boolean;
+  /** SteamGridDB API key - when set, Steam games get proper square icons. */
+  steamGridKey: string;
   /** Whether the first-run setup screen has been completed. */
   setupComplete: boolean;
   /** Closing the window hides to the tray instead of quitting (off by default). */
@@ -57,6 +59,9 @@ export interface Settings {
   autoCheckUpdates: boolean;
   /** Warn that Chocolatey needs admin before a choco install/uninstall/update. */
   warnChocoAdmin: boolean;
+  /** Show the built-in curated catalog apps (on by default). Off = show only the
+   * apps the user added. */
+  showCuratedApps: boolean;
   /** `source:id` keys the user has manually hidden from the Installed list. */
   hiddenApps: string[];
   settingsTab: SettingsTab;
@@ -74,6 +79,7 @@ const DEFAULTS: Settings = {
   preferredSource: null,
   showOutput: false,
   downloadIcons: false,
+  steamGridKey: '',
   setupComplete: false,
   closeToTray: false,
   askCloseToTray: true,
@@ -82,6 +88,7 @@ const DEFAULTS: Settings = {
   refreshOnStartup: true,
   autoCheckUpdates: false,
   warnChocoAdmin: true,
+  showCuratedApps: true,
   hiddenApps: [],
   settingsTab: 'general',
   discoverView: 'grid'
@@ -93,6 +100,11 @@ function load(): Settings {
       const raw = localStorage.getItem(KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
+        // Migrate the old inverted flag `onlyCustomApps` -> `showCuratedApps`.
+        if (parsed.showCuratedApps === undefined && typeof parsed.onlyCustomApps === 'boolean') {
+          parsed.showCuratedApps = !parsed.onlyCustomApps;
+        }
+        delete parsed.onlyCustomApps;
         return {
           ...DEFAULTS,
           ...parsed,
@@ -150,6 +162,10 @@ export function setDownloadIcons(value: boolean) {
   settings.update((s) => ({ ...s, downloadIcons: value }));
 }
 
+export function setSteamGridKey(value: string) {
+  settings.update((s) => ({ ...s, steamGridKey: value.trim() }));
+}
+
 export function setCloseToTray(value: boolean) {
   settings.update((s) => ({ ...s, closeToTray: value }));
 }
@@ -176,6 +192,10 @@ export function setAutoCheckUpdates(value: boolean) {
 
 export function setWarnChocoAdmin(value: boolean) {
   settings.update((s) => ({ ...s, warnChocoAdmin: value }));
+}
+
+export function setShowCuratedApps(value: boolean) {
+  settings.update((s) => ({ ...s, showCuratedApps: value }));
 }
 
 export function hideApp(key: string) {
