@@ -30,8 +30,9 @@
   let { children } = $props();
 
   let fullBleed = $derived(
-    ['/', '/settings', '/changelog', '/curated', '/activity'].includes($page.url.pathname) ||
-      $page.url.pathname.startsWith('/app/')
+    ['/', '/settings', '/changelog', '/curated', '/activity', '/scoop-buckets'].includes(
+      $page.url.pathname
+    ) || $page.url.pathname.startsWith('/app/')
   );
 
   const UPDATE_POLL_MS = 30 * 60 * 1000;

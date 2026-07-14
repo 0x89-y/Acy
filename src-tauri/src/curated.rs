@@ -112,6 +112,9 @@ fn pick_base(bundled: CuratedFile, remote: Option<CuratedFile>) -> CuratedFile {
 }
 
 fn load_base(app: &AppHandle) -> CuratedFile {
+    if let Some(custom) = read_custom_catalog(app) {
+        return custom.catalog;
+    }
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("curated.json");
@@ -310,6 +313,99 @@ pub async fn update_remote(app: &AppHandle, apply: bool) -> Result<CatalogUpdate
         app_count: remote_count,
         message: format!("Updated to catalog v{} ({remote_count} apps).", remote.version),
     })
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomCatalog {
+    pub source: String,
+    pub is_url: bool,
+    pub catalog: CuratedFile,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomCatalogInfo {
+    pub source: String,
+    pub is_url: bool,
+    pub version: u32,
+    pub app_count: usize,
+}
+
+fn custom_catalog_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|dir| dir.join("custom-catalog.json"))
+}
+
+fn read_custom_catalog(app: &AppHandle) -> Option<CustomCatalog> {
+    let text = std::fs::read_to_string(custom_catalog_path(app)?).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+fn info_of(c: &CustomCatalog) -> CustomCatalogInfo {
+    CustomCatalogInfo {
+        source: c.source.clone(),
+        is_url: c.is_url,
+        version: c.catalog.version,
+        app_count: app_count(&c.catalog),
+    }
+}
+
+pub fn custom_info(app: &AppHandle) -> Option<CustomCatalogInfo> {
+    read_custom_catalog(app).as_ref().map(info_of)
+}
+
+pub async fn set_custom(
+    app: &AppHandle,
+    source: String,
+    is_url: bool,
+) -> Result<CustomCatalogInfo, String> {
+    let bytes = if is_url {
+        let client = reqwest::Client::builder()
+            .user_agent(concat!("Acy/", env!("CARGO_PKG_VERSION")))
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .map_err(|e| e.to_string())?;
+        client
+            .get(source.trim())
+            .send()
+            .await
+            .and_then(|r| r.error_for_status())
+            .map_err(|e| format!("Couldn't download the catalog: {e}"))?
+            .bytes()
+            .await
+            .map_err(|e| format!("Couldn't read the catalog: {e}"))?
+            .to_vec()
+    } else {
+        std::fs::read(source.trim()).map_err(|e| format!("Couldn't read the file: {e}"))?
+    };
+
+    let catalog: CuratedFile = serde_json::from_slice(&bytes)
+        .map_err(|e| format!("That's not a valid catalog (same format as the built-in one): {e}"))?;
+
+    let custom = CustomCatalog {
+        source: source.trim().to_string(),
+        is_url,
+        catalog,
+    };
+    let path = custom_catalog_path(app).ok_or("Couldn't find a place to store the catalog.")?;
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let text = serde_json::to_string(&custom).map_err(|e| e.to_string())?;
+    std::fs::write(&path, text).map_err(|e| format!("Couldn't save the catalog: {e}"))?;
+    Ok(info_of(&custom))
+}
+
+pub fn clear_custom(app: &AppHandle) -> Result<(), String> {
+    if let Some(path) = custom_catalog_path(app) {
+        if path.exists() {
+            std::fs::remove_file(path).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

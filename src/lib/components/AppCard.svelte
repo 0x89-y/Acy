@@ -20,6 +20,7 @@
     variants,
     installed = false,
     homepage = null,
+    gameName = null,
     allowPick = false,
     selectable = false,
     selected = false,
@@ -40,6 +41,7 @@
     variants: Variant[];
     installed?: boolean;
     homepage?: string | null;
+    gameName?: string | null;
     allowPick?: boolean;
     tags?: string[];
     layout?: 'grid' | 'list';
@@ -126,7 +128,14 @@
       }
     }}
   >
-    <AppIcon {name} source={primary.source} id={primary.id} {homepage} size={layout === 'list' ? 34 : 44} />
+    <AppIcon
+      {name}
+      source={primary.source}
+      id={primary.id}
+      {homepage}
+      {gameName}
+      size={layout === 'list' ? 34 : 44}
+    />
     <div class="meta">
       <div class="name">
         {#each nameParts as p, i (i)}{#if p.hit}<mark>{p.t}</mark>{:else}{p.t}{/if}{/each}

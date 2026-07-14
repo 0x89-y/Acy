@@ -151,6 +151,116 @@ fn pick_icon(html: &str, base: &reqwest::Url) -> Option<reqwest::Url> {
     base.join(&best?.1).ok()
 }
 
+fn steam_appid(source: Source, id: &str) -> Option<String> {
+    if source != Source::Winget {
+        return None;
+    }
+    const PREFIX: &str = "Steam App ";
+    let last = id.rsplit('\\').next().unwrap_or(id).trim();
+    let head = last.get(..PREFIX.len())?;
+    if !head.eq_ignore_ascii_case(PREFIX) {
+        return None;
+    }
+    let digits = &last[PREFIX.len()..];
+    (!digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())).then(|| digits.to_string())
+}
+
+async fn steam_art(appid: &str) -> Option<Vec<u8>> {
+    let client = http_client().await;
+    for asset in ["library_600x900.jpg", "header.jpg"] {
+        let url = format!("https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/{asset}");
+        if let Ok(url) = reqwest::Url::parse(&url) {
+            if let Some(bytes) = fetch_bytes(client, url).await {
+                return Some(bytes);
+            }
+        }
+    }
+    None
+}
+
+const SGDB_API: &str = "https://www.steamgriddb.com/api/v2";
+
+async fn sgdb_get(client: &Client, key: &str, url: reqwest::Url) -> Option<serde_json::Value> {
+    let resp = client.get(url).bearer_auth(key).send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    serde_json::from_str(&resp.text().await.ok()?).ok()
+}
+
+fn clean_game_name(name: &str) -> String {
+    name.chars()
+        .filter(|c| !matches!(c, '™' | '®' | '©'))
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn pick_game_id(data: &serde_json::Value, query: &str) -> Option<i64> {
+    let arr = data.as_array()?;
+    let want = clean_game_name(query).to_lowercase();
+    arr.iter()
+        .find(|g| {
+            g.get("name")
+                .and_then(|n| n.as_str())
+                .map(|n| clean_game_name(n).to_lowercase() == want)
+                .unwrap_or(false)
+        })
+        .or_else(|| arr.first())
+        .and_then(|g| g.get("id"))
+        .and_then(|v| v.as_i64())
+}
+
+async fn sgdb_game_id_from_steam(client: &Client, key: &str, appid: &str) -> Option<i64> {
+    let url = reqwest::Url::parse(&format!("{SGDB_API}/games/steam/{appid}")).ok()?;
+    let v = sgdb_get(client, key, url).await?;
+    let data = v.get("data")?;
+    data.get("id").and_then(|v| v.as_i64()).or_else(|| {
+        data.as_array()
+            .and_then(|a| a.first())
+            .and_then(|g| g.get("id"))
+            .and_then(|v| v.as_i64())
+    })
+}
+
+fn sgdb_search_url(name: &str) -> Option<reqwest::Url> {
+    let mut url = reqwest::Url::parse(&format!("{SGDB_API}/search/autocomplete")).ok()?;
+    url.path_segments_mut()
+        .ok()?
+        .pop_if_empty()
+        .push(&clean_game_name(name));
+    Some(url)
+}
+
+async fn sgdb_game_id_from_name(client: &Client, key: &str, name: &str) -> Option<i64> {
+    let v = sgdb_get(client, key, sgdb_search_url(name)?).await?;
+    pick_game_id(v.get("data")?, name)
+}
+
+async fn sgdb_icon(client: &Client, key: &str, game_id: i64) -> Option<Vec<u8>> {
+    let url = reqwest::Url::parse(&format!("{SGDB_API}/icons/game/{game_id}")).ok()?;
+    let v = sgdb_get(client, key, url).await?;
+    let asset = v
+        .get("data")?
+        .as_array()?
+        .iter()
+        .find_map(|it| it.get("url").and_then(|u| u.as_str()))?;
+    fetch_bytes(client, reqwest::Url::parse(asset).ok()?).await
+}
+
+async fn steamgriddb_icon(appid: &str, key: &str) -> Option<Vec<u8>> {
+    let client = http_client().await;
+    let game_id = sgdb_game_id_from_steam(client, key, appid).await?;
+    sgdb_icon(client, key, game_id).await
+}
+
+async fn steamgriddb_icon_by_name(name: &str, key: &str) -> Option<Vec<u8>> {
+    let client = http_client().await;
+    let game_id = sgdb_game_id_from_name(client, key, name).await?;
+    sgdb_icon(client, key, game_id).await
+}
+
 async fn fetch_bytes(client: &Client, url: reqwest::Url) -> Option<Vec<u8>> {
     let resp = client.get(url).send().await.ok()?;
     if !resp.status().is_success() {
@@ -223,6 +333,8 @@ pub async fn get_icon(
     source: Source,
     id: String,
     homepage: Option<String>,
+    steamgrid_key: Option<String>,
+    game_name: Option<String>,
 ) -> Option<String> {
     let path = cache_path(app, source, &id)?;
 
@@ -240,19 +352,39 @@ pub async fn get_icon(
 
     let _permit = FETCH_SEM.acquire().await.ok()?;
 
-    let homepage = match homepage {
-        Some(h) if !h.trim().is_empty() => Some(h),
-        _ => sources::for_source(source)
-            .info(&id)
-            .await
-            .ok()
-            .flatten()
-            .and_then(|p| p.homepage),
+    let key = steamgrid_key.as_deref().map(str::trim).filter(|k| !k.is_empty());
+    let bytes = if let Some(appid) = steam_appid(source, &id) {
+        let mut art = match key {
+            Some(key) => steamgriddb_icon(&appid, key).await,
+            None => None,
+        };
+        if art.is_none() {
+            art = steam_art(&appid).await;
+        }
+        art
+    } else if let (Some(key), Some(name)) = (key, game_name.as_deref()) {
+        steamgriddb_icon_by_name(name, key).await
+    } else {
+        None
     };
 
-    let bytes = match homepage {
-        Some(h) => resolve_icon(&h).await,
-        None => None,
+    let bytes = match bytes {
+        Some(b) => Some(b),
+        None => {
+            let homepage = match homepage {
+                Some(h) if !h.trim().is_empty() => Some(h),
+                _ => sources::for_source(source)
+                    .info(&id)
+                    .await
+                    .ok()
+                    .flatten()
+                    .and_then(|p| p.homepage),
+            };
+            match homepage {
+                Some(h) => resolve_icon(&h).await,
+                None => None,
+            }
+        }
     };
 
     match bytes {
@@ -272,17 +404,17 @@ pub async fn get_icon(
     }
 }
 
-pub fn is_resolved(app: &AppHandle, source: Source, id: &str) -> bool {
-    let has_icon = cache_path(app, source, id)
+pub fn has_icon(app: &AppHandle, source: Source, id: &str) -> bool {
+    cache_path(app, source, id)
         .and_then(|p| std::fs::metadata(p).ok())
         .map(|m| m.len() > 0)
-        .unwrap_or(false);
-    if has_icon {
-        return true;
-    }
-    none_path(app, source, id)
-        .map(|p| no_icon_marker_fresh(&p))
         .unwrap_or(false)
+}
+
+pub fn clear_miss_marker(app: &AppHandle, source: Source, id: &str) {
+    if let Some(none) = none_path(app, source, id) {
+        let _ = std::fs::remove_file(none);
+    }
 }
 
 pub fn clear_cache(app: &AppHandle) -> std::io::Result<()> {
@@ -293,4 +425,64 @@ pub fn clear_cache(app: &AppHandle) -> std::io::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn steam_appid_matches_only_winget_arp_steam_ids() {
+        assert_eq!(
+            steam_appid(Source::Winget, r"ARP\Machine\X64\Steam App 1621690").as_deref(),
+            Some("1621690")
+        );
+        assert_eq!(
+            steam_appid(Source::Winget, r"ARP\User\X64\steam app 42").as_deref(),
+            Some("42")
+        );
+        assert_eq!(steam_appid(Source::Winget, r"ARP\Machine\X64\Some.App"), None);
+        assert_eq!(steam_appid(Source::Winget, "Mozilla.Firefox"), None);
+        assert_eq!(
+            steam_appid(Source::Choco, r"ARP\Machine\X64\Steam App 1621690"),
+            None
+        );
+        assert_eq!(
+            steam_appid(Source::Winget, r"ARP\Machine\X64\Steam App 12ab"),
+            None
+        );
+        assert_eq!(steam_appid(Source::Winget, r"ARP\Machine\X64\Steam App "), None);
+    }
+
+    #[test]
+    fn clean_game_name_strips_trademarks_and_whitespace() {
+        assert_eq!(clean_game_name("HELLDIVERS™ 2"), "HELLDIVERS 2");
+        assert_eq!(clean_game_name("  Diablo® IV  "), "Diablo IV");
+        assert_eq!(clean_game_name("Overwatch©"), "Overwatch");
+    }
+
+    #[test]
+    fn pick_game_id_prefers_exact_then_first() {
+        let data = serde_json::json!([
+            { "id": 10, "name": "Diablo" },
+            { "id": 20, "name": "Diablo IV" },
+        ]);
+        assert_eq!(pick_game_id(&data, "diablo iv"), Some(20));
+        assert_eq!(pick_game_id(&data, "Diablo IV™"), Some(20));
+        assert_eq!(pick_game_id(&data, "Diablo II"), Some(10));
+        assert_eq!(pick_game_id(&serde_json::json!([]), "x"), None);
+        assert_eq!(pick_game_id(&serde_json::json!({}), "x"), None);
+    }
+
+    #[test]
+    fn sgdb_search_url_has_no_double_slash() {
+        assert_eq!(
+            sgdb_search_url("League of Legends").unwrap().as_str(),
+            "https://www.steamgriddb.com/api/v2/search/autocomplete/League%20of%20Legends"
+        );
+        assert_eq!(
+            sgdb_search_url("HELLDIVERS™ 2").unwrap().as_str(),
+            "https://www.steamgriddb.com/api/v2/search/autocomplete/HELLDIVERS%202"
+        );
+    }
 }

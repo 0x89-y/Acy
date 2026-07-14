@@ -29,6 +29,12 @@ export function bucketKey(p: Package): BucketKey {
   return 'other';
 }
 
+export function steamAppId(id: string): string | null {
+  const last = (id.split('\\').pop() ?? id).trim();
+  const m = /^steam app (\d+)$/i.exec(last);
+  return m ? m[1] : null;
+}
+
 export type Bucket = {
   key: BucketKey;
   label: string;

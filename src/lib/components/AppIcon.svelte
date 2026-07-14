@@ -1,6 +1,7 @@
 <script lang="ts">
   import { settings } from '$lib/stores/settings';
   import { loadIcon, iconCacheVersion } from '$lib/stores/icons';
+  import { steamAppId } from '$lib/installedGroups';
   import type { Source } from '$lib/types';
 
   let {
@@ -8,13 +9,15 @@
     size = 44,
     source = null,
     id = null,
-    homepage = null
+    homepage = null,
+    gameName = null
   }: {
     name: string;
     size?: number;
     source?: Source | null;
     id?: string | null;
     homepage?: string | null;
+    gameName?: string | null;
   } = $props();
 
   const palette = [
@@ -31,19 +34,25 @@
   let initial = $derived((name.trim()[0] ?? '?').toUpperCase());
   let color = $derived(palette[hash(name) % palette.length]);
 
+  let isGameArt = $derived(
+    (source === 'winget' && !!id && steamAppId(id) !== null) || !!gameName
+  );
+
   let iconUrl = $state<string | null>(null);
   let loading = $state(false);
 
   $effect(() => {
     void $iconCacheVersion;
     const enabled = $settings.downloadIcons;
+    const key = $settings.steamGridKey;
     const s = source;
     const i = id;
     const h = homepage;
+    const g = gameName;
     iconUrl = null;
     if (enabled && s && i) {
       loading = true;
-      loadIcon(s, i, h).then((url) => {
+      loadIcon(s, i, h, key, g).then((url) => {
         if (source === s && id === i) {
           iconUrl = url;
           loading = false;
@@ -58,6 +67,7 @@
 {#if iconUrl}
   <img
     class="icon img"
+    class:cover={isGameArt}
     src={iconUrl}
     alt=""
     style="width:{size}px; height:{size}px;"
@@ -90,6 +100,10 @@
     padding: 5px;
     background: var(--surface-2);
     border: 1px solid var(--border);
+  }
+  .icon.img.cover {
+    object-fit: cover;
+    padding: 0;
   }
   .skel {
     flex-shrink: 0;

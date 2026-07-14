@@ -247,9 +247,17 @@
   let rowLayout: 'grid' | 'list' = $derived($settings.discoverView === 'list' ? 'list' : 'grid');
   let searchedCurrent = $derived(showSearch && searchedQuery === trimmed);
 
+  let browseCats = $derived.by(() => {
+    const cats = curated?.categories ?? [];
+    if ($settings.showCuratedApps) return cats;
+    return cats
+      .map((cat) => ({ ...cat, apps: cat.apps.filter((a) => a.custom) }))
+      .filter((cat) => cat.apps.length > 0);
+  });
+
   let allTags = $derived.by(() => {
     const set = new Set<string>();
-    for (const cat of curated?.categories ?? [])
+    for (const cat of browseCats)
       for (const app of cat.apps)
         if (curatedVariants(app, $settings.managers).length > 0)
           for (const t of app.tags ?? []) set.add(t);
@@ -269,7 +277,7 @@
   );
   let tagCounts = $derived.by(() => {
     const counts = new Map<string, number>();
-    for (const cat of curated?.categories ?? []) {
+    for (const cat of browseCats) {
       for (const app of cat.apps) {
         if (curatedVariants(app, $settings.managers).length === 0) continue;
         for (const tag of new Set(app.tags ?? [])) counts.set(tag, (counts.get(tag) ?? 0) + 1);
@@ -318,7 +326,7 @@
   }
 
   let visibleCategories = $derived(
-    (curated?.categories ?? [])
+    browseCats
       .map((cat) => ({
         ...cat,
         apps: cat.apps.filter(
@@ -374,10 +382,10 @@
 
   let curatedMatches = $derived.by(() => {
     const q = query.trim().toLowerCase();
-    if (!q || !curated) return [] as CuratedApp[];
+    if (!q) return [] as CuratedApp[];
     const seen = new Set<string>();
     const out: CuratedApp[] = [];
-    for (const cat of curated.categories) {
+    for (const cat of browseCats) {
       for (const app of cat.apps) {
         if (curatedVariants(app, $settings.managers).length === 0) continue;
         const name = (app.name ?? app.id).toLowerCase();
@@ -949,6 +957,7 @@
                     description={descFor(p) + dupeSuffix(p)}
                     variants={[{ source: p.source, id: p.id }]}
                     homepage={p.homepage}
+                    gameName={bucketKey(p) === 'games' ? p.name : null}
                     tags={tagsFor(p)}
                     layout={rowLayout}
                     backTo="/?view=library"
@@ -1033,6 +1042,14 @@
               <h2>No apps match these filters</h2>
               <p class="muted">Try fewer tags or switch between matching all and matching any.</p>
               <button class="btn" onclick={clearTags}>Clear filters</button>
+            </div>
+          {:else if visibleCategories.length === 0 && !$settings.showCuratedApps}
+            <div class="filter-empty">
+              <h2>No apps in your list yet</h2>
+              <p class="muted">
+                You're showing only apps you've added. Search for an app to add it, or turn on
+                “Show curated apps” in Settings → Sources.
+              </p>
             </div>
           {:else}
             <div class={rightClass}>

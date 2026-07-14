@@ -180,7 +180,7 @@
       <div class="form">
         {#if !isCustom}
           <p class="note">
-            Built-in app — your changes are kept as a personal override on top of the catalog.
+            Built-in app - your changes are kept as a personal override on top of the catalog.
           </p>
         {/if}
 

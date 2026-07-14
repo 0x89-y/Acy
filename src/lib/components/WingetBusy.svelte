@@ -15,7 +15,7 @@
     class="winget-busy"
     role="status"
     aria-live="polite"
-    title="winget is running in the background — other winget actions may wait for it"
+    title="winget is running in the background - other winget actions may wait for it"
   >
     <span class="spinner" aria-hidden="true"></span>
     {label}

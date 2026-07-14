@@ -11,6 +11,7 @@
   } from '@lucide/svelte';
   import SourceBadge from '$lib/components/SourceBadge.svelte';
   import * as api from '$lib/api';
+  import { settings } from '$lib/stores/settings';
   import type { CuratedFile, CuratedApp, CuratedCategory, Source } from '$lib/types';
 
   const sources: Source[] = ['winget', 'scoop', 'choco', 'msstore', 'local'];
@@ -56,6 +57,14 @@
   }
   const catShown = (cat: CuratedCategory) => catMatches(cat) || cat.apps.some(matchesApp);
   const appShown = (cat: CuratedCategory, app: CuratedApp) => catMatches(cat) || matchesApp(app);
+
+  let hideBuiltins = $derived(!$settings.showCuratedApps);
+  const appVisible = (cat: CuratedCategory, app: CuratedApp) =>
+    (!filtering || appShown(cat, app)) && (!hideBuiltins || app.custom);
+  const catVisible = (cat: CuratedCategory) =>
+    (!filtering || catShown(cat)) && (!hideBuiltins || cat.apps.some((a) => a.custom));
+  const shownCount = (cat: CuratedCategory) =>
+    hideBuiltins ? cat.apps.filter((a) => a.custom).length : cat.apps.length;
 
   let openApp = $state<Record<string, boolean>>({});
   const appOpen = (ci: number, ai: number) => openApp[`${ci}-${ai}`] ?? false;
@@ -186,7 +195,7 @@
     }
   }
 
-  let appCount = $derived(file?.categories.reduce((n, c) => n + c.apps.length, 0) ?? 0);
+  let appCount = $derived(file?.categories.reduce((n, c) => n + shownCount(c), 0) ?? 0);
 </script>
 
 {#snippet appRow(cat: CuratedCategory, ci: number, app: CuratedApp, ai: number, showCat: boolean)}
@@ -199,7 +208,7 @@
       <button class="app-name" onclick={() => (openApp[`${ci}-${ai}`] = !appOpen(ci, ai))}>
         {app.name || app.id || 'Untitled app'}
       </button>
-      {#if showCat}<span class="app-cat">{cat.title || cat.id || '—'}</span>{/if}
+      {#if showCat}<span class="app-cat">{cat.title || cat.id || '-'}</span>{/if}
       <div class="app-sources">
         {#if app.id || app.alternates.length}<SourceBadge source={app.source} />{/if}
         {#each app.alternates as alt, k (k)}<SourceBadge source={alt.source} />{/each}
@@ -228,7 +237,7 @@
               </select>
               <input
                 class="in mono"
-                placeholder={app.source === 'local' ? 'installer path (.exe / .msi) — optional' : 'package id for this manager'}
+                placeholder={app.source === 'local' ? 'installer path (.exe / .msi) - optional' : 'package id for this manager'}
                 bind:value={app.id}
               />
               {#if app.source === 'local'}
@@ -250,7 +259,7 @@
                 </select>
                 <input
                   class="in mono"
-                  placeholder={alt.source === 'local' ? 'installer path (.exe / .msi) — optional' : 'package id for this manager'}
+                  placeholder={alt.source === 'local' ? 'installer path (.exe / .msi) - optional' : 'package id for this manager'}
                   bind:value={alt.id}
                 />
                 {#if alt.source === 'local'}
@@ -333,10 +342,10 @@
             <span>All apps</span><span class="rail-count mono">{appCount}</span>
           </button>
           {#each file.categories as cat, ci (ci)}
-            {#if !filtering || catShown(cat)}
+            {#if catVisible(cat)}
               <button class="rail-link" class:active={selectedCat === ci} onclick={() => (selectedCat = ci)}>
                 <span>{cat.title || cat.id || 'Untitled'}</span>
-                <span class="rail-count mono">{cat.apps.length}</span>
+                <span class="rail-count mono">{shownCount(cat)}</span>
               </button>
             {/if}
           {/each}
@@ -355,7 +364,7 @@
           <div class="pane-scroll">
             <div class="apps">
               {#each allApps as e (e.ci + '-' + e.ai)}
-                {#if !filtering || appShown(e.cat, e.app)}
+                {#if appVisible(e.cat, e.app)}
                   {@render appRow(e.cat, e.ci, e.app, e.ai, true)}
                 {/if}
               {/each}
@@ -379,7 +388,7 @@
           <div class="pane-scroll">
             <div class="apps">
               {#each activeCat.apps as app, ai (ai)}
-                {#if !filtering || appShown(activeCat, app)}
+                {#if appVisible(activeCat, app)}
                   {@render appRow(activeCat, selectedCat as number, app, ai, false)}
                 {/if}
               {/each}
@@ -389,7 +398,7 @@
             </button>
           </div>
         {:else}
-          <p class="pane-msg muted">No categories yet — add one on the left.</p>
+          <p class="pane-msg muted">No categories yet - add one on the left.</p>
         {/if}
       </div>
     </div>

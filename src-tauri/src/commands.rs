@@ -45,6 +45,41 @@ pub async fn update_curated_catalog(
 }
 
 #[tauri::command]
+pub async fn custom_catalog_info(app: AppHandle) -> Option<curated::CustomCatalogInfo> {
+    curated::custom_info(&app)
+}
+
+#[tauri::command]
+pub async fn set_custom_catalog(
+    app: AppHandle,
+    source: String,
+    is_url: bool,
+) -> Result<curated::CustomCatalogInfo, String> {
+    curated::set_custom(&app, source, is_url).await
+}
+
+#[tauri::command]
+pub async fn clear_custom_catalog(app: AppHandle) -> Result<(), String> {
+    curated::clear_custom(&app)
+}
+
+#[tauri::command]
+pub async fn pick_catalog_file(app: AppHandle) -> Option<String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .add_filter("Catalog", &["json"])
+        .pick_file(move |path| {
+            let _ = tx.send(path);
+        });
+    rx.await
+        .ok()
+        .flatten()
+        .and_then(|fp| fp.into_path().ok())
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
 pub async fn search(query: String, sources: Vec<Source>) -> Result<Vec<SearchHit>, String> {
     let query = query.trim().to_string();
     if query.is_empty() {
@@ -226,8 +261,8 @@ pub async fn set_update_count(app: AppHandle, count: u32) {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
         let tip = match count {
             0 => "Acy".to_string(),
-            1 => "Acy — 1 update available".to_string(),
-            n => format!("Acy — {n} updates available"),
+            1 => "Acy - 1 update available".to_string(),
+            n => format!("Acy - {n} updates available"),
         };
         let _ = tray.set_tooltip(Some(&tip));
     }
@@ -356,8 +391,10 @@ pub async fn app_icon(
     source: Source,
     id: String,
     homepage: Option<String>,
+    steamgrid_key: Option<String>,
+    game_name: Option<String>,
 ) -> Option<String> {
-    crate::icons::get_icon(&app, source, id, homepage).await
+    crate::icons::get_icon(&app, source, id, homepage, steamgrid_key, game_name).await
 }
 
 #[tauri::command]
@@ -366,10 +403,12 @@ pub async fn clear_icon_cache(app: AppHandle) -> Result<(), String> {
 }
 
 #[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct IconItem {
     source: Source,
     id: String,
     homepage: Option<String>,
+    game_name: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -387,10 +426,14 @@ struct IconRefetchProgress {
 const ICON_PROGRESS_EVENT: &str = "icon-refetch-progress";
 
 #[tauri::command]
-pub async fn refetch_missing_icons(app: AppHandle, items: Vec<IconItem>) -> IconRefetch {
+pub async fn refetch_missing_icons(
+    app: AppHandle,
+    items: Vec<IconItem>,
+    steamgrid_key: Option<String>,
+) -> IconRefetch {
     let todo: Vec<IconItem> = items
         .into_iter()
-        .filter(|it| !crate::icons::is_resolved(&app, it.source, &it.id))
+        .filter(|it| !crate::icons::has_icon(&app, it.source, &it.id))
         .collect();
     let total = todo.len();
 
@@ -398,7 +441,17 @@ pub async fn refetch_missing_icons(app: AppHandle, items: Vec<IconItem>) -> Icon
     let mut failed = 0;
     for (i, item) in todo.into_iter().enumerate() {
         let _ = app.emit(ICON_PROGRESS_EVENT, IconRefetchProgress { current: i, total });
-        match crate::icons::get_icon(&app, item.source, item.id, item.homepage).await {
+        crate::icons::clear_miss_marker(&app, item.source, &item.id);
+        match crate::icons::get_icon(
+            &app,
+            item.source,
+            item.id,
+            item.homepage,
+            steamgrid_key.clone(),
+            item.game_name,
+        )
+        .await
+        {
             Some(_) => fetched += 1,
             None => failed += 1,
         }

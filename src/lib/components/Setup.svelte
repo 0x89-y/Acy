@@ -7,6 +7,7 @@
     setAccent,
     setManagerEnabled,
     setDownloadIcons,
+    setShowCuratedApps,
     completeSetup,
     ACCENTS,
     type ThemeMode
@@ -33,9 +34,9 @@
   const allManagers: Manager[] = ['winget', 'scoop', 'choco', 'msstore'];
 
   const MANAGER_INFO: Record<Manager, string> = {
-    winget: "Windows Package Manager — Microsoft's built-in catalog",
+    winget: "Windows Package Manager - Microsoft's built-in catalog",
     scoop: 'Portable apps and developer tools',
-    choco: 'Chocolatey — large community catalog',
+    choco: 'Chocolatey - large community catalog',
     msstore: 'Microsoft Store apps'
   };
 
@@ -158,6 +159,23 @@
                 type="checkbox"
                 checked={$settings.downloadIcons}
                 onchange={(e) => setDownloadIcons(e.currentTarget.checked)}
+              />
+              <span class="slider"></span>
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>Curated catalog</h2>
+        <div class="opt-list">
+          <label class="opt-row">
+            <span class="opt-label">Show curated apps (the built-in catalog)</span>
+            <span class="switch">
+              <input
+                type="checkbox"
+                checked={$settings.showCuratedApps}
+                onchange={(e) => setShowCuratedApps(e.currentTarget.checked)}
               />
               <span class="slider"></span>
             </span>

@@ -48,7 +48,7 @@ async fn output_with_timeout(
     {
         Ok(res) => res.map_err(|e| anyhow::anyhow!("failed to run `{program}`: {e}")),
         Err(_) => anyhow::bail!(
-            "`{program}` did not respond within {READ_TIMEOUT_SECS}s — it may be waiting on a \
+            "`{program}` did not respond within {READ_TIMEOUT_SECS}s - it may be waiting on a \
              source agreement or prompt. Try running `{program}` once in a terminal (e.g. \
              `winget list`), or install the WinGet PowerShell module in Settings \u{2192} Sources."
         ),

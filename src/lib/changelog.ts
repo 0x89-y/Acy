@@ -7,25 +7,37 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.9.0',
+    date: '2026-07-14',
+    changes: [
+      'Games now show real icons - Steam artwork automatically, other launchers via SteamGridDB with an API key.',
+      '"Re-download missing icons" now covers installed games and retries past failures.',
+      'Added support for a custom curated catalog (local file or URL) in place of the built-in one.',
+      'Added a "Show curated apps" setting (on by default) to hide the built-in catalog.',
+      'Reorganized Settings, with per-manager maintenance actions and the version and update status in the header.',
+      'Converted several settings actions into header icon buttons.'
+    ]
+  },
+  {
     version: '0.8.1',
     date: '2026-07-13',
     changes: [
-      'The app page, the curated catalog editor, the changelog, and Settings now use the same full-window panel as the home screen, so every screen looks consistent.',
-      'Editing a curated app now happens in place on its app page — the details swap to an edit form instead of opening a separate window.',
-      'Redesigned the first-run setup to match: a welcome panel with the choices on the right and Get started on the left.',
-      'Removed the floating "Acy update available" pop-up — an Acy update now shows only in the Updates list, alongside your app updates.'
+      'The app page, catalog editor, changelog, and Settings now use the same full-window panel as the home screen.',
+      'Editing a curated app now happens in place on its app page, instead of a separate window.',
+      'Redesigned the first-run setup to match the new panel layout.',
+      'Removed the floating "Acy update available" pop-up; Acy updates now show only in the Updates list.'
     ]
   },
   {
     version: '0.8.0',
     date: '2026-07-12',
     changes: [
-      'Discover and Installed are now one screen with a Discover / Library switch. Discover browses the catalog by category; Library lists your installed apps grouped by source (winget, Scoop, Chocolatey, Microsoft Store, Games, Windows components, Other apps), plus Updates.',
-      'The home screen fills the whole window: the category/source list sits on the left and its apps on the right, in grid or list view.',
-      'Installed apps now show their catalog description and tags, and grid/list view is shared with Discover, so both look the same.',
-      'A package manager that still needs setting up appears in the Library list and opens Settings → Sources; the Library tab shows a dot when an update is available or a source needs attention.',
-      'Reworked the look to match the shared design: flat surfaces (no shadows), brighter accent colours with white text, squircle app icons, and a slimmer title bar.',
-      'Settings is now one clean panel with a back button, and the top bar no longer carries a Discover link — the logo takes you home.',
+      'Discover and Installed are now one screen with a Discover / Library switch. Library groups your installed apps by source, plus Updates.',
+      'The home screen fills the whole window, with the category list on the left and apps on the right.',
+      'Installed apps now show their catalog description and tags, and share grid/list view with Discover.',
+      'The Library tab shows a dot when an update is available or a manager needs attention.',
+      'Reworked the look to match the shared design: flat surfaces, brighter accents, squircle icons, and a slimmer title bar.',
+      'Settings is now one panel with a back button, and the logo takes you home.',
       'Installed no longer has separate "Drivers" and "Fonts" groups; they sit under "Other apps".'
     ]
   },
@@ -33,12 +45,12 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: '0.7.1',
     date: '2026-07-04',
     changes: [
-      'Curated apps can now carry a "Release notes" link — it shows on the app page and on its update row in Installed, so you can see what changed before updating.',
-      'Tags are clickable everywhere (cards and the app page): click one to filter Discover by it, and Discover search now matches tags too (e.g. "free").',
-      'Added a custom accent colour picker (Settings → Appearance) that adapts to light and dark automatically.',
-      'Added "Reset all settings" to restore theme, accent, managers, and preferences to defaults (your apps and curated list are untouched).',
+      'Curated apps can carry a "Release notes" link, shown on the app page and its Installed update row.',
+      'Tags are now clickable to filter Discover, and search matches tags too (e.g. "free").',
+      'Added a custom accent colour picker that adapts to light and dark.',
+      'Added "Reset all settings" (your apps and curated list are untouched).',
       'Apps in the Uncategorized group can be filed into a category from their right-click menu.',
-      'Discover catalog updates no longer apply automatically — like the app updater, "Check for catalog updates" tells you when a new version is available and you choose to apply it.',
+      'Discover catalog updates no longer apply automatically; "Check for catalog updates" now prompts first.',
       'Fixed the ▾ menu on the Install split button not opening.'
     ]
   },
@@ -46,19 +58,19 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: '0.7.0',
     date: '2026-07-03',
     changes: [
-      'Discover can now be updated without a new app version: Acy fetches a newer, signature-verified catalog from the web when you press "Check for catalog updates" (Settings → Sources → Curated catalog).',
-      'Add any app you find in search to your Discover list with a "+" button, then edit or remove it right from the app\'s page — no need to open the catalog editor.',
-      'The catalog editor gained a search box that matches app names, ids, tags, and category titles.',
-      'Added an Aurora accent theme, and in light mode all the accent colours are now softer pastels with dark text.',
-      'Combined the Settings action buttons (app icons, maintenance, catalog) and the changelog pager into single accent controls.',
-      'Removed the light/dark toggle from the top bar — change the theme in Settings → Appearance instead.'
+      'Discover can update without a new app release, via a signature-verified catalog fetched from the web.',
+      'Add any search result to your Discover list with a "+", then edit or remove it from the app\'s page.',
+      'The catalog editor gained a search box (matches names, ids, tags, and category titles).',
+      'Added an Aurora accent theme, and softer pastel accents with dark text in light mode.',
+      'Combined the Settings action buttons and the changelog pager into single accent controls.',
+      'Removed the light/dark toggle from the top bar; change the theme in Settings → Appearance.'
     ]
   },
   {
     version: '0.6.6',
     date: '2026-07-03',
     changes: [
-      'Missing app icons can be re-downloaded from Settings → App icons, and icon fetching is gentler about rate limits — apps with no icon are remembered so they are not re-checked every time.',
+      'Missing app icons can be re-downloaded from Settings, and icon fetching is gentler about rate limits.',
       'Icons now show a loading placeholder while they load, with calmer fallback tiles.',
       'Reworked Settings: a new Appearance tab for theme, accent, and icons, and every section now uses the same clean bordered-list look.',
       "Scoop buckets have their own page, opened from a \"Manage buckets\" button on Scoop's row in Settings.",
@@ -72,7 +84,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       'Refreshed the interface for a calmer, flatter look: muted accent colours, no glass blur on the top bar, squared-off badges and tags, and less explanatory clutter.',
       "Scoop installs that need a bucket you don't have (like extras for Firefox or VS Code) now offer to add it first instead of failing.",
       'Redesigned the Scoop buckets settings as a list you can add to and remove from, each with a short description.',
-      'Added ALCOM, Bambu Studio, Ente Photos, Hytale, MusicBrainz Picard, TeamSpeak, VRChat Creator Companion, VRCX, and WowUp to Discover.',
+      'Added more apps to Discover.',
       'Expanded filter tags across the catalog and added more verified support links.'
     ]
   },
@@ -82,7 +94,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     changes: [
       'Chocolatey actions now show a dismissible "may need administrator rights" warning instead of checking your admin status (which some antivirus flagged).',
       'Removed the "switch an app to another package manager" action, and softened how Acy invokes PowerShell, to avoid antivirus false positives.',
-      "Acy's own entry can no longer show up in — or be removed from — the Installed list."
+      "Acy's own entry can no longer show up in - or be removed from - the Installed list."
     ]
   },
   {
@@ -99,7 +111,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: '2026-07-01',
     changes: [
       'Installed apps now appear instantly (read straight from Windows), with winget filling in details in the background.',
-      'With "refresh on startup" off, launches no longer run a slow winget scan — it only runs when you press Refresh, so installs and uninstalls no longer get stuck behind it.',
+      'With "refresh on startup" off, a slow winget scan no longer runs at launch or blocks installs and uninstalls.',
       'A slow or failed refresh no longer blanks the Installed list.',
       'Right-click a curated app to switch it between package managers (e.g. winget → choco).',
       'Games, drivers, and Windows system components now sort into their own collapsible groups more accurately; the list is grouped by default.',
@@ -136,7 +148,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     changes: [
       'Long categories now open a dedicated page with every app (the "Show more" link is now "View all"), keeping grid/list views and multi-select install.',
       'Back from an app\'s detail page returns to the category page you came from.',
-      'More curated apps.'
+      'Added more apps to Discover.'
     ]
   },
   {
@@ -190,7 +202,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       'Keyboard shortcuts: Ctrl+1/2/3 switch pages and Esc goes back.',
       'Uninstalling now asks to confirm, and Acy remembers its window size and position.',
       'Polish: loading skeletons, a Clear-all for toasts, and Installed sort/grouping and the Settings tab now stick.',
-      'More curated apps.'
+      'Added more apps to Discover.'
     ]
   },
   {
@@ -213,7 +225,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: '0.4.0',
     date: '2026-06-27',
     changes: [
-      'Acy can update itself — Settings → Software updates → Check for updates.',
+      'Acy can update itself - Settings → Software updates → Check for updates.',
       'Install from a local or network .exe/.msi: add "local" as a per-app source (toggleable, and selectable as your preferred source).',
       'Scoop buckets: add buckets like extras right from Settings, so Scoop apps that need them install cleanly.',
       'Failed installs and updates can be retried from the toast, with a hint when administrator rights are needed.',
@@ -237,8 +249,8 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: '2026-06-25',
     changes: [
       'Microsoft Store apps: a new msstore source for searching and installing Store-only apps.',
-      'Curated apps can offer several package managers at once — install from any via a split button, with an optional preferred source.',
-      'Curated catalog editor in Settings — edit the Discover home page without touching JSON.',
+      'Curated apps can offer several package managers at once - install from any via a split button, with an optional preferred source.',
+      'Curated catalog editor in Settings - edit the Discover home page without touching JSON.',
       'System tray with an optional "close to tray" mode that keeps update checks running in the background.',
       'Desktop notifications (opt-in) when new updates are found, plus an update count in the tray tooltip.',
       'Background update checks refresh the nav badge periodically while the app is open.',

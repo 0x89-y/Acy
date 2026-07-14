@@ -35,6 +35,7 @@ export interface Settings {
   preferredSource: Source | null;
   showOutput: boolean;
   downloadIcons: boolean;
+  steamGridKey: string;
   setupComplete: boolean;
   closeToTray: boolean;
   askCloseToTray: boolean;
@@ -43,6 +44,7 @@ export interface Settings {
   refreshOnStartup: boolean;
   autoCheckUpdates: boolean;
   warnChocoAdmin: boolean;
+  showCuratedApps: boolean;
   hiddenApps: string[];
   settingsTab: SettingsTab;
   discoverView: ViewMode;
@@ -58,6 +60,7 @@ const DEFAULTS: Settings = {
   preferredSource: null,
   showOutput: false,
   downloadIcons: false,
+  steamGridKey: '',
   setupComplete: false,
   closeToTray: false,
   askCloseToTray: true,
@@ -66,6 +69,7 @@ const DEFAULTS: Settings = {
   refreshOnStartup: true,
   autoCheckUpdates: false,
   warnChocoAdmin: true,
+  showCuratedApps: true,
   hiddenApps: [],
   settingsTab: 'general',
   discoverView: 'grid'
@@ -77,6 +81,10 @@ function load(): Settings {
       const raw = localStorage.getItem(KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
+        if (parsed.showCuratedApps === undefined && typeof parsed.onlyCustomApps === 'boolean') {
+          parsed.showCuratedApps = !parsed.onlyCustomApps;
+        }
+        delete parsed.onlyCustomApps;
         return {
           ...DEFAULTS,
           ...parsed,
@@ -129,6 +137,10 @@ export function setDownloadIcons(value: boolean) {
   settings.update((s) => ({ ...s, downloadIcons: value }));
 }
 
+export function setSteamGridKey(value: string) {
+  settings.update((s) => ({ ...s, steamGridKey: value.trim() }));
+}
+
 export function setCloseToTray(value: boolean) {
   settings.update((s) => ({ ...s, closeToTray: value }));
 }
@@ -155,6 +167,10 @@ export function setAutoCheckUpdates(value: boolean) {
 
 export function setWarnChocoAdmin(value: boolean) {
   settings.update((s) => ({ ...s, warnChocoAdmin: value }));
+}
+
+export function setShowCuratedApps(value: boolean) {
+  settings.update((s) => ({ ...s, showCuratedApps: value }));
 }
 
 export function hideApp(key: string) {

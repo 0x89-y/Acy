@@ -24,6 +24,23 @@ export const updateCuratedCatalog = (apply: boolean) =>
     message: string;
   }>('update_curated_catalog', { apply });
 
+export interface CustomCatalogInfo {
+  source: string;
+  isUrl: boolean;
+  version: number;
+  appCount: number;
+}
+
+export const customCatalogInfo = () =>
+  invoke<CustomCatalogInfo | null>('custom_catalog_info');
+
+export const setCustomCatalog = (source: string, isUrl: boolean) =>
+  invoke<CustomCatalogInfo>('set_custom_catalog', { source, isUrl });
+
+export const clearCustomCatalog = () => invoke<void>('clear_custom_catalog');
+
+export const pickCatalogFile = () => invoke<string | null>('pick_catalog_file');
+
 export const search = (query: string, sources: Source[]) =>
   invoke<SearchHit[]>('search', { query, sources });
 
@@ -45,8 +62,13 @@ export const scoopNeededBucket = (id: string) =>
   invoke<string | null>('scoop_needed_bucket', { id });
 
 export const refetchMissingIcons = (
-  items: { source: Source; id: string; homepage: string | null }[]
-) => invoke<{ fetched: number; failed: number }>('refetch_missing_icons', { items });
+  items: { source: Source; id: string; homepage: string | null; gameName?: string | null }[],
+  steamGridKey?: string | null
+) =>
+  invoke<{ fetched: number; failed: number }>('refetch_missing_icons', {
+    items,
+    steamgridKey: steamGridKey || null
+  });
 
 export const uninstall = (source: Source, id: string, opId: string) =>
   invoke<number>('uninstall', { source, id, opId });
