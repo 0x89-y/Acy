@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { ExternalLink, ArrowLeft, Heart, Plus, Pencil, FileText } from '@lucide/svelte';
   import CuratedAppEditForm from '$lib/components/CuratedAppEditForm.svelte';
@@ -138,7 +139,7 @@
   onkeydown={(e) => {
     if (e.key !== 'Escape') return;
     if (editing) editing = false;
-    else history.back();
+    else goto(backHref);
   }}
 />
 

@@ -44,11 +44,8 @@
     type ThemeMode,
     type SettingsTab
   } from '$lib/stores/settings';
-  import { get } from 'svelte/store';
   import { managers, loadManagers } from '$lib/stores/managers';
-  import { installed } from '$lib/stores/library';
-  import { bucketKey } from '$lib/installedGroups';
-  import { clearIconCache, refreshIcons } from '$lib/stores/icons';
+  import { clearIconCache, iconRefetch, refetchMissingIcons } from '$lib/stores/icons';
   import { reloadCurated } from '$lib/stores/curated';
   import { confirmAction } from '$lib/stores/confirm';
   import { enqueue } from '$lib/stores/ops';
@@ -100,9 +97,7 @@
 
   let busy = $state<Source | null>(null);
   let clearing = $state(false);
-  let refetchingIcons = $state(false);
-  let iconRefetchMsg = $state('');
-  let iconProgress = $state<{ current: number; total: number } | null>(null);
+  let iconRefetching = $derived($iconRefetch.status === 'running');
   let catalogPhase = $state<'idle' | 'checking' | 'available' | 'applying'>('idle');
   let catalogMsg = $state('');
   let catalogVersion = $state(0);
@@ -172,49 +167,6 @@
     clearing = true;
     await clearIconCache();
     clearing = false;
-  }
-
-  async function refetchMissingIcons() {
-    refetchingIcons = true;
-    iconRefetchMsg = '';
-    iconProgress = null;
-    const unlisten = await api.onIconRefetchProgress((p) => (iconProgress = p));
-    try {
-      const file = await api.getCurated();
-      const curatedItems = file.categories.flatMap((c) =>
-        c.apps.map((a) => ({
-          source: a.source,
-          id: a.id,
-          homepage: a.icon ?? a.homepage ?? null,
-          gameName: null as string | null
-        }))
-      );
-      const installedGames = get(installed)
-        .filter((p) => bucketKey(p) === 'games')
-        .map((p) => ({
-          source: p.source,
-          id: p.id,
-          homepage: p.homepage ?? null,
-          gameName: p.name as string | null
-        }));
-      const byKey = new Map<string, (typeof curatedItems)[number]>();
-      for (const it of [...curatedItems, ...installedGames]) {
-        const k = `${it.source}:${it.id.toLowerCase()}`;
-        if (!byKey.has(k)) byKey.set(k, it);
-      }
-      const items = [...byKey.values()];
-      const { fetched, failed } = await api.refetchMissingIcons(items, $settings.steamGridKey);
-      refreshIcons();
-      if (fetched === 0 && failed === 0) iconRefetchMsg = 'No missing icons.';
-      else if (failed === 0) iconRefetchMsg = `Downloaded ${fetched} missing ${fetched === 1 ? 'icon' : 'icons'}.`;
-      else iconRefetchMsg = `Downloaded ${fetched}, ${failed} still unavailable.`;
-    } catch (e) {
-      console.error('refetch missing icons failed', e);
-      iconRefetchMsg = 'Could not re-download icons.';
-    }
-    unlisten();
-    refetchingIcons = false;
-    iconProgress = null;
   }
 
   async function checkCatalog() {
@@ -418,28 +370,28 @@
         <div class="group-head">
           <h2>App icons</h2>
           <div class="head-actions">
-            {#if refetchingIcons && iconProgress && iconProgress.total > 0}
+            {#if $iconRefetch.status === 'running' && $iconRefetch.total > 0}
               <span class="icon-msg muted"
-                >{Math.min(iconProgress.current + 1, iconProgress.total)} / {iconProgress.total}</span
+                >{Math.min($iconRefetch.current + 1, $iconRefetch.total)} / {$iconRefetch.total}</span
               >
-            {:else if iconRefetchMsg}
-              <span class="icon-msg muted">{iconRefetchMsg}</span>
+            {:else if $iconRefetch.status === 'done'}
+              <span class="icon-msg muted">{$iconRefetch.message}</span>
             {/if}
             <button
               class="icon-btn"
               title="Re-download missing icons"
               aria-label="Re-download missing icons"
               onclick={refetchMissingIcons}
-              disabled={!$settings.downloadIcons || refetchingIcons || clearing}
+              disabled={!$settings.downloadIcons || iconRefetching || clearing}
             >
-              <RefreshCw size={16} class={refetchingIcons ? 'icon-spin' : ''} />
+              <RefreshCw size={16} class={iconRefetching ? 'icon-spin' : ''} />
             </button>
             <button
               class="icon-btn"
               title="Clear icon cache"
               aria-label="Clear icon cache"
               onclick={clearIcons}
-              disabled={clearing || refetchingIcons}
+              disabled={clearing || iconRefetching}
             >
               <Trash2 size={16} />
             </button>

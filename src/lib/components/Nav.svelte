@@ -1,9 +1,6 @@
 <script lang="ts">
-  import { page } from '$app/stores';
   import { Settings } from '@lucide/svelte';
   import WindowControls from './WindowControls.svelte';
-
-  let path = $derived($page.url.pathname);
 </script>
 
 <header class="nav" data-tauri-drag-region>
@@ -12,13 +9,7 @@
   </a>
   <div class="spacer" data-tauri-drag-region></div>
   <div class="right">
-    <a
-      href="/settings"
-      class="icon-link"
-      class:active={path.startsWith('/settings')}
-      title="Settings"
-      aria-label="Settings"
-    >
+    <a href="/settings" class="icon-link" title="Settings" aria-label="Settings">
       <Settings size={18} />
     </a>
     <div class="win-divider"></div>
@@ -90,9 +81,5 @@
   .icon-link:hover {
     background: var(--surface-hover);
     color: var(--text);
-  }
-  .icon-link.active {
-    color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 16%, var(--surface));
   }
 </style>

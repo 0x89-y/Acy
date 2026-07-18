@@ -7,6 +7,19 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.9.1',
+    date: '2026-07-18',
+    changes: [
+      'Added more apps to Discover.',
+      'The Updates entry is now pinned to the bottom of the Discover rail too, not just Library.',
+      'Removed the per-source "Update all" buttons; "Update everything" stays as the single batch action.',
+      'A dismissible banner now appears when a package manager needs setup, linking to Settings → Sources.',
+      'The Library dot now only flags a manager that needs attention; available updates show as the Updates count.',
+      'Fixed "Re-download missing icons" progress being lost when leaving and reopening Settings.',
+      'Fixed Back (or Escape) from a search result\'s page going to the Discover home instead of returning to your search.'
+    ]
+  },
+  {
     version: '0.9.0',
     date: '2026-07-14',
     changes: [
