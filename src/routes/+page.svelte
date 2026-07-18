@@ -68,6 +68,9 @@
   let searchedQuery = $state('');
   let trimmed = $derived(query.trim());
   let showSearch = $derived(trimmed.length > 0);
+  // Back target for a search result's detail page, so "Back" returns to this
+  // search rather than the Discover home. Restored from ?q= on mount below.
+  let searchBackTo = $derived(`/?q=${encodeURIComponent(trimmed)}`);
 
   // ---- Discover vs Library mode (the rail switch) ----
   // Mode lives in the `browseView` store (so Ctrl+2 / the /installed redirect can
@@ -131,6 +134,11 @@
     setSettingsTab('sources');
     goto('/settings');
   }
+  // Attention banner for sources that need setup - more visible than the rail
+  // dot alone. Dismissible for the session; reappears on reload / new issues.
+  let setupBannerDismissed = $state(false);
+  let showSetupBanner = $derived(managerIssues.length > 0 && !setupBannerDismissed);
+  let setupIssueNames = $derived(managerIssues.map((m) => managerNames[m.source]).join(', '));
 
   // ---- Installed apps shown in the Library pane (rendered with AppCard) ----
   let libFilter = $state('');
@@ -579,6 +587,15 @@
     window.addEventListener('keydown', onShortcut);
     window.addEventListener('keydown', onResultsKey);
 
+    // Restore a search when returning from a result's detail page (?q=...), so
+    // Back lands on the search we were on rather than the Discover home.
+    const q = get(page).url.searchParams.get('q');
+    if (q) {
+      browseView.set('discover');
+      query = q;
+      runSearch();
+    }
+
     (async () => {
       try {
         curated = await api.getCurated();
@@ -841,6 +858,7 @@
             allowPick
             layout={rowLayout}
             highlight={trimmed}
+            backTo={searchBackTo}
             selectable={selectMode && !anyInstalled(vs)}
             selected={selectedApps.has(appKey(app))}
             onToggleSelect={() => toggleSelectApp(app)}
@@ -868,6 +886,7 @@
               installed={hitInstalled(hit)}
               layout={rowLayout}
               highlight={trimmed}
+              backTo={searchBackTo}
               inList={hitInList(hit)}
               onAddToList={() => addHit(hit)}
               onChanged={() => loadInstalled(true)}
@@ -897,6 +916,25 @@
     <a class="btn btn-accent" href="/settings">Open Settings</a>
   </div>
 {:else}
+  {#if showSetupBanner}
+    <div class="setup-banner" role="status">
+      <span class="setup-banner-dot"></span>
+      <span class="setup-banner-text">
+        {setupIssueNames}
+        {managerIssues.length > 1 ? 'need' : 'needs'} setup before you can search or install
+        {managerIssues.length > 1 ? 'from them' : 'from it'}.
+      </span>
+      <button class="btn btn-ghost setup-banner-action" onclick={openSources}>Open Sources</button>
+      <button
+        class="setup-banner-close"
+        onclick={() => (setupBannerDismissed = true)}
+        title="Dismiss"
+        aria-label="Dismiss"
+      >
+        <X size={15} />
+      </button>
+    </div>
+  {/if}
   <!-- One master-detail panel. The rail switches between Discover (category
        browse) and Library (Installed / Updates); the right pane follows. The
        rail hides during a Discover search so results fill the pane. -->
@@ -907,12 +945,8 @@
           <button class:on={$browseView === 'discover'} onclick={() => setMode('discover')}>Discover</button>
           <button class:on={$browseView === 'library'} onclick={() => setMode('library')}>
             Library
-            {#if railUpdateCount > 0 || managerIssues.length > 0}
-              <span
-                class="lib-dot"
-                class:warn={managerIssues.length > 0}
-                title={managerIssues.length > 0 ? 'A source needs attention' : 'Updates available'}
-              ></span>
+            {#if managerIssues.length > 0}
+              <span class="lib-dot" title="A source needs attention"></span>
             {/if}
           </button>
         </div>
@@ -933,6 +967,14 @@
               <span>{cat.title}</span><span class="rail-count mono">{cat.apps.length}</span>
             </button>
           {/each}
+          <button
+            class="rail-link updates-link"
+            onclick={() => { browseView.set('library'); libSelection = 'updates'; }}
+            title="View updates"
+          >
+            <span>Updates</span>
+            {#if railUpdateCount > 0}<span class="rail-badge mono">{railUpdateCount}</span>{/if}
+          </button>
         {:else}
           <button
             class="rail-link"
@@ -1376,6 +1418,49 @@
     min-width: 32px;
     justify-content: center;
   }
+  /* Attention banner: shown above the panel when a source needs setup, so it
+     isn't missed the way the rail dot can be. */
+  .setup-banner {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+    border-bottom: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
+    font-size: 0.86rem;
+  }
+  .setup-banner-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--warning);
+  }
+  .setup-banner-text {
+    flex: 1;
+    min-width: 0;
+  }
+  .setup-banner-action {
+    flex-shrink: 0;
+    font-size: 0.82rem;
+  }
+  .setup-banner-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 5px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-muted);
+    line-height: 0;
+  }
+  .setup-banner-close:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+  }
   /* Master-detail panel (both views): category rail + apps pane. Capped to the
      viewport so the rail stays put and the apps pane scrolls. */
   .browse-panel {
@@ -1419,15 +1504,13 @@
     font-size: 0.82rem;
     font-weight: 500;
   }
-  /* Attention dot on Library: accent = updates, amber = a source needs setup. */
+  /* Attention dot on Library: a source needs setup/attention (updates are
+     surfaced by the Updates entry's count badge in both rails instead). */
   .lib-dot {
     width: 6px;
     height: 6px;
     border-radius: 50%;
     flex-shrink: 0;
-    background: var(--accent);
-  }
-  .lib-dot.warn {
     background: var(--warning);
   }
   .rail-switch button.on .lib-dot {

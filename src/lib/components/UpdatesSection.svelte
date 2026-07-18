@@ -98,11 +98,6 @@
       {updatingEverything ? 'Updating…' : `Update everything · ${totalUpdateCount}`}
     </button>
   {/if}
-  {#each updateSources as s (s)}
-    <button class="btn" onclick={() => updateAll(s)} disabled={updatingAll === s || updatingEverything}>
-      {updatingAll === s ? 'Updating…' : `Update all · ${s}`}
-    </button>
-  {/each}
   <div class="spacer"></div>
   {#if $lastChecked}
     <span class="checked muted">Checked {ago($lastChecked, now)}</span>
