@@ -204,7 +204,7 @@
       <button class="disclose" onclick={() => (openApp[`${ci}-${ai}`] = !appOpen(ci, ai))} aria-label="Toggle app">
         {#if appOpen(ci, ai)}<ChevronDown size={15} />{:else}<ChevronRight size={15} />{/if}
       </button>
-      <span class="tag" class:custom={app.custom}>{app.custom ? 'custom' : 'built-in'}</span>
+      <span class="tag" class:custom={app.custom}>{app.custom ? 'custom' : 'curated'}</span>
       <button class="app-name" onclick={() => (openApp[`${ci}-${ai}`] = !appOpen(ci, ai))}>
         {app.name || app.id || 'Untitled app'}
       </button>

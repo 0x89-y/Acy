@@ -50,10 +50,8 @@ pub struct CuratedFile {
     pub categories: Vec<CuratedCategory>,
 }
 
-const DEFAULT: &str = include_str!("../../curated.json");
-
-const CATALOG_URL: &str = "https://0x89-y.xyz/acy/curated.json";
-const CATALOG_SIG_URL: &str = "https://0x89-y.xyz/acy/curated.json.sig";
+const CATALOG_URL: &str = "https://raw.githubusercontent.com/0x89-y/Acy/main/curated.json";
+const CATALOG_SIG_URL: &str = "https://raw.githubusercontent.com/0x89-y/Acy/main/curated.json.sig";
 
 const CATALOG_PUBKEY: &str = "RWS3VEM6J8kwYA+2cJgsbaR1llGwi+f10sRCXZU4w9SrP47w+9je9SBo";
 
@@ -78,37 +76,41 @@ fn read_curated(path: &Path) -> Option<CuratedFile> {
     }
 }
 
-fn embedded() -> CuratedFile {
-    serde_json::from_str(DEFAULT).expect("embedded curated.json must be valid")
-}
-
-fn bundled_catalog(app: &AppHandle) -> CuratedFile {
-    if let Ok(resource) = app
-        .path()
-        .resolve("curated.json", tauri::path::BaseDirectory::Resource)
-    {
-        if let Some(file) = read_curated(&resource) {
-            return file;
-        }
+fn empty() -> CuratedFile {
+    CuratedFile {
+        version: 0,
+        categories: Vec::new(),
     }
-    embedded()
 }
 
-fn remote_cache_path(app: &AppHandle) -> Option<PathBuf> {
-    let dir = app.path().app_cache_dir().ok()?;
+fn downloaded_path(app: &AppHandle) -> Option<PathBuf> {
+    let dir = app.path().app_config_dir().ok()?;
     let _ = std::fs::create_dir_all(&dir);
-    Some(dir.join("curated-remote.json"))
+    Some(dir.join("curated-catalog.json"))
 }
 
-fn read_remote_cache(app: &AppHandle) -> Option<CuratedFile> {
-    read_curated(&remote_cache_path(app)?)
+fn legacy_cache_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_cache_dir()
+        .ok()
+        .map(|dir| dir.join("curated-remote.json"))
 }
 
-fn pick_base(bundled: CuratedFile, remote: Option<CuratedFile>) -> CuratedFile {
-    match remote {
-        Some(r) if r.version >= bundled.version => r,
-        _ => bundled,
+fn read_downloaded(app: &AppHandle) -> Option<CuratedFile> {
+    let path = downloaded_path(app)?;
+    if let Some(file) = read_curated(&path) {
+        return Some(file);
     }
+    let legacy = legacy_cache_path(app)?;
+    let file = read_curated(&legacy)?;
+    if let Ok(bytes) = std::fs::read(&legacy) {
+        let _ = std::fs::write(&path, bytes);
+    }
+    Some(file)
+}
+
+fn pick_base(downloaded: Option<CuratedFile>) -> CuratedFile {
+    downloaded.unwrap_or_else(empty)
 }
 
 fn load_base(app: &AppHandle) -> CuratedFile {
@@ -121,7 +123,7 @@ fn load_base(app: &AppHandle) -> CuratedFile {
     if let Some(file) = read_curated(&repo) {
         return file;
     }
-    pick_base(bundled_catalog(app), read_remote_cache(app))
+    pick_base(read_downloaded(app))
 }
 
 fn appdata_file(app: &AppHandle) -> Option<PathBuf> {
@@ -239,6 +241,25 @@ fn app_count(file: &CuratedFile) -> usize {
     file.categories.iter().map(|c| c.apps.len()).sum()
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogStatus {
+    pub present: bool,
+    pub custom: bool,
+    pub version: u32,
+    pub app_count: usize,
+}
+
+pub fn status(app: &AppHandle) -> CatalogStatus {
+    let base = load_base(app);
+    CatalogStatus {
+        present: base.version > 0 || !base.categories.is_empty(),
+        custom: read_custom_catalog(app).is_some(),
+        version: base.version,
+        app_count: app_count(&base),
+    }
+}
+
 pub async fn update_remote(app: &AppHandle, apply: bool) -> Result<CatalogUpdate, String> {
     let client = reqwest::Client::builder()
         .user_agent(concat!("Acy/", env!("CARGO_PKG_VERSION")))
@@ -303,7 +324,7 @@ pub async fn update_remote(app: &AppHandle, apply: bool) -> Result<CatalogUpdate
         });
     }
 
-    let path = remote_cache_path(app).ok_or("Couldn't find a place to store the catalog.")?;
+    let path = downloaded_path(app).ok_or("Couldn't find a place to store the catalog.")?;
     std::fs::write(&path, &json_bytes).map_err(|e| format!("Couldn't save the catalog: {e}"))?;
 
     Ok(CatalogUpdate {
@@ -458,21 +479,25 @@ mod tests {
     }
 
     #[test]
-    fn pick_base_prefers_higher_version_remote() {
-        let bundled = parse(r#"{"version":3,"categories":[]}"#);
-        let remote = parse(r#"{"version":5,"categories":[{"id":"x","title":"X","apps":[]}]}"#);
-        assert_eq!(pick_base(bundled, Some(remote)).version, 5);
+    fn pick_base_uses_the_download_or_nothing() {
+        let none = pick_base(None);
+        assert_eq!(none.version, 0);
+        assert!(none.categories.is_empty());
 
-        let bundled = parse(r#"{"version":4,"categories":[]}"#);
-        let remote = parse(r#"{"version":4,"categories":[]}"#);
-        assert_eq!(pick_base(bundled, Some(remote)).version, 4);
+        let file = parse(r#"{"version":5,"categories":[{"id":"x","title":"X","apps":[]}]}"#);
+        assert_eq!(pick_base(Some(file)).version, 5);
+    }
 
-        let bundled = parse(r#"{"version":6,"categories":[]}"#);
-        let remote = parse(r#"{"version":2,"categories":[]}"#);
-        assert_eq!(pick_base(bundled, Some(remote)).version, 6);
-
-        let bundled = parse(r#"{"version":6,"categories":[]}"#);
-        assert_eq!(pick_base(bundled, None).version, 6);
+    #[test]
+    fn merge_onto_empty_base_keeps_only_customs() {
+        let saved = parse(
+            r#"{"version":1,"categories":[{"id":"browsers","title":"Browsers","apps":[
+                {"id":"Mozilla.Firefox","source":"winget","custom":false},
+                {"id":"Brave.Brave","source":"winget","custom":true}
+            ]}]}"#,
+        );
+        let merged = merge(empty(), &saved);
+        assert_eq!(ids(&merged, "browsers"), vec!["Brave.Brave"]);
     }
 
     #[test]

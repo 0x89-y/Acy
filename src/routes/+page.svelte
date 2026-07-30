@@ -31,7 +31,9 @@
     searchHitToInput,
     curatedKeys as allCuratedKeys,
     curatedKey,
-    moveCuratedApp
+    moveCuratedApp,
+    catalog,
+    downloadCatalog
   } from '$lib/stores/curated';
   import { notice } from '$lib/stores/ops';
   import { pendingTag, browseView } from '$lib/stores/discover';
@@ -1086,6 +1088,20 @@
                 You're showing only apps you've added. Search for an app to add it, or turn on
                 “Show curated apps” in Settings → Sources.
               </p>
+            </div>
+          {:else if visibleCategories.length === 0 && $catalog.status === 'downloading'}
+            <div class="filter-empty">
+              <h2>Downloading the catalog…</h2>
+              <p class="muted">Acy's curated apps are fetched from GitHub, not shipped with it.</p>
+            </div>
+          {:else if visibleCategories.length === 0 && ($catalog.status === 'error' || $catalog.status === 'missing')}
+            <div class="filter-empty">
+              <h2>Couldn't download the catalog</h2>
+              <p class="muted">
+                {$catalog.message ||
+                  "Acy's curated apps are fetched from GitHub, and haven't downloaded yet."}
+              </p>
+              <button class="btn" onclick={() => downloadCatalog()}>Try again</button>
             </div>
           {:else}
             <div class={rightClass}>

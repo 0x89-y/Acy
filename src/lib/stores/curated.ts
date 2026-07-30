@@ -1,5 +1,7 @@
-import { writable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
+import * as api from '$lib/api';
 import { getCurated, saveCurated } from '$lib/api';
+import { settings } from '$lib/stores/settings';
 import type { CuratedApp, CuratedFile, SearchHit, Source, Variant } from '$lib/types';
 
 const UNCATEGORIZED = 'uncategorized';
@@ -42,6 +44,76 @@ export async function reloadCurated() {
   } catch (e) {
     console.error('curated reload failed', e);
   }
+}
+
+export type CatalogStatus = 'unknown' | 'ready' | 'missing' | 'downloading' | 'error' | 'off';
+
+export interface CatalogState {
+  status: CatalogStatus;
+  version: number;
+  appCount: number;
+  message: string;
+}
+
+export const catalog = writable<CatalogState>({
+  status: 'unknown',
+  version: 0,
+  appCount: 0,
+  message: ''
+});
+
+export async function loadCatalogStatus(): Promise<void> {
+  try {
+    const st = await api.curatedCatalogStatus();
+    catalog.update((c) => ({
+      ...c,
+      status: st.present ? 'ready' : get(settings).showCuratedApps ? 'missing' : 'off',
+      version: st.version,
+      appCount: st.appCount,
+      message: ''
+    }));
+  } catch (e) {
+    console.error('catalog status failed', e);
+  }
+}
+
+export async function downloadCatalog(): Promise<boolean> {
+  const before = get(catalog);
+  catalog.set({ ...before, status: 'downloading', message: '' });
+  try {
+    const res = await api.updateCuratedCatalog(true);
+    if (res.updated) await reloadCurated();
+    await loadCatalogStatus();
+    return true;
+  } catch (e) {
+    const message = typeof e === 'string' ? e : "Couldn't download the catalog.";
+    const st = await api.curatedCatalogStatus().catch(() => null);
+    catalog.set({
+      status: st?.present ? 'ready' : 'error',
+      version: st?.version ?? before.version,
+      appCount: st?.appCount ?? before.appCount,
+      message
+    });
+    return !!st?.present;
+  }
+}
+
+export async function syncCatalog(): Promise<void> {
+  const s = get(settings);
+  if (!s.setupComplete) return;
+  if (!s.showCuratedApps) {
+    await loadCatalogStatus();
+    return;
+  }
+  try {
+    const st = await api.curatedCatalogStatus();
+    if (st.custom) {
+      catalog.set({ status: 'ready', version: st.version, appCount: st.appCount, message: '' });
+      return;
+    }
+  } catch {
+  }
+  await downloadCatalog();
 }
 
 export type AddResult = 'added' | 'exists' | 'error';

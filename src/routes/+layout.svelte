@@ -22,6 +22,7 @@
   import { loadManagers } from '$lib/stores/managers';
   import { loadUpdates } from '$lib/stores/library';
   import { browseView } from '$lib/stores/discover';
+  import { syncCatalog } from '$lib/stores/curated';
   import { settings } from '$lib/stores/settings';
   import { initTray } from '$lib/stores/tray';
   import { initAppUpdater } from '$lib/stores/updater';
@@ -71,6 +72,7 @@
       await loadManagers();
       if (get(settings).refreshOnStartup) loadUpdates();
     })();
+    syncCatalog();
     const timer = setInterval(() => loadUpdates(true), UPDATE_POLL_MS);
     return () => {
       clearInterval(timer);

@@ -243,7 +243,8 @@
       <div class="form">
         {#if !isCustom}
           <p class="note">
-            Built-in app - your changes are kept as a personal override on top of the catalog.
+            From Acy's catalog - your changes are kept as a personal override, and survive catalog
+            updates.
           </p>
         {/if}
 
@@ -261,7 +262,7 @@
         </label>
         <label class="f">
           <span class="fl">Category</span>
-          <select class="in" bind:value={categoryId} disabled={!isCustom} title={isCustom ? '' : 'Built-in apps stay in their category'}>
+          <select class="in" bind:value={categoryId} disabled={!isCustom} title={isCustom ? '' : 'Catalog apps stay in their category'}>
             {#each file?.categories ?? [] as c (c.id)}
               <option value={c.id}>{c.title || c.id}</option>
             {/each}

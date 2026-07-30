@@ -28,9 +28,6 @@
     "active": true,
     "targets": "all",
     "createUpdaterArtifacts": true,
-    "resources": {
-      "../curated.json": "curated.json"
-    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -41,7 +38,9 @@
   },
   "plugins": {
     "updater": {
-      "endpoints": ["https://0x89-y.xyz/acy/latest.json"],
+      "endpoints": [
+        "https://github.com/0x89-y/Acy/releases/latest/download/latest.json"
+      ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDYwMzBDOTI3M0E0MzU0QjcKUldTM1ZFTTZKOGt3WUErMmNKZ3NiYVIxbGxHd2krZjEwc1JDWFpVNHc5U3JQNDd3KzlqZTlTQm8K"
     }
   }

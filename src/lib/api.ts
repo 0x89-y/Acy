@@ -70,6 +70,11 @@ export const refetchMissingIcons = (
     steamgridKey: steamGridKey || null
   });
 
+export const curatedCatalogStatus = () =>
+  invoke<{ present: boolean; custom: boolean; version: number; appCount: number }>(
+    'curated_catalog_status'
+  );
+
 export const appIconState = (source: Source, id: string) =>
   invoke<{ cached: boolean; deleted: boolean }>('app_icon_state', { source, id });
 

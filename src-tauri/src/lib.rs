@@ -49,6 +49,7 @@ pub fn run() {
             commands::get_curated,
             commands::save_curated,
             commands::update_curated_catalog,
+            commands::curated_catalog_status,
             commands::custom_catalog_info,
             commands::set_custom_catalog,
             commands::clear_custom_catalog,

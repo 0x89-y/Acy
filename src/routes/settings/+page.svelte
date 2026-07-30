@@ -46,7 +46,7 @@
   } from '$lib/stores/settings';
   import { managers, loadManagers } from '$lib/stores/managers';
   import { clearIconCache, iconRefetch, refetchMissingIcons } from '$lib/stores/icons';
-  import { reloadCurated } from '$lib/stores/curated';
+  import { catalog, downloadCatalog, loadCatalogStatus, reloadCurated } from '$lib/stores/curated';
   import { confirmAction } from '$lib/stores/confirm';
   import { enqueue } from '$lib/stores/ops';
   import { activity, type ActivityAction } from '$lib/stores/activity';
@@ -119,7 +119,14 @@
     } catch {
       customCat = null;
     }
+    loadCatalogStatus();
   });
+
+  function toggleCurated(on: boolean) {
+    setShowCuratedApps(on);
+    if (on) downloadCatalog();
+    else loadCatalogStatus();
+  }
 
   async function applyCustomCatalog(source: string, isUrl: boolean) {
     customBusy = true;
@@ -128,6 +135,7 @@
       customCat = await api.setCustomCatalog(source, isUrl);
       customUrl = '';
       await reloadCurated();
+      await loadCatalogStatus();
       customMsg = `Loaded ${customCat.appCount} apps (catalog v${customCat.version}).`;
     } catch (e) {
       customMsg = typeof e === 'string' ? e : 'Could not load that catalog.';
@@ -156,6 +164,7 @@
       await api.clearCustomCatalog();
       customCat = null;
       await reloadCurated();
+      await loadCatalogStatus();
       customMsg = 'Reverted to the official catalog.';
     } catch (e) {
       customMsg = typeof e === 'string' ? e : 'Could not remove the custom catalog.';
@@ -192,6 +201,7 @@
     try {
       const res = await api.updateCuratedCatalog(true);
       if (res.updated) await reloadCurated();
+      await loadCatalogStatus();
       catalogMsg = res.message;
     } catch (e) {
       catalogMsg = typeof e === 'string' ? e : 'Catalog update failed.';
@@ -556,16 +566,36 @@
         </div>
         <div class="opt-list">
           <label class="opt-row">
-            <span class="opt-label">Show curated apps</span>
+            <span class="opt-meta">
+              <span class="opt-label">Show curated apps</span>
+              <span class="opt-desc muted">
+                {#if $catalog.status === 'downloading'}
+                  Downloading Acy's app catalog…
+                {:else if $catalog.status === 'error'}
+                  {$catalog.message}
+                {:else if customCat}
+                  Using your own catalog (below).
+                {:else if $settings.showCuratedApps && $catalog.status === 'ready'}
+                  {$catalog.appCount} apps · catalog v{$catalog.version}
+                {:else}
+                  Downloads Acy's app catalog from GitHub.
+                {/if}
+              </span>
+            </span>
             <span class="switch">
               <input
                 type="checkbox"
                 checked={$settings.showCuratedApps}
-                onchange={(e) => setShowCuratedApps(e.currentTarget.checked)}
+                onchange={(e) => toggleCurated(e.currentTarget.checked)}
               />
               <span class="slider"></span>
             </span>
           </label>
+          {#if $settings.showCuratedApps && $catalog.status === 'error'}
+            <div class="seg-actions">
+              <button class="seg-act" onclick={() => downloadCatalog()}>Try again</button>
+            </div>
+          {/if}
         </div>
         {#if catalogPhase === 'available'}
           <div class="icon-actions">
@@ -708,7 +738,7 @@
         <p class="about muted">License: <span class="mono">MIT</span></p>
         <p class="about">
           <a class="link" href="https://github.com/0x89-y" target="_blank" rel="noreferrer noopener">
-            github.com/0x89-y
+            GitHub
           </a>
         </p>
       </section>
@@ -1173,6 +1203,15 @@
     font-size: 0.9rem;
     font-weight: 500;
     min-width: 0;
+  }
+  .opt-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .opt-desc {
+    font-size: 0.76rem;
   }
   .key-row {
     display: flex;

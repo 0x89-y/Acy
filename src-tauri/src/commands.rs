@@ -37,6 +37,11 @@ pub async fn save_curated(app: AppHandle, file: CuratedFile) -> Result<(), Strin
 }
 
 #[tauri::command]
+pub async fn curated_catalog_status(app: AppHandle) -> curated::CatalogStatus {
+    curated::status(&app)
+}
+
+#[tauri::command]
 pub async fn update_curated_catalog(
     app: AppHandle,
     apply: bool,

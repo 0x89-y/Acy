@@ -13,6 +13,7 @@
     type ThemeMode
   } from '$lib/stores/settings';
   import { managers, loadManagers } from '$lib/stores/managers';
+  import { catalog, downloadCatalog, loadCatalogStatus } from '$lib/stores/curated';
   import { enqueue } from '$lib/stores/ops';
   import WindowControls from './WindowControls.svelte';
   import * as api from '$lib/api';
@@ -44,7 +45,15 @@
 
   onMount(() => {
     loadManagers();
+    if ($settings.showCuratedApps) downloadCatalog();
+    else loadCatalogStatus();
   });
+
+  function toggleCurated(on: boolean) {
+    setShowCuratedApps(on);
+    if (on) downloadCatalog();
+    else loadCatalogStatus();
+  }
 
   function statusOf(source: Source) {
     return $managers.find((m) => m.source === source);
@@ -170,16 +179,34 @@
         <h2>Curated catalog</h2>
         <div class="opt-list">
           <label class="opt-row">
-            <span class="opt-label">Show curated apps (the built-in catalog)</span>
+            <span class="opt-meta">
+              <span class="opt-label">Show curated apps</span>
+              <span class="opt-desc muted">
+                {#if $catalog.status === 'downloading'}
+                  Downloading Acy's app catalog…
+                {:else if $catalog.status === 'error'}
+                  {$catalog.message}
+                {:else if $settings.showCuratedApps && $catalog.status === 'ready'}
+                  {$catalog.appCount} apps · catalog v{$catalog.version}
+                {:else}
+                  Downloads Acy's app catalog from GitHub.
+                {/if}
+              </span>
+            </span>
             <span class="switch">
               <input
                 type="checkbox"
                 checked={$settings.showCuratedApps}
-                onchange={(e) => setShowCuratedApps(e.currentTarget.checked)}
+                onchange={(e) => toggleCurated(e.currentTarget.checked)}
               />
               <span class="slider"></span>
             </span>
           </label>
+          {#if $settings.showCuratedApps && $catalog.status === 'error'}
+            <div class="retry-row">
+              <button class="btn mgr-btn" onclick={() => downloadCatalog()}>Try again</button>
+            </div>
+          {/if}
         </div>
       </section>
     </div>
@@ -318,6 +345,19 @@
     font-size: 0.9rem;
     font-weight: 500;
     min-width: 0;
+  }
+  .opt-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .opt-desc {
+    font-size: 0.76rem;
+  }
+  .retry-row {
+    display: flex;
+    justify-content: flex-start;
   }
 
   .seg {
