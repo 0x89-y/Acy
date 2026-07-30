@@ -70,6 +70,27 @@ export const refetchMissingIcons = (
     steamgridKey: steamGridKey || null
   });
 
+export const appIconState = (source: Source, id: string) =>
+  invoke<{ cached: boolean; deleted: boolean }>('app_icon_state', { source, id });
+
+export const refreshAppIcon = (
+  source: Source,
+  id: string,
+  homepage?: string | null,
+  steamGridKey?: string | null,
+  gameName?: string | null
+) =>
+  invoke<string | null>('refresh_app_icon', {
+    source,
+    id,
+    homepage: homepage ?? null,
+    steamgridKey: steamGridKey || null,
+    gameName: gameName || null
+  });
+
+export const deleteAppIcon = (source: Source, id: string) =>
+  invoke<void>('delete_app_icon', { source, id });
+
 export const uninstall = (source: Source, id: string, opId: string) =>
   invoke<number>('uninstall', { source, id, opId });
 

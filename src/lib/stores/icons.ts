@@ -89,6 +89,27 @@ export function loadIcon(
   return pending;
 }
 
+function setIcon(source: Source, id: string, url: string | null): void {
+  cache.set(`${source}:${id.toLowerCase()}`, Promise.resolve(url));
+  iconCacheVersion.update((n) => n + 1);
+}
+
+export async function redownloadIcon(
+  source: Source,
+  id: string,
+  homepage?: string | null,
+  gameName?: string | null
+): Promise<string | null> {
+  const url = await api.refreshAppIcon(source, id, homepage, get(settings).steamGridKey, gameName);
+  setIcon(source, id, url);
+  return url;
+}
+
+export async function deleteIcon(source: Source, id: string): Promise<void> {
+  await api.deleteAppIcon(source, id);
+  setIcon(source, id, null);
+}
+
 export async function clearIconCache(): Promise<void> {
   cache = new Map();
   try {

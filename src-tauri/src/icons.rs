@@ -15,6 +15,8 @@ static CLIENT: OnceCell<Client> = OnceCell::const_new();
 
 const NO_ICON_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
+const SUPPRESSED: &str = "never";
+
 async fn http_client() -> &'static Client {
     CLIENT
         .get_or_init(|| async {
@@ -69,6 +71,9 @@ fn no_icon_marker_fresh(path: &PathBuf) -> bool {
     let Ok(text) = std::fs::read_to_string(path) else {
         return false;
     };
+    if text.trim() == SUPPRESSED {
+        return true;
+    }
     let Ok(stamp) = text.trim().parse::<u64>() else {
         return false;
     };
@@ -415,6 +420,32 @@ pub fn clear_miss_marker(app: &AppHandle, source: Source, id: &str) {
     if let Some(none) = none_path(app, source, id) {
         let _ = std::fs::remove_file(none);
     }
+}
+
+pub fn is_suppressed(app: &AppHandle, source: Source, id: &str) -> bool {
+    none_path(app, source, id)
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .map(|t| t.trim() == SUPPRESSED)
+        .unwrap_or(false)
+}
+
+pub fn delete_icon(app: &AppHandle, source: Source, id: &str) -> std::io::Result<()> {
+    if let Some(path) = cache_path(app, source, id) {
+        if path.exists() {
+            std::fs::remove_file(&path)?;
+        }
+    }
+    if let Some(none) = none_path(app, source, id) {
+        std::fs::write(none, SUPPRESSED)?;
+    }
+    Ok(())
+}
+
+pub fn forget_icon(app: &AppHandle, source: Source, id: &str) {
+    if let Some(path) = cache_path(app, source, id) {
+        let _ = std::fs::remove_file(path);
+    }
+    clear_miss_marker(app, source, id);
 }
 
 pub fn clear_cache(app: &AppHandle) -> std::io::Result<()> {

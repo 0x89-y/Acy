@@ -1,9 +1,11 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { Plus, Trash2, X } from '@lucide/svelte';
+  import { Download, Plus, Trash2, X } from '@lucide/svelte';
   import * as api from '$lib/api';
   import { reloadCurated } from '$lib/stores/curated';
   import { confirmAction } from '$lib/stores/confirm';
+  import { deleteIcon, loadIcon, redownloadIcon } from '$lib/stores/icons';
+  import { settings } from '$lib/stores/settings';
   import type { CuratedApp, CuratedFile, Source, Variant } from '$lib/types';
 
   let {
@@ -58,6 +60,7 @@
             categoryId = cat.id;
             isCustom = app.custom;
             loaded = true;
+            void loadIconState();
             await tick();
             root?.querySelector<HTMLInputElement>('input')?.focus();
             return;
@@ -69,6 +72,66 @@
       }
     })();
   });
+
+  let iconUrl = $state<string | null>(null);
+  let iconCached = $state(false);
+  let iconDeleted = $state(false);
+  let iconBusy = $state<'' | 'download' | 'delete'>('');
+  let iconMsg = $state('');
+
+  let iconFrom = $derived(icon.trim() || homepage.trim() || null);
+
+  let iconStatus = $derived.by(() => {
+    if (iconBusy === 'download') return 'Downloading…';
+    if (iconBusy === 'delete') return 'Deleting…';
+    if (iconMsg) return iconMsg;
+    if (iconDeleted) return "Deleted - Acy won't fetch it again on its own.";
+    if (iconUrl) return 'Cached on this PC.';
+    return 'Not downloaded yet.';
+  });
+
+  async function loadIconState() {
+    try {
+      const st = await api.appIconState(source, id);
+      iconCached = st.cached;
+      iconDeleted = st.deleted;
+      iconUrl = st.cached ? await loadIcon(source, id, iconFrom, $settings.steamGridKey) : null;
+    } catch {
+    }
+  }
+
+  async function downloadIcon() {
+    if (iconBusy) return;
+    iconBusy = 'download';
+    iconMsg = '';
+    try {
+      const url = await redownloadIcon(source, id, iconFrom);
+      iconUrl = url;
+      iconCached = !!url;
+      iconDeleted = false;
+      if (!url) iconMsg = 'No icon found - try setting an Icon URL or homepage.';
+    } catch (e) {
+      iconMsg = `Download failed: ${e}`;
+    } finally {
+      iconBusy = '';
+    }
+  }
+
+  async function removeIcon() {
+    if (iconBusy) return;
+    iconBusy = 'delete';
+    iconMsg = '';
+    try {
+      await deleteIcon(source, id);
+      iconUrl = null;
+      iconCached = false;
+      iconDeleted = true;
+    } catch (e) {
+      iconMsg = `Delete failed: ${e}`;
+    } finally {
+      iconBusy = '';
+    }
+  }
 
   function addSource() {
     const used = new Set(srcs.map((s) => s.source));
@@ -232,6 +295,39 @@
               <span class="fl">Icon URL</span>
               <input class="in" placeholder="optional" bind:value={icon} />
             </label>
+            <div class="f">
+              <span class="fl">Icon</span>
+              <div class="icon-row">
+                <div class="icon-preview">
+                  {#if iconUrl}
+                    <img src={iconUrl} alt="" />
+                  {:else}
+                    <span class="ph">{((name || id).trim()[0] ?? '?').toUpperCase()}</span>
+                  {/if}
+                </div>
+                <div class="icon-side">
+                  <div class="icon-actions">
+                    <button
+                      class="btn btn-ghost"
+                      onclick={downloadIcon}
+                      disabled={!!iconBusy}
+                      title="Fetch from the Icon URL above, or the homepage"
+                    >
+                      <Download size={14} />
+                      {iconUrl || iconCached ? 'Re-download' : 'Download'}
+                    </button>
+                    <button
+                      class="btn btn-ghost danger"
+                      onclick={removeIcon}
+                      disabled={!!iconBusy || (!iconUrl && !iconCached)}
+                    >
+                      <Trash2 size={14} /> Delete
+                    </button>
+                  </div>
+                  <span class="icon-status">{iconStatus}</span>
+                </div>
+              </div>
+            </div>
             <label class="f">
               <span class="fl">Donate URL</span>
               <input class="in" placeholder="optional" bind:value={donate} />
@@ -372,6 +468,54 @@
   }
   .in:disabled {
     opacity: 0.6;
+  }
+  .icon-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 2px;
+  }
+  .icon-preview {
+    flex: 0 0 auto;
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 28%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .icon-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 5px;
+  }
+  .icon-preview .ph {
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+  .icon-side {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .icon-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .icon-actions .btn {
+    font-size: 0.8rem;
+    padding: 5px 9px;
+  }
+  .icon-status {
+    font-size: 0.74rem;
+    color: var(--text-muted);
   }
   .icon-btn {
     display: inline-flex;

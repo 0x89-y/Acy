@@ -402,6 +402,39 @@ pub async fn clear_icon_cache(app: AppHandle) -> Result<(), String> {
     crate::icons::clear_cache(&app).map_err(|e| e.to_string())
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IconState {
+    cached: bool,
+    deleted: bool,
+}
+
+#[tauri::command]
+pub async fn app_icon_state(app: AppHandle, source: Source, id: String) -> IconState {
+    IconState {
+        cached: crate::icons::has_icon(&app, source, &id),
+        deleted: crate::icons::is_suppressed(&app, source, &id),
+    }
+}
+
+#[tauri::command]
+pub async fn refresh_app_icon(
+    app: AppHandle,
+    source: Source,
+    id: String,
+    homepage: Option<String>,
+    steamgrid_key: Option<String>,
+    game_name: Option<String>,
+) -> Option<String> {
+    crate::icons::forget_icon(&app, source, &id);
+    crate::icons::get_icon(&app, source, id, homepage, steamgrid_key, game_name).await
+}
+
+#[tauri::command]
+pub async fn delete_app_icon(app: AppHandle, source: Source, id: String) -> Result<(), String> {
+    crate::icons::delete_icon(&app, source, &id).map_err(|e| e.to_string())
+}
+
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IconItem {
@@ -433,7 +466,10 @@ pub async fn refetch_missing_icons(
 ) -> IconRefetch {
     let todo: Vec<IconItem> = items
         .into_iter()
-        .filter(|it| !crate::icons::has_icon(&app, it.source, &it.id))
+        .filter(|it| {
+            !crate::icons::has_icon(&app, it.source, &it.id)
+                && !crate::icons::is_suppressed(&app, it.source, &it.id)
+        })
         .collect();
     let total = todo.len();
 
