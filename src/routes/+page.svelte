@@ -144,25 +144,20 @@
       : installedSorted.filter((p) => bucketKey(p) === libSelection)
   );
 
-  let catalogInfo = $derived.by(() => {
+  let catalogDesc = $derived.by(() => {
     const desc = new Map<string, string>();
-    const tags = new Map<string, string[]>();
     const k = (s: Source, i: string) => `${s}:${i.toLowerCase()}`;
     for (const cat of curated?.categories ?? []) {
       for (const app of cat.apps) {
-        const set = (s: Source, i: string) => {
-          if (app.description) desc.set(k(s, i), app.description);
-          if (app.tags?.length) tags.set(k(s, i), app.tags);
-        };
-        set(app.source, app.id);
-        for (const alt of app.alternates ?? []) set(alt.source, alt.id);
+        if (!app.description) continue;
+        desc.set(k(app.source, app.id), app.description);
+        for (const alt of app.alternates ?? []) desc.set(k(alt.source, alt.id), app.description);
       }
     }
-    return { desc, tags };
+    return desc;
   });
   const descFor = (p: Package) =>
-    catalogInfo.desc.get(hideKey(p)) ?? `${p.id}${p.version ? ` · ${p.version}` : ''}`;
-  const tagsFor = (p: Package) => catalogInfo.tags.get(hideKey(p)) ?? [];
+    catalogDesc.get(hideKey(p)) ?? `${p.id}${p.version ? ` · ${p.version}` : ''}`;
 
   let managedByName = $derived.by(() => {
     const m = new Map<string, Set<Source>>();
@@ -795,8 +790,6 @@
             variants={vs}
             installed={anyInstalled(vs)}
             homepage={app.icon ?? app.homepage}
-            tags={app.tags ?? []}
-            allowPick
             layout={rowLayout}
             highlight={trimmed}
             backTo={searchBackTo}
@@ -994,7 +987,7 @@
                     variants={[{ source: p.source, id: p.id }]}
                     homepage={p.homepage}
                     gameName={bucketKey(p) === 'games' ? p.name : null}
-                    tags={tagsFor(p)}
+                    showSources
                     layout={rowLayout}
                     backTo="/?view=library"
                     menu={installedMenu(p)}
@@ -1111,8 +1104,6 @@
                   variants={vs}
                   installed={anyInstalled(vs)}
                   homepage={app.icon ?? app.homepage}
-                  tags={app.tags ?? []}
-                  allowPick
                   layout={rowLayout}
                   selectable={selectMode && !anyInstalled(vs)}
                   selected={selectedApps.has(appKey(app))}

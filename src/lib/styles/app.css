@@ -262,6 +262,18 @@ button {
   filter: brightness(1.05);
 }
 
+/* Neutral at rest, accent on hover: for actions repeated on every card. */
+.btn-quiet {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.btn-quiet:hover:not(:disabled) {
+  background: var(--accent-fill);
+  border-color: var(--accent-hover);
+  color: var(--accent-contrast);
+}
+
 .btn-ghost {
   background: transparent;
   border-color: transparent;

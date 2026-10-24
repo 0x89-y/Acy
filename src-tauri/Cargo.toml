@@ -1,6 +1,6 @@
 [package]
 name = "acy"
-version = "0.9.2"
+version = "0.9.3"
 description = "A Windows app store for winget, Scoop, Chocolatey and the Microsoft Store"
 authors = ["0x89-y"]
 edition = "2021"

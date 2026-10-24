@@ -14,6 +14,13 @@ export interface Package {
   homepage: string | null;
   description: string | null;
   installed: boolean;
+  // Only filled by app_info (the detail page); omitted elsewhere.
+  author?: string;
+  publisherUrl?: string;
+  license?: string;
+  licenseUrl?: string;
+  releaseNotes?: string;
+  releaseNotesUrl?: string;
 }
 
 export interface SearchHit {

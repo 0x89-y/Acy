@@ -319,6 +319,10 @@ fn strip_ansi(line: &str) -> String {
 fn sanitize(out: &str) -> Vec<String> {
     out.split('\n')
         .map(|raw| {
+            // winget ends lines with CRLF; drop that \r first, or the spinner
+            // handling below (keep only what follows the last \r) would turn
+            // every line into an empty string.
+            let raw = raw.strip_suffix('\r').unwrap_or(raw);
             let visible = raw.rsplit('\r').next().unwrap_or(raw);
             strip_ansi(visible).trim_end().to_string()
         })
@@ -397,38 +401,124 @@ pub(super) fn parse_table(out: &str) -> Vec<std::collections::HashMap<String, St
     rows
 }
 
+#[derive(Clone, Copy)]
+enum ShowField {
+    Version,
+    Publisher,
+    PublisherUrl,
+    Author,
+    Description,
+    Homepage,
+    License,
+    LicenseUrl,
+    ReleaseNotes,
+    ReleaseNotesUrl,
+}
+
+// `winget show` labels are translated into the Windows display language, so
+// match every translation winget ships. Taken from winget-cli's
+// Localization/Resources/*/winget.resw (ShowLabel* keys, trailing colon and
+// padding removed): en, de, es, fr, it, ja, ko, pt-BR, ru, zh-CN, zh-TW.
+const SHOW_LABELS: &[(ShowField, &[&str])] = &[
+    (ShowField::Version, &["Version", "Versión", "Versione", "バージョン", "버전", "Versão", "Версия", "版本"]),
+    (ShowField::Publisher, &["Publisher", "Herausgeber", "Editor", "Editore", "公開元", "게시자", "Fornecedor", "Издатель", "发布者", "發行者"]),
+    (ShowField::PublisherUrl, &["Publisher Url", "Herausgeber-URL", "Dirección URL del editor", "ID de l’Editeur", "URL editore", "発行元 URL", "게시자 URL", "URL do Fornecedor", "URL-адрес издателя", "发布服务器 URL", "發行者 URL"]),
+    (ShowField::Author, &["Author", "Autor", "Auteur", "Autore", "作成者", "만든 이", "Автор", "作者"]),
+    (ShowField::Description, &["Description", "Beschreibung", "Descripción", "Descrizione", "説明", "설명", "Descrição", "Описание", "描述"]),
+    (ShowField::Homepage, &["Homepage", "Startseite", "Página principal", "Page d’accueil", "Home page", "ホーム ページ", "홈페이지", "Página inicial", "Домашняя страница", "主页", "首頁"]),
+    (ShowField::License, &["License", "Lizenz", "Licencia", "Licence", "Licenza", "ライセンス", "라이선스", "Licença", "Лицензия", "许可证", "授權"]),
+    (ShowField::LicenseUrl, &["License Url", "Lizenz-URL", "Dirección URL de la licencia", "URL de la licence", "URL licenza", "ライセンス URL", "라이선스 URL", "URL da licença", "URL-адрес лицензии", "许可证 URL", "授權 URL"]),
+    (ShowField::ReleaseNotes, &["Release Notes", "Versionshinweise", "Notas de la versión", "Notes de publication", "Note sulla versione", "リリース ノート", "릴리스 정보", "Notas de Versão", "Заметки о выпуске", "发行说明", "版本資訊"]),
+    (ShowField::ReleaseNotesUrl, &["Release Notes Url", "URL der Versionshinweise", "Dirección URL de notas de la versión", "URL des notes de publication", "URL note sulla versione", "リリース ノート URL", "릴리스 정보 URL", "URL de Notas de Versão", "URL-адрес заметок о выпуске", "发行说明 URL", "版本資訊 Url"]),
+];
+
+const MAX_RELEASE_NOTES: usize = 4000;
+
+fn show_field(label: &str) -> Option<ShowField> {
+    let label = label.trim();
+    SHOW_LABELS
+        .iter()
+        .find(|(_, names)| names.iter().any(|n| n.eq_ignore_ascii_case(label)))
+        .map(|(f, _)| *f)
+}
+
+// "Label: value" - Chinese output uses the full-width colon.
+fn split_label(line: &str) -> Option<(&str, &str)> {
+    let at = line.find([':', '：'])?;
+    let colon_len = line[at..].chars().next()?.len_utf8();
+    Some((&line[..at], &line[at + colon_len..]))
+}
+
+fn apply_show_field(pkg: &mut Package, field: ShowField, value: String) {
+    let d = &mut pkg.details;
+    match field {
+        ShowField::Version => pkg.version = Some(value),
+        ShowField::Publisher => pkg.publisher = Some(value),
+        ShowField::PublisherUrl => d.publisher_url = Some(value),
+        ShowField::Author => d.author = Some(value),
+        ShowField::Description => pkg.description = Some(value),
+        ShowField::Homepage => pkg.homepage = Some(value),
+        ShowField::License => d.license = Some(value),
+        ShowField::LicenseUrl => d.license_url = Some(value),
+        ShowField::ReleaseNotes => {
+            d.release_notes = Some(if value.chars().count() > MAX_RELEASE_NOTES {
+                let cut: String = value.chars().take(MAX_RELEASE_NOTES).collect();
+                format!("{}…", cut.trim_end())
+            } else {
+                value
+            })
+        }
+        ShowField::ReleaseNotesUrl => d.release_notes_url = Some(value),
+    }
+}
+
 pub(super) fn parse_show(out: &str, id: &str) -> Option<Package> {
     let mut pkg = Package::new(id, id, Source::Winget);
     let mut found = false;
-    for line in sanitize(out) {
-        let trimmed = line.trim();
-        if let Some(rest) = trimmed.strip_prefix("Found ") {
-            if let Some(end) = rest.rfind(" [") {
-                pkg.name = rest[..end].trim().to_string();
+    // A field whose value may continue on the following indented lines
+    // (Description, Release Notes); anything under an unknown label is skipped.
+    let mut current: Option<(ShowField, Vec<String>)> = None;
+    let id_suffix = format!("[{id}]");
+
+    let mut flush = |pkg: &mut Package, current: &mut Option<(ShowField, Vec<String>)>| {
+        if let Some((field, lines)) = current.take() {
+            let value = lines.join("\n").trim().to_string();
+            if !value.is_empty() {
+                apply_show_field(pkg, field, value);
                 found = true;
+            }
+        }
+    };
+
+    for line in sanitize(out) {
+        if line.trim().is_empty() {
+            continue;
+        }
+        if line.starts_with(char::is_whitespace) {
+            if let Some((_, lines)) = current.as_mut() {
+                lines.push(line.trim().to_string());
             }
             continue;
         }
-        if let Some((key, value)) = trimmed.split_once(':') {
-            let value = value.trim().to_string();
-            if value.is_empty() {
-                continue;
+        flush(&mut pkg, &mut current);
+        let trimmed = line.trim();
+        // "Found <name> [<id>]" in whatever language: one word, then the name.
+        let head_end = trimmed.len().saturating_sub(id_suffix.len());
+        if trimmed.is_char_boundary(head_end) && trimmed[head_end..].eq_ignore_ascii_case(&id_suffix) {
+            if let Some((_, name)) = trimmed[..head_end].trim().split_once(char::is_whitespace) {
+                pkg.name = name.trim().to_string();
             }
-            match key.trim() {
-                "Version" => pkg.version = Some(value),
-                "Publisher" => pkg.publisher = Some(value),
-                "Homepage" => pkg.homepage = Some(value),
-                "Description" => pkg.description = Some(value),
-                _ => {}
+            continue;
+        }
+        if let Some((label, value)) = split_label(trimmed) {
+            if let Some(field) = show_field(label) {
+                current = Some((field, vec![value.trim().to_string()]));
             }
-            found = true;
         }
     }
-    if found {
-        Some(pkg)
-    } else {
-        None
-    }
+    flush(&mut pkg, &mut current);
+
+    found.then_some(pkg)
 }
 
 #[cfg(test)]
@@ -472,6 +562,16 @@ Brave              Brave.Brave         1.66.110  winget
     }
 
     #[test]
+    fn parses_crlf_table() {
+        let out = "Name    Id         Version  Source\r\n\
+                   ----------------------------------\r\n\
+                   Git     Git.Git    2.45.0   winget\r\n";
+        let pkgs = Winget::map_cli_table(out, false);
+        assert_eq!(pkgs.len(), 1);
+        assert_eq!(pkgs[0].id, "Git.Git");
+    }
+
+    #[test]
     fn parses_upgrade_table_with_available() {
         let out = "\
 Name        Id              Version   Available  Source
@@ -499,5 +599,63 @@ Git         Git.Git         2.44.0    2.45.0     winget
         let pkg = parse_show(out, "Mozilla.Firefox").unwrap();
         assert_eq!(pkg.name, "Mozilla Firefox");
         assert_eq!(pkg.homepage.as_deref(), Some("https://www.mozilla.org"));
+    }
+
+    #[test]
+    fn parses_german_show_output() {
+        // Real `winget show` output on German Windows (trimmed), CRLF and all,
+        // with the spinner winget prints before it.
+        let out = [
+            "\r-\r\\\r|\r \rGefunden Alacritty [Alacritty.Alacritty]",
+            "Version: 0.17.0",
+            "Herausgeber: Alacritty",
+            "Herausgeber-URL: https://github.com/alacritty/alacritty",
+            "Autor: Alacritty",
+            "Moniker: alacritty",
+            "Beschreibung: Alacritty is a free and open-source GPU accelerated terminal emulator.",
+            "Startseite: https://github.com/alacritty/alacritty",
+            "Lizenz: Apache-2.0",
+            "Lizenz-URL: https://github.com/alacritty/alacritty/blob/HEAD/LICENSE-APACHE",
+            "Versionshinweise:",
+            "  Packaging",
+            "  - Fixed invalid logo SVG attributes",
+            "URL der Versionshinweise: https://github.com/alacritty/alacritty/releases/tag/v0.17.0",
+            "Dokumentation:",
+            "  Wiki: https://github.com/alacritty/alacritty/wiki",
+            "Installationsprogramm:",
+            "  Installertyp: wix",
+        ]
+        .join("\r\n");
+        let pkg = parse_show(&out, "Alacritty.Alacritty").unwrap();
+        let d = &pkg.details;
+        assert_eq!(pkg.name, "Alacritty");
+        assert_eq!(pkg.version.as_deref(), Some("0.17.0"));
+        assert_eq!(pkg.publisher.as_deref(), Some("Alacritty"));
+        assert_eq!(pkg.homepage.as_deref(), Some("https://github.com/alacritty/alacritty"));
+        assert!(pkg.description.as_deref().unwrap().starts_with("Alacritty is a free"));
+        assert_eq!(d.author.as_deref(), Some("Alacritty"));
+        assert_eq!(d.license.as_deref(), Some("Apache-2.0"));
+        assert!(d.license_url.as_deref().unwrap().ends_with("LICENSE-APACHE"));
+        assert_eq!(
+            d.release_notes.as_deref(),
+            Some("Packaging\n- Fixed invalid logo SVG attributes")
+        );
+        assert!(d.release_notes_url.as_deref().unwrap().ends_with("v0.17.0"));
+        assert_eq!(d.publisher_url.as_deref(), Some("https://github.com/alacritty/alacritty"));
+    }
+
+    #[test]
+    fn parses_full_width_colon_and_padded_labels() {
+        let out = "已找到 Git [Git.Git]\n版本： 2.45.0\n许可证： GPL-2.0\nVersion : 2.45.0\n";
+        let pkg = parse_show(out, "Git.Git").unwrap();
+        assert_eq!(pkg.name, "Git");
+        assert_eq!(pkg.version.as_deref(), Some("2.45.0"));
+        assert_eq!(pkg.details.license.as_deref(), Some("GPL-2.0"));
+    }
+
+    #[test]
+    fn show_without_known_fields_is_none() {
+        let out = "Es wurde kein Paket gefunden, das den Eingabekriterien entspricht.\n";
+        assert!(parse_show(out, "Nope.Nope").is_none());
     }
 }

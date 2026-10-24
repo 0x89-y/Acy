@@ -147,6 +147,14 @@ impl PackageSource for Scoop {
                     "version" => pkg.version = Some(value),
                     "website" => pkg.homepage = Some(value),
                     "bucket" => pkg.publisher = Some(value),
+                    // e.g. "MIT (https://spdx.org/licenses/MIT.html)"
+                    "license" => match value.split_once(" (") {
+                        Some((name, url)) => {
+                            pkg.details.license = Some(name.to_string());
+                            pkg.details.license_url = Some(url.trim_end_matches(')').to_string());
+                        }
+                        None => pkg.details.license = Some(value),
+                    },
                     _ => {}
                 }
             }

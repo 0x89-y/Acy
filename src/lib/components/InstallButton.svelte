@@ -8,12 +8,15 @@
     id,
     name = id,
     kind = 'install',
+    quiet = false,
     onDone
   }: {
     source: Source;
     id: string;
     name?: string;
     kind?: InstallKind;
+    /** Neutral until hovered - for grids where every card has one. */
+    quiet?: boolean;
     onDone?: () => void;
   } = $props();
 
@@ -26,7 +29,7 @@
     onDone?.();
   }
 
-  let cls = $derived(kind === 'uninstall' ? 'btn' : 'btn btn-accent');
+  let cls = $derived(kind === 'uninstall' ? 'btn' : quiet ? 'btn btn-quiet' : 'btn btn-accent');
 </script>
 
 {#if kind === 'uninstall'}

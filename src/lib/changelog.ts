@@ -7,6 +7,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.9.3',
+    date: '2026-10-24',
+    changes: [
+      'Calmer Discover cards: no tags or package-manager pills, and an Install button that only lights up on hover. The Library keeps its source pills.',
+      'Redesigned app page: a header with publisher, version and install button, then About, What\'s new, Details and "More in" related apps.',
+      'App pages now show the publisher, license, version and release notes from the package manager, for catalog apps too.',
+      'Fixed app details being empty on non-English Windows: all 11 languages winget ships are now understood.',
+      'Fixed winget results coming back empty when the WinGet PowerShell module isn\'t installed.'
+    ]
+  },
+  {
     version: '0.9.2',
     date: '2026-10-24',
     changes: [

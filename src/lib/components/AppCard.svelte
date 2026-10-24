@@ -5,12 +5,10 @@
   import AppIcon from './AppIcon.svelte';
   import SourceBadge from './SourceBadge.svelte';
   import InstallButton from './InstallButton.svelte';
-  import InstallSplitButton from './InstallSplitButton.svelte';
   import { settings } from '$lib/stores/settings';
   import { copyText } from '$lib/clipboard';
   import { runOp, installCommand } from '$lib/install';
   import { openContextMenu, type CtxItem } from '$lib/stores/contextMenu';
-  import { filterByTag } from '$lib/stores/discover';
   import type { Source, Variant } from '$lib/types';
   import type { Snippet } from 'svelte';
 
@@ -21,13 +19,12 @@
     installed = false,
     homepage = null,
     gameName = null,
-    allowPick = false,
+    showSources = false,
     selectable = false,
     selected = false,
     highlight = '',
     layout = 'grid',
     backTo = null,
-    tags = [],
     inList = false,
     ctxExtra = [],
     action,
@@ -42,8 +39,9 @@
     installed?: boolean;
     homepage?: string | null;
     gameName?: string | null;
-    allowPick?: boolean;
-    tags?: string[];
+    /** Show the source/launcher pills (Library). Browsing cards leave the
+     * choice of package manager to the detail page. */
+    showSources?: boolean;
     layout?: 'grid' | 'list';
     selectable?: boolean;
     selected?: boolean;
@@ -141,37 +139,13 @@
         {#each nameParts as p, i (i)}{#if p.hit}<mark>{p.t}</mark>{:else}{p.t}{/if}{/each}
       </div>
       {#if description}<div class="desc muted">{description}</div>{/if}
-      {#if tags.length}
-        <div class="tags">
-          {#each tags.slice(0, 3) as t (t)}
-            <span
-              class="tag"
-              role="button"
-              tabindex="0"
-              title={`Filter Discover by "${t}"`}
-              onclick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                filterByTag(t);
-              }}
-              onkeydown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  filterByTag(t);
-                }
-              }}
-            >
-              {t}
-            </span>
-          {/each}
-        </div>
-      {/if}
     </div>
   </a>
   <div class="foot">
     <div class="badges">
-      {#each variants as v (v.source)}<SourceBadge source={v.source} id={v.id} />{/each}
+      {#if showSources}
+        {#each variants as v (v.source)}<SourceBadge source={v.source} id={v.id} />{/each}
+      {/if}
     </div>
     <div class="foot-right">
       {#if onAddToList && !selectable}
@@ -206,11 +180,9 @@
       {:else if action}
         {@render action({ source: primary.source, id: primary.id, name })}
       {:else if installed}
-        <span class="installed">Installed</span>
-      {:else if allowPick && variants.length > 1}
-        <InstallSplitButton {variants} {name} preferred={$settings.preferredSource} onDone={onChanged} />
+        <span class="installed"><Check size={14} /> Installed</span>
       {:else}
-        <InstallButton source={primary.source} id={primary.id} {name} onDone={onChanged} />
+        <InstallButton source={chosen.source} id={chosen.id} {name} quiet onDone={onChanged} />
       {/if}
     </div>
     </div>
@@ -307,31 +279,6 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
-  .tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-top: 5px;
-  }
-  .tags .tag {
-    font-size: 0.66rem;
-    font-family: var(--font-mono);
-    color: var(--text-muted);
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 1px 7px;
-    white-space: nowrap;
-    cursor: pointer;
-  }
-  .tags .tag:hover {
-    color: var(--accent);
-    border-color: var(--accent);
-  }
-  .app-card.list .tags {
-    flex-wrap: nowrap;
-    overflow: hidden;
-  }
   .foot {
     display: flex;
     align-items: center;
@@ -391,9 +338,14 @@
     flex-shrink: 0;
   }
   .installed {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  .installed :global(svg) {
     color: var(--success);
-    font-weight: 500;
   }
   .selection-action {
     justify-content: flex-end;

@@ -33,6 +33,27 @@ pub struct Package {
     pub homepage: Option<String>,
     pub description: Option<String>,
     pub installed: bool,
+    /// Detail-page fields, only filled by `info` (skipped when empty so the
+    /// installed/search lists stay small).
+    #[serde(default, flatten)]
+    pub details: PackageDetails,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackageDetails {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub publisher_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_notes: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_notes_url: Option<String>,
 }
 
 impl Package {
@@ -48,6 +69,7 @@ impl Package {
             homepage: None,
             description: None,
             installed: false,
+            details: PackageDetails::default(),
         }
     }
 }
