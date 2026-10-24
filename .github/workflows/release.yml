@@ -1,7 +1,11 @@
 # Build, sign and publish a release when a version tag is pushed:
 #
-#   git tag -a v0.9.2 -m "One-line notes for the updater"
-#   git push origin v0.9.2
+#   git tag -a v0.9.3 -F changelog_since_last_build.md
+#   git push origin v0.9.3
+#
+# The tag message is the release notes (GitHub release body and latest.json).
+# The notes file stays local (it's gitignored); -F copies it into the tag, and
+# git's default cleanup drops its "# ..." heading line.
 #
 # Produces the same three assets publish-release.bat stages by hand. The app's
 # updater reads releases/latest/download/latest.json, so publishing the release
