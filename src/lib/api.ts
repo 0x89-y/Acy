@@ -93,7 +93,10 @@ export const refreshAppIcon = (
     gameName: gameName || null
   });
 
-export const deleteAppIcon = (source: Source, id: string) =>
+export const iconCacheStats = () =>
+  invoke<{ icons: number; bytes: number }>('icon_cache_stats');
+
+export const deleteAppIcon =(source: Source, id: string) =>
   invoke<void>('delete_app_icon', { source, id });
 
 export const uninstall = (source: Source, id: string, opId: string) =>
@@ -108,8 +111,6 @@ export const bootstrapManager = (source: Source, opId: string) =>
 export const setUpdateCount = (count: number) => invoke<void>('set_update_count', { count });
 
 export const notify = (title: string, body: string) => invoke<void>('notify', { title, body });
-
-export const pickInstaller = () => invoke<string | null>('pick_installer');
 
 export const scoopBuckets = () => invoke<string[]>('scoop_buckets');
 

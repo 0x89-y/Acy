@@ -4,12 +4,11 @@ version = 4
 
 [[package]]
 name = "acy"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.22.1",
- "minisign-verify",
  "regex",
  "reqwest 0.12.28",
  "serde",

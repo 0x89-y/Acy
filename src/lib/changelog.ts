@@ -7,6 +7,26 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.9.2',
+    date: '2026-10-24',
+    changes: [
+      'The curated catalog is now downloaded from GitHub instead of being shipped with Acy, and refreshes in the background on startup.',
+      'App updates now come from GitHub releases.',
+      'Per-app icon controls (More options → Icon): preview, re-download or delete an app\'s icon. Deleted icons stay deleted.',
+      'Steam, Epic, Riot and Rockstar apps now show their launcher instead of "winget", including games in custom Steam library folders.',
+      'Settings → App icons now shows how many icons are cached and how much space they use.',
+      'Removed the "Local file" source: most installers need admin rights and couldn\'t start from Acy.',
+      'Fixed a security issue where a curly apostrophe (’) in a package id or search could break out of Scoop/WinGet commands.',
+      'Fixed installs that could hang forever on non-English Windows (e.g. Chocolatey).',
+      'Fixed the Library sometimes staying out of date right after an install.',
+      'Fixed a crash when fetching icons from some non-English websites, and two similar app ids sharing one icon.',
+      'Fixed app pages failing to open for ids containing "%".',
+      'The "Updates available" notification no longer repeats on every launch.',
+      '"Copy command" now quotes ids that need it.',
+      'Hardening: a Content Security Policy, size-limited downloads, icons never fetched from local-network addresses, and crash-safe catalog saves.'
+    ]
+  },
+  {
     version: '0.9.1',
     date: '2026-07-18',
     changes: [

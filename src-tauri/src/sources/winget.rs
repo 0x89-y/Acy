@@ -1,6 +1,6 @@
 use super::PackageSource;
 use crate::model::{ManagerStatus, Package, Source};
-use crate::runner;
+use crate::runner::{self, ps_quote as quote};
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicI8, Ordering};
 
@@ -12,10 +12,6 @@ static MODULE_STATE: AtomicI8 = AtomicI8::new(0);
 
 fn s(v: &str) -> String {
     v.to_string()
-}
-
-fn quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "''"))
 }
 
 async fn module_available() -> bool {

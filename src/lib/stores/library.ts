@@ -1,4 +1,4 @@
-import { writable, derived, get } from 'svelte/store';
+import { writable, derived, get, type Readable } from 'svelte/store';
 import * as api from '$lib/api';
 import type { Package, Source } from '$lib/types';
 import { enabledSources, updatesCount } from './managers';
@@ -59,12 +59,37 @@ function readChecked(): number | null {
 }
 export const lastChecked = writable<number | null>(readChecked());
 
+// Resolves once `flag` reads false.
+function whenIdle(flag: Readable<boolean>): Promise<void> {
+  return new Promise((resolve) => {
+    let idle = false;
+    let unsub = () => {};
+    unsub = flag.subscribe((busy) => {
+      if (busy) return;
+      idle = true;
+      resolve();
+      unsub();
+    });
+    if (idle) unsub();
+  });
+}
+
 let installedSig = '';
+let installedRerun: Promise<void> | null = null;
 
 export async function loadInstalled(force = false): Promise<void> {
   const sources = get(enabledSources);
   const current = sig(sources);
-  if (get(installedLoading)) return;
+  if (get(installedLoading)) {
+    // A forced refresh (e.g. after an install) can't just be dropped: the load
+    // already running may have started before the change. Run again after it.
+    if (!force) return;
+    installedRerun ??= whenIdle(installedLoading).then(() => {
+      installedRerun = null;
+      return loadInstalled(true);
+    });
+    return installedRerun;
+  }
   if (!force && get(installedReady) && current === installedSig) return;
 
   if (sources.includes('winget') && (force || !get(installedReady))) {
@@ -106,6 +131,7 @@ export const updatesError = writable<string | null>(null);
 export const updatesReady = writable(cachedUpdates !== null);
 
 let updatesSig = '';
+let updatesRerun: Promise<void> | null = null;
 
 export const actionableUpdates = derived(
   [updates, ignoredUpdateKeys],
@@ -123,7 +149,14 @@ export async function loadUpdates(force = false): Promise<void> {
   const sources = get(enabledSources);
   const current = sig(sources);
   if (!force && get(updatesReady) && current === updatesSig) return;
-  if (get(updatesLoading)) return;
+  if (get(updatesLoading)) {
+    if (!force) return;
+    updatesRerun ??= whenIdle(updatesLoading).then(() => {
+      updatesRerun = null;
+      return loadUpdates(true);
+    });
+    return updatesRerun;
+  }
   if (!force && !get(settings).refreshOnStartup) return;
 
   updatesLoading.set(true);

@@ -52,7 +52,15 @@ export const VERBS: Record<InstallKind, string> = {
   uninstall: 'Uninstall'
 };
 
-export function installCommand(source: Source, id: string): string | null {
+// Quote for pasting into either cmd or PowerShell (double quotes work in both).
+function shellArg(value: string): string {
+  return /[\s&|<>^;,()'"`$%]/.test(value) ? `"${value}"` : value;
+}
+
+export function installCommand(source: Source, rawId: string): string | null {
+  // ARP\… and MSIX\… ids are local install records; there's nothing to install.
+  if (/^(ARP|MSIX)\\/i.test(rawId)) return null;
+  const id = shellArg(rawId);
   switch (source) {
     case 'winget':
       return `winget install --id ${id} -e`;
@@ -77,23 +85,6 @@ export async function runOp(
 
   if (source === 'scoop' && kind === 'install' && !(await ensureScoopBucket(id, name))) {
     return false;
-  }
-
-  if (source === 'local') {
-    if (kind !== 'install') return false;
-    let path = id;
-    if (!path) {
-      const picked = await api.pickInstaller();
-      if (!picked) return false;
-      path = picked;
-    }
-    return enqueue(
-      `Install ${name}`,
-      (opId) => api.install('local', path, opId),
-      undefined,
-      undefined,
-      { action: 'install', name, source }
-    );
   }
 
   const idLower = id.toLowerCase();

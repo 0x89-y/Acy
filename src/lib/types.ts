@@ -1,7 +1,7 @@
 
 export type Manager = 'winget' | 'scoop' | 'choco' | 'msstore';
 
-export type Source = Manager | 'local';
+export type Source = Manager;
 
 export interface Package {
   id: string;

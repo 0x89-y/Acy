@@ -132,7 +132,7 @@ async fn collect(set: &mut JoinSet<Result<Vec<Package>, String>>) -> (Vec<Packag
             Ok(Err(_)) | Err(_) => errored = true,
         }
     }
-    all.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    all.sort_by_cached_key(|p| p.name.to_lowercase());
     (all, errored)
 }
 
@@ -247,9 +247,6 @@ pub async fn bootstrap_manager(
         ),
         Source::Msstore => {
             return Err("The Microsoft Store source is part of winget; install winget to use it.".into());
-        }
-        Source::Local => {
-            return Err("The local source has nothing to set up; pick an installer file instead.".into());
         }
     };
     let result = runner::stream(&app, &op_id, OP_EVENT, &program, &args)
@@ -375,22 +372,6 @@ pub async fn scoop_cleanup(app: AppHandle, op_id: String) -> Result<i32, String>
 }
 
 #[tauri::command]
-pub async fn pick_installer(app: AppHandle) -> Option<String> {
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    app.dialog()
-        .file()
-        .add_filter("Installer", &["exe", "msi"])
-        .pick_file(move |path| {
-            let _ = tx.send(path);
-        });
-    rx.await
-        .ok()
-        .flatten()
-        .and_then(|fp| fp.into_path().ok())
-        .map(|p| p.to_string_lossy().into_owned())
-}
-
-#[tauri::command]
 pub async fn app_icon(
     app: AppHandle,
     source: Source,
@@ -405,6 +386,11 @@ pub async fn app_icon(
 #[tauri::command]
 pub async fn clear_icon_cache(app: AppHandle) -> Result<(), String> {
     crate::icons::clear_cache(&app).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn icon_cache_stats(app: AppHandle) -> crate::icons::CacheStats {
+    crate::icons::cache_stats(&app)
 }
 
 #[derive(serde::Serialize)]

@@ -33,6 +33,10 @@
   --choco: #92531f;
   --msstore: #7c3aed;
   --local: #64748b;
+  --steam: #334155;
+  --epic: #18181b;
+  --riot: #c8323a;
+  --rockstar: #a16207;
 }
 
 [data-theme='dark'] {
@@ -60,6 +64,10 @@
   --choco: #cf9a64;
   --msstore: #a78bfa;
   --local: #94a3b8;
+  --steam: #d4d4d8;
+  --epic: #fafafa;
+  --riot: #ff6b6e;
+  --rockstar: #fcaf17;
 }
 
 [data-accent='purple'] {

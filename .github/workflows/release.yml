@@ -1,0 +1,134 @@
+# Build, sign and publish a release when a version tag is pushed:
+#
+#   git tag -a v0.9.2 -m "One-line notes for the updater"
+#   git push origin v0.9.2
+#
+# Produces the same three assets publish-release.bat stages by hand. The app's
+# updater reads releases/latest/download/latest.json, so publishing the release
+# is what ships the update to existing installs.
+#
+# Needs repo secrets (Settings -> Secrets and variables -> Actions):
+#   TAURI_SIGNING_PRIVATE_KEY           contents of the updater key file
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  its password (leave empty if none)
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # actions/checkout doesn't fetch the annotated tag object, which holds
+      # the release notes (the tag message).
+      - name: Fetch tag annotation
+        run: git fetch --force origin "refs/tags/${env:TAG}:refs/tags/${env:TAG}"
+
+      - name: Check the tag matches the app version
+        id: version
+        run: |
+          $tag = $env:TAG
+          $ver = $tag.TrimStart('v')
+          $conf = (Get-Content -Raw src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $pkg = (Get-Content -Raw package.json | ConvertFrom-Json).version
+          $cargo = (Select-String -Path src-tauri/Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"' |
+                    Select-Object -First 1).Matches[0].Groups[1].Value
+          $bad = @{ 'tauri.conf.json' = $conf; 'package.json' = $pkg; 'Cargo.toml' = $cargo }.GetEnumerator() |
+                 Where-Object { $_.Value -ne $ver }
+          if ($bad) {
+            $bad | ForEach-Object { Write-Host "::error::$($_.Key) has version $($_.Value), tag is $tag" }
+            exit 1
+          }
+          "version=$ver" >> $env:GITHUB_OUTPUT
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - name: Build and sign the installer
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build --bundles nsis
+
+      - name: Stage assets and write latest.json
+        run: |
+          $ver = '${{ steps.version.outputs.version }}'
+          $tag = $env:TAG
+          $bundle = "src-tauri/target/release/bundle/nsis"
+          $setup = "$bundle/Acy_${ver}_x64-setup.exe"
+          if (-not (Test-Path "$setup.sig")) { Write-Host "::error::No updater signature at $setup.sig"; exit 1 }
+
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item $setup release/Acy-windows-x64-setup.exe
+          Copy-Item "$setup.sig" release/Acy-windows-x64-setup.exe.sig
+
+          # Notes: the annotated tag's message; a lightweight tag gets a default.
+          # git prints UTF-8; without this PowerShell decodes it with the OEM
+          # code page and mangles anything non-ASCII.
+          [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+          $notes = ''
+          if ((git cat-file -t "refs/tags/$tag") -eq 'tag') {
+            $notes = ((git for-each-ref "refs/tags/$tag" --format='%(contents)') -join "`n").Trim()
+          }
+          if (-not $notes) { $notes = "Acy $ver. See Settings for the full changelog." }
+          [IO.File]::WriteAllText("$PWD/release/notes.md", $notes)
+
+          # BOM-less UTF-8: the updater's serde_json rejects a leading BOM.
+          $manifest = [ordered]@{
+            version   = $ver
+            notes     = $notes
+            pub_date  = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+            platforms = [ordered]@{
+              'windows-x86_64' = [ordered]@{
+                signature = (Get-Content -Raw "$setup.sig").Trim()
+                url       = 'https://github.com/0x89-y/Acy/releases/latest/download/Acy-windows-x64-setup.exe'
+              }
+            }
+          }
+          [IO.File]::WriteAllText("$PWD/release/latest.json",
+            ($manifest | ConvertTo-Json -Depth 5), [Text.UTF8Encoding]::new($false))
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:TAG
+          $ghArgs = @(
+            'release', 'create', $tag,
+            'release/Acy-windows-x64-setup.exe',
+            'release/Acy-windows-x64-setup.exe.sig',
+            'release/latest.json',
+            '--title', "Acy ${{ steps.version.outputs.version }}",
+            '--notes-file', 'release/notes.md',
+            '--verify-tag'
+          )
+          # Pre-release tags (v1.0.0-beta.1) don't become releases/latest, so
+          # existing installs won't auto-update to them.
+          if ($tag -match '-') { $ghArgs += '--prerelease' }
+          gh @ghArgs

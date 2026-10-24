@@ -1,5 +1,5 @@
 use crate::model::Source;
-use base64::{engine::general_purpose::STANDARD, Engine};
+use crate::net::read_capped;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -51,9 +51,9 @@ pub struct CuratedFile {
 }
 
 const CATALOG_URL: &str = "https://raw.githubusercontent.com/0x89-y/Acy/main/curated.json";
-const CATALOG_SIG_URL: &str = "https://raw.githubusercontent.com/0x89-y/Acy/main/curated.json.sig";
 
-const CATALOG_PUBKEY: &str = "RWS3VEM6J8kwYA+2cJgsbaR1llGwi+f10sRCXZU4w9SrP47w+9je9SBo";
+// The real catalog is ~100 KB; this only stops a runaway download.
+const MAX_CATALOG_BYTES: usize = 10 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -65,9 +65,61 @@ pub struct CatalogUpdate {
     pub message: String,
 }
 
+fn known_source(entry: &serde_json::Value) -> bool {
+    entry
+        .get("source")
+        .is_some_and(|s| serde_json::from_value::<Source>(s.clone()).is_ok())
+}
+
+// Catalogs saved before the `local` source was removed can still contain it.
+// Drop those entries (promoting a known alternate when the primary is gone)
+// instead of failing the whole file and losing every custom app with it.
+fn strip_unknown_sources(catalog: &mut serde_json::Value) {
+    let Some(cats) = catalog.get_mut("categories").and_then(|c| c.as_array_mut()) else {
+        return;
+    };
+    for cat in cats {
+        let Some(apps) = cat.get_mut("apps").and_then(|a| a.as_array_mut()) else {
+            continue;
+        };
+        for app in apps.iter_mut() {
+            if let Some(alts) = app.get_mut("alternates").and_then(|a| a.as_array_mut()) {
+                alts.retain(known_source);
+            }
+            if known_source(app) {
+                continue;
+            }
+            let promoted = app
+                .get_mut("alternates")
+                .and_then(|a| a.as_array_mut())
+                .filter(|a| !a.is_empty())
+                .map(|a| a.remove(0));
+            if let (Some(alt), Some(obj)) = (promoted, app.as_object_mut()) {
+                obj.insert("source".into(), alt["source"].clone());
+                obj.insert("id".into(), alt["id"].clone());
+            }
+        }
+        apps.retain(known_source);
+    }
+}
+
+// Write to a sibling temp file, then rename over the target, so a crash
+// mid-write can't leave a truncated catalog behind.
+fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, bytes)?;
+    std::fs::rename(&tmp, path)
+}
+
+fn parse_catalog(bytes: &[u8]) -> serde_json::Result<CuratedFile> {
+    let mut value: serde_json::Value = serde_json::from_slice(bytes)?;
+    strip_unknown_sources(&mut value);
+    serde_json::from_value(value)
+}
+
 fn read_curated(path: &Path) -> Option<CuratedFile> {
-    let text = std::fs::read_to_string(path).ok()?;
-    match serde_json::from_str::<CuratedFile>(&text) {
+    let text = std::fs::read(path).ok()?;
+    match parse_catalog(&text) {
         Ok(file) => Some(file),
         Err(e) => {
             eprintln!("curated.json at {} is invalid: {e}", path.display());
@@ -117,11 +169,17 @@ fn load_base(app: &AppHandle) -> CuratedFile {
     if let Some(custom) = read_custom_catalog(app) {
         return custom.catalog;
     }
-    let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("curated.json");
-    if let Some(file) = read_curated(&repo) {
-        return file;
+    // Dev builds read the repo copy so catalog edits show up live. Release builds
+    // must not: the path is the build machine's, and a file planted there would
+    // replace the downloaded catalog.
+    #[cfg(debug_assertions)]
+    {
+        let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("curated.json");
+        if let Some(file) = read_curated(&repo) {
+            return file;
+        }
     }
     pick_base(read_downloaded(app))
 }
@@ -233,7 +291,7 @@ pub fn save(app: &AppHandle, file: &CuratedFile) -> anyhow::Result<PathBuf> {
     let dir = app.path().app_config_dir()?;
     std::fs::create_dir_all(&dir)?;
     let path = dir.join("curated.json");
-    std::fs::write(&path, serde_json::to_string_pretty(&tagged)?)?;
+    write_atomic(&path, serde_json::to_string_pretty(&tagged)?.as_bytes())?;
     Ok(path)
 }
 
@@ -267,39 +325,17 @@ pub async fn update_remote(app: &AppHandle, apply: bool) -> Result<CatalogUpdate
         .build()
         .map_err(|e| e.to_string())?;
 
-    let json_bytes = client
+    let resp = client
         .get(CATALOG_URL)
         .send()
         .await
         .and_then(|r| r.error_for_status())
-        .map_err(|e| format!("Couldn't download the catalog: {e}"))?
-        .bytes()
+        .map_err(|e| format!("Couldn't download the catalog: {e}"))?;
+    let json_bytes = read_capped(resp, MAX_CATALOG_BYTES)
         .await
-        .map_err(|e| format!("Couldn't read the catalog: {e}"))?;
+        .ok_or("Couldn't read the catalog (download failed or too large).")?;
 
-    let sig_text = client
-        .get(CATALOG_SIG_URL)
-        .send()
-        .await
-        .and_then(|r| r.error_for_status())
-        .map_err(|e| format!("Couldn't download the catalog signature: {e}"))?
-        .text()
-        .await
-        .map_err(|e| format!("Couldn't read the catalog signature: {e}"))?;
-
-    let sig_text = STANDARD
-        .decode(sig_text.trim())
-        .ok()
-        .and_then(|bytes| String::from_utf8(bytes).ok())
-        .unwrap_or(sig_text);
-    let pk = minisign_verify::PublicKey::from_base64(CATALOG_PUBKEY)
-        .map_err(|e| format!("Bad catalog public key: {e}"))?;
-    let sig = minisign_verify::Signature::decode(&sig_text)
-        .map_err(|_| "The catalog signature is malformed.".to_string())?;
-    pk.verify(&json_bytes, &sig, false)
-        .map_err(|_| "The catalog failed signature verification and was not applied.".to_string())?;
-
-    let remote: CuratedFile = serde_json::from_slice(&json_bytes)
+    let remote: CuratedFile = parse_catalog(&json_bytes)
         .map_err(|e| format!("The downloaded catalog is not valid: {e}"))?;
     let remote_count = app_count(&remote);
 
@@ -325,7 +361,7 @@ pub async fn update_remote(app: &AppHandle, apply: bool) -> Result<CatalogUpdate
     }
 
     let path = downloaded_path(app).ok_or("Couldn't find a place to store the catalog.")?;
-    std::fs::write(&path, &json_bytes).map_err(|e| format!("Couldn't save the catalog: {e}"))?;
+    write_atomic(&path, &json_bytes).map_err(|e| format!("Couldn't save the catalog: {e}"))?;
 
     Ok(CatalogUpdate {
         updated: true,
@@ -361,8 +397,12 @@ fn custom_catalog_path(app: &AppHandle) -> Option<PathBuf> {
 }
 
 fn read_custom_catalog(app: &AppHandle) -> Option<CustomCatalog> {
-    let text = std::fs::read_to_string(custom_catalog_path(app)?).ok()?;
-    serde_json::from_str(&text).ok()
+    let text = std::fs::read(custom_catalog_path(app)?).ok()?;
+    let mut value: serde_json::Value = serde_json::from_slice(&text).ok()?;
+    if let Some(catalog) = value.get_mut("catalog") {
+        strip_unknown_sources(catalog);
+    }
+    serde_json::from_value(value).ok()
 }
 
 fn info_of(c: &CustomCatalog) -> CustomCatalogInfo {
@@ -389,21 +429,20 @@ pub async fn set_custom(
             .timeout(std::time::Duration::from_secs(15))
             .build()
             .map_err(|e| e.to_string())?;
-        client
+        let resp = client
             .get(source.trim())
             .send()
             .await
             .and_then(|r| r.error_for_status())
-            .map_err(|e| format!("Couldn't download the catalog: {e}"))?
-            .bytes()
+            .map_err(|e| format!("Couldn't download the catalog: {e}"))?;
+        read_capped(resp, MAX_CATALOG_BYTES)
             .await
-            .map_err(|e| format!("Couldn't read the catalog: {e}"))?
-            .to_vec()
+            .ok_or("Couldn't read the catalog (download failed or too large).")?
     } else {
         std::fs::read(source.trim()).map_err(|e| format!("Couldn't read the file: {e}"))?
     };
 
-    let catalog: CuratedFile = serde_json::from_slice(&bytes)
+    let catalog: CuratedFile = parse_catalog(&bytes)
         .map_err(|e| format!("That's not a valid catalog (same format as the built-in one): {e}"))?;
 
     let custom = CustomCatalog {
@@ -416,7 +455,7 @@ pub async fn set_custom(
         let _ = std::fs::create_dir_all(dir);
     }
     let text = serde_json::to_string(&custom).map_err(|e| e.to_string())?;
-    std::fs::write(&path, text).map_err(|e| format!("Couldn't save the catalog: {e}"))?;
+    write_atomic(&path, text.as_bytes()).map_err(|e| format!("Couldn't save the catalog: {e}"))?;
     Ok(info_of(&custom))
 }
 
@@ -519,6 +558,29 @@ mod tests {
         assert_eq!(browsers[0].id, "Mozilla.Firefox");
         assert_eq!(browsers[0].name.as_deref(), Some("Firefox (mine)"));
         assert_eq!(browsers[1].id, "Google.Chrome");
+    }
+
+    #[test]
+    fn parse_catalog_drops_removed_local_source() {
+        let file = parse_catalog(
+            br#"{"version":1,"categories":[{"id":"mine","title":"Mine","apps":[
+                {"id":"C:\\setup.exe","source":"local","custom":true},
+                {"id":"","source":"local","custom":true,
+                 "alternates":[{"source":"local","id":""},{"source":"scoop","id":"foo"}]},
+                {"id":"Git.Git","source":"winget","custom":true,
+                 "alternates":[{"source":"local","id":"x.msi"},{"source":"choco","id":"git"}]}
+            ]}]}"#,
+        )
+        .unwrap();
+        let apps = &file.categories[0].apps;
+        assert_eq!(apps.len(), 2);
+        assert_eq!((apps[0].source, apps[0].id.as_str()), (Source::Scoop, "foo"));
+        assert!(apps[0].alternates.is_empty());
+        assert_eq!(apps[1].id, "Git.Git");
+        assert_eq!(
+            apps[1].alternates,
+            vec![CuratedVariant { source: Source::Choco, id: "git".into() }]
+        );
     }
 
     #[test]

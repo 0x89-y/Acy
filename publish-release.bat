@@ -50,6 +50,7 @@ if not defined NOTES set "NOTES=Acy %VER%. See Settings for the full changelog."
 
 if not exist "release" mkdir "release"
 copy /y "%SETUP%" "release\Acy-windows-x64-setup.exe" >nul
+copy /y "%SIG%" "release\Acy-windows-x64-setup.exe.sig" >nul
 
 rem ---- Write latest.json with the signature inlined --------------------------
 rem The signature file is a base64 blob; read it raw so no newline sneaks in.
@@ -63,7 +64,7 @@ powershell -NoProfile -Command ^
   "  version   = '%VER%';" ^
   "  notes     = '%NOTES%';" ^
   "  pub_date  = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ');" ^
-  "  platforms = [ordered]@{ 'windows-x86_64' = [ordered]@{ signature = $sig; url = 'https://0x89-y.xyz/acy/Acy-windows-x64-setup.exe' } }" ^
+  "  platforms = [ordered]@{ 'windows-x86_64' = [ordered]@{ signature = $sig; url = 'https://github.com/0x89-y/Acy/releases/latest/download/Acy-windows-x64-setup.exe' } }" ^
   "};" ^
   "$json = $manifest | ConvertTo-Json -Depth 5;" ^
   "$out = Join-Path (Get-Location).Path 'release\latest.json';" ^
@@ -81,9 +82,12 @@ echo.
 echo STAGED OK  (v%VER%).
 echo.
 echo   release\Acy-windows-x64-setup.exe
+echo   release\Acy-windows-x64-setup.exe.sig
 echo   release\latest.json
 echo.
-echo   Next: upload BOTH files to https://0x89-y.xyz/acy/ .
+echo   Next: create a new GitHub release (tag v%VER%) and attach all three files
+echo   under exactly these names. The updater reads
+echo   github.com/0x89-y/Acy/releases/latest/download/latest.json .
 echo   Existing installs pick up the update on their next check (on startup, then
 echo   periodically), or immediately via Settings ^> Software updates ^> Check for updates.
 echo.

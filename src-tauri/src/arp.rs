@@ -125,7 +125,7 @@ pub fn list_installed() -> Vec<crate::model::Package> {
         }
     }
 
-    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out.sort_by_cached_key(|p| p.name.to_lowercase());
     out
 }
 

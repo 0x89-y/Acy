@@ -29,6 +29,9 @@ export async function initTray() {
     console.error('tray close handler init failed', e);
   }
 
+  // Start from the count restored from last session's cache, so launching
+  // doesn't re-announce updates the user was already told about.
+  lastNotified = get(updatesCount);
   updatesCount.subscribe((count) => {
     api.setUpdateCount(count).catch(() => {});
     if (get(settings).notifyUpdates && count > lastNotified) {

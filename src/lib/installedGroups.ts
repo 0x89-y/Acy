@@ -5,7 +5,7 @@ export type BucketKey = Source | 'games' | 'ms-system' | 'other';
 export type LibSelection = 'all' | BucketKey | 'updates';
 
 const GAMES =
-  /(\\steam app\b|steam app|epic games|\bgog\b|gog galaxy|gog\.com|\bea app\b|ea desktop|origin games|ubisoft|uplay|battle\.net|blizzard|battlefield|\briot\b|riot games|riot client|valorant|league of legends|hoyoplay|genshin|honkai|zenless zone|vintage story)/i;
+  /(\\steam app\b|steam app|\\epicgames-|epic games|\bgog\b|gog galaxy|gog\.com|\bea app\b|ea desktop|origin games|ubisoft|uplay|battle\.net|blizzard|battlefield|\briot\b|riot games|riot client|valorant|league of legends|hoyoplay|genshin|honkai|zenless zone|vintage story)/i;
 const MS_SYSTEM =
   /(visual c\+\+|redistributable|webview2|windows sdk|windows software development kit|\.net\s+(runtime|sdk|host|desktop runtime|targeting pack)|microsoft edge update|windows app runtime)/i;
 const MS_MSIX_PUBLISHER = '_8wekyb3d8bbwe';
@@ -34,6 +34,34 @@ export function steamAppId(id: string): string | null {
   const m = /^steam app (\d+)$/i.exec(last);
   return m ? m[1] : null;
 }
+
+export type Launcher = 'steam' | 'epic' | 'riot' | 'rockstar';
+
+// The launcher that installed an app, judged by the uninstall entry it
+// registered (winget lists these as ARP\…). Steam always names its entries
+// "Steam App <appid>" and Riot "Riot Game <name>", whatever library folder the
+// game lives in, so this works where install paths don't (many Steam entries
+// have none). Epic uses "EpicGames-<app>" (the publisher is the game's, e.g.
+// Rockstar for GTA V, so it can't be used). Riot's anti-cheat registers
+// separately as "Riot Vanguard", and Rockstar's launcher and Social Club as
+// "Rockstar Games <name>". Ubisoft/EA/GOG/Battle.net games aren't handled yet:
+// add them once a real install has been checked for its entry's naming.
+export function launcherOf(source: Source, id: string): Launcher | null {
+  if (source !== 'winget' || !/^arp\\/i.test(id)) return null;
+  if (steamAppId(id) !== null) return 'steam';
+  const last = (id.split('\\').pop() ?? id).trim();
+  if (/^epicgames-/i.test(last)) return 'epic';
+  if (/^(riot game |riot vanguard$)/i.test(last)) return 'riot';
+  if (/^rockstar games /i.test(last)) return 'rockstar';
+  return null;
+}
+
+export const LAUNCHER_LABELS: Record<Launcher, string> = {
+  steam: 'Steam',
+  epic: 'Epic',
+  riot: 'Riot',
+  rockstar: 'Rockstar'
+};
 
 export type Bucket = {
   key: BucketKey;

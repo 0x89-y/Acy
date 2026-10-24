@@ -1,4 +1,5 @@
 use crate::model::Source;
+use crate::net::read_capped;
 use crate::sources;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use regex::Regex;
@@ -26,10 +27,74 @@ async fn http_client() -> &'static Client {
                      (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
                 )
                 .timeout(Duration::from_secs(8))
+                .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                    if attempt.previous().len() >= 10 {
+                        attempt.error("too many redirects")
+                    } else if is_public_web_url(attempt.url()) {
+                        attempt.follow()
+                    } else {
+                        attempt.stop()
+                    }
+                }))
                 .build()
                 .unwrap_or_else(|_| Client::new())
         })
         .await
+}
+
+const MAX_ICON_BYTES: usize = 5 * 1024 * 1024;
+const MAX_JSON_BYTES: usize = 1024 * 1024;
+// Only the <head> matters for finding the icon link.
+const MAX_PAGE_BYTES: usize = 1024 * 1024;
+
+// Homepages come from package metadata, which anyone can publish. Don't let
+// one point the icon fetcher at the user's router, localhost services, etc.
+fn is_public_web_url(url: &reqwest::Url) -> bool {
+    use std::net::IpAddr;
+    if !matches!(url.scheme(), "http" | "https") {
+        return false;
+    }
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    let host = host.trim_start_matches('[').trim_end_matches(']').to_ascii_lowercase();
+    match host.parse::<IpAddr>() {
+        Ok(IpAddr::V4(ip)) => !(ip.is_private()
+            || ip.is_loopback()
+            || ip.is_link_local()
+            || ip.is_unspecified()
+            || ip.is_broadcast()
+            // 100.64.0.0/10 (carrier-grade NAT, also Tailscale)
+            || (ip.octets()[0] == 100 && (ip.octets()[1] & 0xc0) == 64)),
+        Ok(IpAddr::V6(ip)) => {
+            let first = ip.segments()[0];
+            !(ip.is_loopback()
+                || ip.is_unspecified()
+                || (first & 0xfe00) == 0xfc00
+                || (first & 0xffc0) == 0xfe80
+                || ip.to_ipv4_mapped().is_some())
+        }
+        Err(_) => {
+            !(host == "localhost"
+                || host.ends_with(".localhost")
+                || host.ends_with(".local")
+                || host.ends_with(".internal")
+                || !host.contains('.'))
+        }
+    }
+}
+
+// Read at most `max` bytes of a body, keeping what fits.
+async fn read_prefix(mut resp: reqwest::Response, max: usize) -> Vec<u8> {
+    let mut out = Vec::new();
+    while let Ok(Some(chunk)) = resp.chunk().await {
+        let room = max - out.len();
+        out.extend_from_slice(&chunk[..chunk.len().min(room)]);
+        if out.len() >= max {
+            break;
+        }
+    }
+    out
 }
 
 fn source_key(source: Source) -> &'static str {
@@ -38,7 +103,6 @@ fn source_key(source: Source) -> &'static str {
         Source::Scoop => "scoop",
         Source::Choco => "choco",
         Source::Msstore => "msstore",
-        Source::Local => "local",
     }
 }
 
@@ -48,16 +112,40 @@ fn sanitize(s: &str) -> String {
         .collect()
 }
 
-fn cache_path(app: &AppHandle, source: Source, id: &str) -> Option<PathBuf> {
+// Stable across Rust versions, unlike `DefaultHasher`, so cache names never shift.
+fn fnv1a(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, b| {
+        (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3)
+    })
+}
+
+// `sanitize` alone mapped e.g. `Foo.Bar` and `Foo-Bar` to the same file, so a
+// hash of the full id is appended. Lowercased: ids are case-insensitive and so
+// is NTFS.
+fn cache_key(id: &str) -> String {
+    let id = id.to_lowercase();
+    let readable: String = sanitize(&id).chars().take(60).collect();
+    format!("{readable}_{:016x}", fnv1a(id.as_bytes()))
+}
+
+fn icon_file(app: &AppHandle, source: Source, id: &str, ext: &str) -> Option<PathBuf> {
     let dir = app.path().app_cache_dir().ok()?.join("icons");
     let _ = std::fs::create_dir_all(&dir);
-    Some(dir.join(format!("{}_{}.img", source_key(source), sanitize(id))))
+    let path = dir.join(format!("{}_{}.{ext}", source_key(source), cache_key(id)));
+    if !path.exists() {
+        // Adopt a file cached under the old sanitize-only name, if any.
+        let legacy = dir.join(format!("{}_{}.{ext}", source_key(source), sanitize(id)));
+        let _ = std::fs::rename(legacy, &path);
+    }
+    Some(path)
+}
+
+fn cache_path(app: &AppHandle, source: Source, id: &str) -> Option<PathBuf> {
+    icon_file(app, source, id, "img")
 }
 
 fn none_path(app: &AppHandle, source: Source, id: &str) -> Option<PathBuf> {
-    let dir = app.path().app_cache_dir().ok()?.join("icons");
-    let _ = std::fs::create_dir_all(&dir);
-    Some(dir.join(format!("{}_{}.none", source_key(source), sanitize(id))))
+    icon_file(app, source, id, "none")
 }
 
 fn now_secs() -> u64 {
@@ -116,8 +204,10 @@ fn pick_icon(html: &str, base: &reqwest::Url) -> Option<reqwest::Url> {
     let href = HREF.get_or_init(|| Regex::new(r#"(?is)\bhref\s*=\s*["']([^"']+)["']"#).unwrap());
     let sizes = SIZES.get_or_init(|| Regex::new(r#"(?is)\bsizes\s*=\s*["']([^"']+)["']"#).unwrap());
 
-    let scope = match html.to_lowercase().find("</head>") {
-        Some(end) => &html[..end.min(html.len())],
+    // ASCII lowercasing keeps byte offsets identical; full `to_lowercase` can
+    // change lengths (e.g. 'İ') and the slice below would panic mid-char.
+    let scope = match html.to_ascii_lowercase().find("</head>") {
+        Some(end) => &html[..end],
         None => html,
     };
 
@@ -190,7 +280,7 @@ async fn sgdb_get(client: &Client, key: &str, url: reqwest::Url) -> Option<serde
     if !resp.status().is_success() {
         return None;
     }
-    serde_json::from_str(&resp.text().await.ok()?).ok()
+    serde_json::from_slice(&read_capped(resp, MAX_JSON_BYTES).await?).ok()
 }
 
 fn clean_game_name(name: &str) -> String {
@@ -267,15 +357,15 @@ async fn steamgriddb_icon_by_name(name: &str, key: &str) -> Option<Vec<u8>> {
 }
 
 async fn fetch_bytes(client: &Client, url: reqwest::Url) -> Option<Vec<u8>> {
+    if !is_public_web_url(&url) {
+        return None;
+    }
     let resp = client.get(url).send().await.ok()?;
     if !resp.status().is_success() {
         return None;
     }
-    let bytes = resp.bytes().await.ok()?;
-    if bytes.len() < 100 {
-        return None;
-    }
-    Some(bytes.to_vec())
+    let bytes = read_capped(resp, MAX_ICON_BYTES).await?;
+    (bytes.len() >= 100).then_some(bytes)
 }
 
 async fn favicon_service(domain: &str) -> Option<Vec<u8>> {
@@ -288,8 +378,8 @@ async fn favicon_service(domain: &str) -> Option<Vec<u8>> {
             Ok(resp) if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS => {
             }
             Ok(resp) if resp.status().is_success() => {
-                let bytes = resp.bytes().await.ok()?;
-                return (bytes.len() >= 100).then(|| bytes.to_vec());
+                let bytes = read_capped(resp, MAX_ICON_BYTES).await?;
+                return (bytes.len() >= 100).then_some(bytes);
             }
             Ok(_) => return None,
             Err(_) => {}
@@ -304,6 +394,9 @@ async fn favicon_service(domain: &str) -> Option<Vec<u8>> {
 
 async fn resolve_icon(source_url: &str) -> Option<Vec<u8>> {
     let base = reqwest::Url::parse(source_url.trim()).ok()?;
+    if !is_public_web_url(&base) {
+        return None;
+    }
     let client = http_client().await;
 
     if let Ok(resp) = client.get(base.clone()).send().await {
@@ -315,12 +408,13 @@ async fn resolve_icon(source_url: &str) -> Option<Vec<u8>> {
                 .map(|t| t.starts_with("image/"))
                 .unwrap_or(false);
             if is_image {
-                if let Ok(bytes) = resp.bytes().await {
+                if let Some(bytes) = read_capped(resp, MAX_ICON_BYTES).await {
                     if bytes.len() >= 100 {
-                        return Some(bytes.to_vec());
+                        return Some(bytes);
                     }
                 }
-            } else if let Ok(html) = resp.text().await {
+            } else {
+                let html = String::from_utf8_lossy(&read_prefix(resp, MAX_PAGE_BYTES).await).into_owned();
                 if let Some(icon_url) = pick_icon(&html, &base) {
                     if let Some(bytes) = fetch_bytes(client, icon_url).await {
                         return Some(bytes);
@@ -448,6 +542,33 @@ pub fn forget_icon(app: &AppHandle, source: Source, id: &str) {
     clear_miss_marker(app, source, id);
 }
 
+#[derive(serde::Serialize)]
+pub struct CacheStats {
+    icons: u32,
+    bytes: u64,
+}
+
+pub fn cache_stats(app: &AppHandle) -> CacheStats {
+    let mut stats = CacheStats { icons: 0, bytes: 0 };
+    let Ok(dir) = app.path().app_cache_dir() else {
+        return stats;
+    };
+    let Ok(entries) = std::fs::read_dir(dir.join("icons")) else {
+        return stats;
+    };
+    for entry in entries.flatten() {
+        let Ok(meta) = entry.metadata() else { continue };
+        if !meta.is_file() {
+            continue;
+        }
+        stats.bytes += meta.len();
+        if meta.len() > 0 && entry.path().extension().is_some_and(|e| e == "img") {
+            stats.icons += 1;
+        }
+    }
+    stats
+}
+
 pub fn clear_cache(app: &AppHandle) -> std::io::Result<()> {
     if let Ok(dir) = app.path().app_cache_dir() {
         let icons = dir.join("icons");
@@ -503,6 +624,52 @@ mod tests {
         assert_eq!(pick_game_id(&data, "Diablo II"), Some(10));
         assert_eq!(pick_game_id(&serde_json::json!([]), "x"), None);
         assert_eq!(pick_game_id(&serde_json::json!({}), "x"), None);
+    }
+
+    #[test]
+    fn cache_key_separates_ids_that_sanitize_alike() {
+        assert_ne!(cache_key("Foo.Bar"), cache_key("Foo-Bar"));
+        assert_eq!(cache_key("Foo.Bar"), cache_key("foo.bar"));
+        assert!(cache_key("Mozilla.Firefox").starts_with("mozilla_firefox_"));
+        let long = "x".repeat(300);
+        assert!(cache_key(&long).len() < 80);
+    }
+
+    #[test]
+    fn public_web_url_rejects_local_targets() {
+        let ok = |s: &str| is_public_web_url(&reqwest::Url::parse(s).unwrap());
+        assert!(ok("https://www.mozilla.org/"));
+        assert!(ok("http://8.8.8.8/icon.png"));
+        assert!(ok("https://[2606:4700::1111]/"));
+        for bad in [
+            "http://localhost:8080/",
+            "http://127.0.0.1/",
+            "http://192.168.1.1/",
+            "http://10.0.0.5/",
+            "http://172.16.0.1/",
+            "http://169.254.169.254/latest/meta-data",
+            "http://100.100.1.1/",
+            "http://[::1]/",
+            "http://[fd00::1]/",
+            "http://[::ffff:127.0.0.1]/",
+            "http://router/",
+            "http://printer.local/",
+            "file:///C:/Windows/win.ini",
+            "ftp://example.com/x.png",
+        ] {
+            assert!(!ok(bad), "{bad} should be rejected");
+        }
+    }
+
+    #[test]
+    fn pick_icon_handles_length_changing_lowercase() {
+        let base = reqwest::Url::parse("https://example.com/").unwrap();
+        let html = "<html><head><title>İİİİ</title>\
+                    <link rel=\"icon\" href=\"/fav.png\"></head><body></body></html>";
+        assert_eq!(
+            pick_icon(html, &base).map(|u| u.to_string()).as_deref(),
+            Some("https://example.com/fav.png")
+        );
     }
 
     #[test]

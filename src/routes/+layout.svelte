@@ -65,6 +65,7 @@
   }
 
   onMount(() => {
+    document.documentElement.setAttribute('data-started', '');
     initTray();
     initAppUpdater();
     window.addEventListener('keydown', onKey);

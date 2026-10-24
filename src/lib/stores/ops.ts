@@ -53,6 +53,10 @@ const retryable = new Map<string, EnqueueArgs>();
 
 const DISMISS_MS = 6000;
 
+// Keep only the tail of very chatty ops (choco can print thousands of lines);
+// every new line copies the array and the toast re-scans it.
+const MAX_LINES = 2000;
+
 function updateOp(id: string, patch: (op: Op) => Op) {
   ops.update((list) => list.map((op) => (op.id === id ? patch(op) : op)));
 }
@@ -83,7 +87,10 @@ async function ensureListener() {
   if (listening) return;
   listening = true;
   await onOpLog((log) => {
-    updateOp(log.opId, (op) => ({ ...op, lines: [...op.lines, log.line] }));
+    updateOp(log.opId, (op) => ({
+      ...op,
+      lines: [...op.lines.slice(-(MAX_LINES - 1)), log.line]
+    }));
   });
 }
 

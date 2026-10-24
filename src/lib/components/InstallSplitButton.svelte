@@ -19,10 +19,9 @@
     winget: 'winget',
     scoop: 'Scoop',
     choco: 'Chocolatey',
-    msstore: 'Microsoft Store',
-    local: 'a local file'
+    msstore: 'Microsoft Store'
   };
-  const menuLabel = (s: Source) => (s === 'local' ? 'Install from file…' : `Install with ${labels[s]}`);
+  const menuLabel = (s: Source) => `Install with ${labels[s]}`;
 
   let busy = $state(false);
   let open = $state(false);

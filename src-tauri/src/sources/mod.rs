@@ -3,7 +3,6 @@ use async_trait::async_trait;
 use std::collections::BTreeMap;
 
 pub mod choco;
-pub mod local;
 pub mod msstore;
 pub mod scoop;
 pub mod winget;
@@ -31,7 +30,6 @@ pub fn for_source(source: Source) -> Box<dyn PackageSource> {
         Source::Scoop => Box::new(scoop::Scoop),
         Source::Choco => Box::new(choco::Choco),
         Source::Msstore => Box::new(msstore::Msstore),
-        Source::Local => Box::new(local::Local),
     }
 }
 
@@ -77,6 +75,6 @@ pub fn merge(packages: Vec<Package>) -> Vec<SearchHit> {
     for hit in &mut hits {
         hit.variants.sort_by_key(|v| v.source.priority());
     }
-    hits.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    hits.sort_by_cached_key(|p| p.name.to_lowercase());
     hits
 }

@@ -45,7 +45,12 @@
     type SettingsTab
   } from '$lib/stores/settings';
   import { managers, loadManagers } from '$lib/stores/managers';
-  import { clearIconCache, iconRefetch, refetchMissingIcons } from '$lib/stores/icons';
+  import {
+    clearIconCache,
+    iconCacheVersion,
+    iconRefetch,
+    refetchMissingIcons
+  } from '$lib/stores/icons';
   import { catalog, downloadCatalog, loadCatalogStatus, reloadCurated } from '$lib/stores/curated';
   import { confirmAction } from '$lib/stores/confirm';
   import { enqueue } from '$lib/stores/ops';
@@ -82,22 +87,36 @@
     winget: 'winget',
     scoop: 'Scoop',
     choco: 'Chocolatey',
-    msstore: 'Microsoft Store',
-    local: 'Local file'
+    msstore: 'Microsoft Store'
   };
-  const allManagers: Source[] = ['winget', 'scoop', 'choco', 'msstore', 'local'];
+  const allManagers: Source[] = ['winget', 'scoop', 'choco', 'msstore'];
 
   const MANAGER_INFO: Record<Source, string> = {
     winget: "Windows Package Manager - Microsoft's built-in catalog",
     scoop: 'Portable apps and developer tools',
     choco: 'Chocolatey - large community catalog',
-    msstore: 'Microsoft Store apps',
-    local: 'Install directly from a downloaded .exe or .msi'
+    msstore: 'Microsoft Store apps'
   };
 
   let busy = $state<Source | null>(null);
   let clearing = $state(false);
   let iconRefetching = $derived($iconRefetch.status === 'running');
+
+  let iconStats = $state<{ icons: number; bytes: number } | null>(null);
+  // Re-read whenever the cache is cleared or icons are (re)downloaded.
+  $effect(() => {
+    void $iconCacheVersion;
+    api
+      .iconCacheStats()
+      .then((s) => (iconStats = s))
+      .catch(() => {});
+  });
+
+  function formatBytes(n: number): string {
+    if (n < 1024) return `${n} B`;
+    const kb = n / 1024;
+    return kb < 1024 ? `${Math.round(kb)} KB` : `${(kb / 1024).toFixed(1)} MB`;
+  }
   let catalogPhase = $state<'idle' | 'checking' | 'available' | 'applying'>('idle');
   let catalogMsg = $state('');
   let catalogVersion = $state(0);
@@ -387,6 +406,13 @@
             {:else if $iconRefetch.status === 'done'}
               <span class="icon-msg muted">{$iconRefetch.message}</span>
             {/if}
+            {#if iconStats && !iconRefetching}
+              <span class="head-ver muted" title="Disk space used by cached icons">
+                {iconStats.icons === 0
+                  ? 'No icons cached'
+                  : `${iconStats.icons} ${iconStats.icons === 1 ? 'icon' : 'icons'} · ${formatBytes(iconStats.bytes)}`}
+              </span>
+            {/if}
             <button
               class="icon-btn"
               title="Re-download missing icons"
@@ -458,7 +484,6 @@
         <div class="mgr-list">
           {#each allManagers as s (s)}
             {@const st = statusOf(s)}
-            {@const isLocal = s === 'local'}
             <div class="mgr-row" class:is-on={$settings.managers[s] !== false}>
               <div class="mgr-meta">
                 <span class="mgr-name">{names[s]}</span>
@@ -504,17 +529,17 @@
                     </button>
                   {/if}
                 {/if}
-                {#if !isLocal && st && !st.available}
+                {#if st && !st.available}
                   <button class="btn mgr-btn" onclick={() => install(s)} disabled={busy === s}>
                     {busy === s ? 'Working…' : 'Install'}
                   </button>
                 {:else}
                   <span
                     class="mgr-state mono"
-                    class:ok={isLocal || st?.available}
-                    class:off={!isLocal && !st?.available}
+                    class:ok={st?.available}
+                    class:off={!st?.available}
                   >
-                    {isLocal ? 'file-based' : st?.available ? 'available' : 'not installed'}
+                    {st?.available ? 'available' : 'not installed'}
                   </span>
                 {/if}
                 <label class="switch" title="Enable {names[s]}">

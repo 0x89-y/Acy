@@ -56,7 +56,7 @@ const DEFAULTS: Settings = {
   themeMode: 'system',
   accent: 'purple',
   customAccent: '#7c3aed',
-  managers: { winget: true, scoop: true, choco: true, msstore: true, local: true },
+  managers: { winget: true, scoop: true, choco: true, msstore: true },
   preferredSource: null,
   showOutput: false,
   downloadIcons: false,
@@ -85,6 +85,9 @@ function load(): Settings {
           parsed.showCuratedApps = !parsed.onlyCustomApps;
         }
         delete parsed.onlyCustomApps;
+        // The `local` source was removed.
+        delete parsed.managers?.local;
+        if (parsed.preferredSource === 'local') parsed.preferredSource = null;
         return {
           ...DEFAULTS,
           ...parsed,

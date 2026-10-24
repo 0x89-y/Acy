@@ -1,6 +1,6 @@
 use super::PackageSource;
 use crate::model::{ManagerStatus, Package, Source};
-use crate::runner;
+use crate::runner::{self, ps_quote as quote};
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -168,9 +168,6 @@ impl PackageSource for Scoop {
 
 }
 
-fn quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "''"))
-}
 
 pub fn needed_bucket(id: &str) -> Option<String> {
     let buckets = scoop_home()?.join("buckets");

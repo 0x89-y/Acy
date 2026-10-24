@@ -22,6 +22,10 @@
     <script>
       (function () {
         function show(label, detail) {
+          // Only for errors that stop the app from booting; once the layout has
+          // mounted (it sets data-started), a full-screen overlay would hide a
+          // working UI with no way to dismiss it.
+          if (document.documentElement.hasAttribute('data-started')) return;
           var pre = document.createElement('pre');
           pre.style.cssText =
             'position:fixed;inset:0;margin:0;padding:16px;white-space:pre-wrap;' +

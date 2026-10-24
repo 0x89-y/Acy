@@ -29,8 +29,7 @@
     winget: 'winget',
     scoop: 'Scoop',
     choco: 'Chocolatey',
-    msstore: 'Microsoft Store',
-    local: 'Local file'
+    msstore: 'Microsoft Store'
   };
   const allManagers: Manager[] = ['winget', 'scoop', 'choco', 'msstore'];
 

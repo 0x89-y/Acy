@@ -3,6 +3,7 @@ mod commands;
 mod curated;
 mod icons;
 mod model;
+mod net;
 mod runner;
 mod sources;
 mod tray;
@@ -66,13 +67,13 @@ pub fn run() {
             commands::bootstrap_manager,
             commands::app_icon,
             commands::clear_icon_cache,
+            commands::icon_cache_stats,
             commands::refetch_missing_icons,
             commands::app_icon_state,
             commands::refresh_app_icon,
             commands::delete_app_icon,
             commands::set_update_count,
             commands::notify,
-            commands::pick_installer,
             commands::scoop_buckets,
             commands::scoop_known_buckets,
             commands::add_scoop_bucket,

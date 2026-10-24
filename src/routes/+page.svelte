@@ -105,13 +105,11 @@
     winget: 'winget',
     scoop: 'Scoop',
     choco: 'Chocolatey',
-    msstore: 'Microsoft Store',
-    local: 'Local file'
+    msstore: 'Microsoft Store'
   };
   let managerIssues = $derived(
     $managers.filter(
       (m) =>
-        m.source !== 'local' &&
         $settings.managers[m.source] !== false &&
         (!m.available || m.needsSetup)
     )

@@ -171,7 +171,7 @@
   </a>
   <div class="foot">
     <div class="badges">
-      {#each variants as v (v.source)}<SourceBadge source={v.source} />{/each}
+      {#each variants as v (v.source)}<SourceBadge source={v.source} id={v.id} />{/each}
     </div>
     <div class="foot-right">
       {#if onAddToList && !selectable}

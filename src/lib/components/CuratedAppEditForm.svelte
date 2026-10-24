@@ -1,11 +1,10 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { Download, Plus, Trash2, X } from '@lucide/svelte';
+  import { Plus, Trash2, X } from '@lucide/svelte';
   import * as api from '$lib/api';
+  import AppIconControls from '$lib/components/AppIconControls.svelte';
   import { reloadCurated } from '$lib/stores/curated';
   import { confirmAction } from '$lib/stores/confirm';
-  import { deleteIcon, loadIcon, redownloadIcon } from '$lib/stores/icons';
-  import { settings } from '$lib/stores/settings';
   import type { CuratedApp, CuratedFile, Source, Variant } from '$lib/types';
 
   let {
@@ -20,7 +19,7 @@
     onSaved?: () => void;
   } = $props();
 
-  const allSources: Source[] = ['winget', 'scoop', 'choco', 'msstore', 'local'];
+  const allSources: Source[] = ['winget', 'scoop', 'choco', 'msstore'];
   let idLower = $derived(id.trim().toLowerCase());
 
   let file = $state<CuratedFile | null>(null);
@@ -60,7 +59,6 @@
             categoryId = cat.id;
             isCustom = app.custom;
             loaded = true;
-            void loadIconState();
             await tick();
             root?.querySelector<HTMLInputElement>('input')?.focus();
             return;
@@ -73,70 +71,12 @@
     })();
   });
 
-  let iconUrl = $state<string | null>(null);
-  let iconCached = $state(false);
-  let iconDeleted = $state(false);
-  let iconBusy = $state<'' | 'download' | 'delete'>('');
-  let iconMsg = $state('');
-
   let iconFrom = $derived(icon.trim() || homepage.trim() || null);
-
-  let iconStatus = $derived.by(() => {
-    if (iconBusy === 'download') return 'Downloading…';
-    if (iconBusy === 'delete') return 'Deleting…';
-    if (iconMsg) return iconMsg;
-    if (iconDeleted) return "Deleted - Acy won't fetch it again on its own.";
-    if (iconUrl) return 'Cached on this PC.';
-    return 'Not downloaded yet.';
-  });
-
-  async function loadIconState() {
-    try {
-      const st = await api.appIconState(source, id);
-      iconCached = st.cached;
-      iconDeleted = st.deleted;
-      iconUrl = st.cached ? await loadIcon(source, id, iconFrom, $settings.steamGridKey) : null;
-    } catch {
-    }
-  }
-
-  async function downloadIcon() {
-    if (iconBusy) return;
-    iconBusy = 'download';
-    iconMsg = '';
-    try {
-      const url = await redownloadIcon(source, id, iconFrom);
-      iconUrl = url;
-      iconCached = !!url;
-      iconDeleted = false;
-      if (!url) iconMsg = 'No icon found - try setting an Icon URL or homepage.';
-    } catch (e) {
-      iconMsg = `Download failed: ${e}`;
-    } finally {
-      iconBusy = '';
-    }
-  }
-
-  async function removeIcon() {
-    if (iconBusy) return;
-    iconBusy = 'delete';
-    iconMsg = '';
-    try {
-      await deleteIcon(source, id);
-      iconUrl = null;
-      iconCached = false;
-      iconDeleted = true;
-    } catch (e) {
-      iconMsg = `Delete failed: ${e}`;
-    } finally {
-      iconBusy = '';
-    }
-  }
 
   function addSource() {
     const used = new Set(srcs.map((s) => s.source));
-    const next = allSources.find((s) => !used.has(s)) ?? 'local';
-    srcs = [...srcs, { source: next, id: '' }];
+    const next = allSources.find((s) => !used.has(s));
+    if (next) srcs = [...srcs, { source: next, id: '' }];
   }
   function removeSource(i: number) {
     srcs = srcs.filter((_, k) => k !== i);
@@ -149,7 +89,7 @@
     const seen = new Set<Source>();
     const cleaned = srcs
       .map((v) => ({ source: v.source, id: v.id.trim() }))
-      .filter((v) => (v.id || v.source === 'local') && !seen.has(v.source) && seen.add(v.source));
+      .filter((v) => v.id && !seen.has(v.source) && seen.add(v.source));
     if (cleaned.length === 0) {
       error = 'The app needs at least one source with a package id.';
       return;
@@ -268,6 +208,16 @@
             {/each}
           </select>
         </label>
+        <div class="f">
+          <span class="fl">Icon</span>
+          <AppIconControls {source} {id} {name} from={iconFrom}>
+            <input
+              class="in"
+              placeholder="image or page URL - defaults to the homepage"
+              bind:value={icon}
+            />
+          </AppIconControls>
+        </div>
 
         {#if showMore}
           <div class="more">
@@ -275,11 +225,17 @@
               <span class="fl">Sources</span>
               {#each srcs as s, i (i)}
                 <div class="src-row">
-                  <select class="in src" bind:value={s.source}>
+                  <select class="src-pick {s.source}" bind:value={s.source} title="Package manager">
                     {#each allSources as src (src)}<option value={src}>{src}</option>{/each}
                   </select>
-                  <input class="in mono" placeholder="package id" bind:value={s.id} />
-                  <button class="icon-btn danger" title="Remove source" disabled={srcs.length === 1} onclick={() => removeSource(i)}>
+                  <input class="src-id mono" placeholder="package id" bind:value={s.id} />
+                  <button
+                    class="icon-btn danger row-del"
+                    title="Remove source"
+                    aria-label="Remove source"
+                    disabled={srcs.length === 1}
+                    onclick={() => removeSource(i)}
+                  >
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -293,48 +249,11 @@
               <input class="in" placeholder="optional" bind:value={homepage} />
             </label>
             <label class="f">
-              <span class="fl">Icon URL</span>
-              <input class="in" placeholder="optional" bind:value={icon} />
-            </label>
-            <div class="f">
-              <span class="fl">Icon</span>
-              <div class="icon-row">
-                <div class="icon-preview">
-                  {#if iconUrl}
-                    <img src={iconUrl} alt="" />
-                  {:else}
-                    <span class="ph">{((name || id).trim()[0] ?? '?').toUpperCase()}</span>
-                  {/if}
-                </div>
-                <div class="icon-side">
-                  <div class="icon-actions">
-                    <button
-                      class="btn btn-ghost"
-                      onclick={downloadIcon}
-                      disabled={!!iconBusy}
-                      title="Fetch from the Icon URL above, or the homepage"
-                    >
-                      <Download size={14} />
-                      {iconUrl || iconCached ? 'Re-download' : 'Download'}
-                    </button>
-                    <button
-                      class="btn btn-ghost danger"
-                      onclick={removeIcon}
-                      disabled={!!iconBusy || (!iconUrl && !iconCached)}
-                    >
-                      <Trash2 size={14} /> Delete
-                    </button>
-                  </div>
-                  <span class="icon-status">{iconStatus}</span>
-                </div>
-              </div>
-            </div>
-            <label class="f">
-              <span class="fl">Donate URL</span>
+              <span class="fl">Donate</span>
               <input class="in" placeholder="optional" bind:value={donate} />
             </label>
             <label class="f">
-              <span class="fl">Release notes URL</span>
+              <span class="fl">Release notes</span>
               <input class="in" placeholder="optional" bind:value={releaseNotes} />
             </label>
           </div>
@@ -436,17 +355,80 @@
     gap: 6px;
   }
   .src-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr) auto;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    padding: 5px 0;
   }
-  .src-row .src {
-    flex: 0 0 110px;
+  .src-row + .src-row {
+    border-top: 1px solid var(--border);
   }
-  .src-row .mono {
-    flex: 1;
+  .src-pick {
+    appearance: none;
+    justify-self: start;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    line-height: 1.5;
+    padding: 1px 7px;
+    border-radius: var(--radius-sm);
+    border: 1px solid currentColor;
+    background: transparent;
+    color: var(--local);
+    outline: none;
+  }
+  .src-pick:hover {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+  }
+  .src-pick:focus-visible {
+    box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 35%, transparent);
+  }
+  .src-pick option {
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--font-sans);
+  }
+  .src-pick.winget {
+    color: var(--winget);
+  }
+  .src-pick.scoop {
+    color: var(--scoop);
+  }
+  .src-pick.choco {
+    color: var(--choco);
+  }
+  .src-pick.msstore {
+    color: var(--msstore);
+  }
+  .src-id {
+    min-width: 0;
+    width: 100%;
+    padding: 5px 8px;
     font-family: var(--font-mono);
     font-size: 0.8rem;
+    color: var(--text);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    outline: none;
+  }
+  .src-id:hover {
+    border-color: var(--border);
+  }
+  .src-id:focus {
+    background: var(--surface);
+    border-color: var(--accent);
+  }
+  .row-del {
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+  .src-row:hover .row-del,
+  .src-row:focus-within .row-del {
+    opacity: 1;
+  }
+  .row-del:disabled {
+    opacity: 0;
   }
   .add-src {
     align-self: flex-start;
@@ -454,69 +436,25 @@
     padding: 4px 8px;
   }
   .in {
-    background: var(--surface);
-    border: 1px solid var(--border);
+    background: transparent;
+    border: 1px solid transparent;
     border-radius: var(--radius-sm);
     color: var(--text);
-    padding: 7px 10px;
+    padding: 6px 9px;
     font-size: 0.86rem;
     outline: none;
     width: 100%;
     min-width: 0;
   }
+  .in:hover:not(:disabled) {
+    border-color: var(--border);
+  }
   .in:focus {
+    background: var(--surface);
     border-color: var(--accent);
   }
   .in:disabled {
     opacity: 0.6;
-  }
-  .icon-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-top: 2px;
-  }
-  .icon-preview {
-    flex: 0 0 auto;
-    width: 48px;
-    height: 48px;
-    display: grid;
-    place-items: center;
-    border-radius: 28%;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    overflow: hidden;
-  }
-  .icon-preview img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    padding: 5px;
-  }
-  .icon-preview .ph {
-    font-family: var(--font-mono);
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--text-muted);
-  }
-  .icon-side {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0;
-  }
-  .icon-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .icon-actions .btn {
-    font-size: 0.8rem;
-    padding: 5px 9px;
-  }
-  .icon-status {
-    font-size: 0.74rem;
-    color: var(--text-muted);
   }
   .icon-btn {
     display: inline-flex;

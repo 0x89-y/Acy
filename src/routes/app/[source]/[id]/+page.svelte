@@ -26,7 +26,7 @@
   import type { Package, Source, Variant } from '$lib/types';
 
   let source = $derived($page.params.source as Source);
-  let id = $derived(decodeURIComponent($page.params.id ?? ''));
+  let id = $derived($page.params.id ?? '');
   let idLower = $derived(id.toLowerCase());
   let backHref = $derived.by(() => {
     const requested = $page.url.searchParams.get('back');
@@ -162,7 +162,7 @@
         <AppIcon {name} size={64} {source} {id} homepage={iconSource} />
         <h1>{name}</h1>
         <div class="meta">
-          {#each variants as v (v.source)}<SourceBadge source={v.source} />{/each}
+          {#each variants as v (v.source)}<SourceBadge source={v.source} id={v.id} />{/each}
         </div>
         <div class="sub mono">{id}</div>
         {#if publisher}<div class="sub muted">{publisher}</div>{/if}

@@ -10,16 +10,12 @@
     ChevronDown
   } from '@lucide/svelte';
   import SourceBadge from '$lib/components/SourceBadge.svelte';
+  import AppIconControls from '$lib/components/AppIconControls.svelte';
   import * as api from '$lib/api';
   import { settings } from '$lib/stores/settings';
   import type { CuratedFile, CuratedApp, CuratedCategory, Source } from '$lib/types';
 
-  const sources: Source[] = ['winget', 'scoop', 'choco', 'msstore', 'local'];
-
-  async function browse(set: (path: string) => void) {
-    const path = await api.pickInstaller();
-    if (path) set(path);
-  }
+  const sources: Source[] = ['winget', 'scoop', 'choco', 'msstore'];
 
   let file = $state<CuratedFile | null>(null);
   let loading = $state(true);
@@ -116,8 +112,8 @@
   }
   function addAlternate(app: CuratedApp) {
     const used = new Set<Source>([app.source, ...app.alternates.map((v) => v.source)]);
-    const next = sources.find((s) => !used.has(s)) ?? 'local';
-    app.alternates.push({ source: next, id: '' });
+    const next = sources.find((s) => !used.has(s));
+    if (next) app.alternates.push({ source: next, id: '' });
   }
   function removeAlternate(app: CuratedApp, i: number) {
     app.alternates.splice(i, 1);
@@ -144,7 +140,7 @@
           const seen = new Set<Source>();
           const uniq = [{ source: a.source, id: a.id }, ...a.alternates]
             .map((v) => ({ source: v.source, id: v.id.trim() }))
-            .filter((v) => (v.id || v.source === 'local') && !seen.has(v.source) && seen.add(v.source));
+            .filter((v) => v.id && !seen.has(v.source) && seen.add(v.source));
           const primary = uniq[0] ?? { source: a.source, id: '' };
           return {
             id: primary.id,
@@ -168,7 +164,7 @@
     for (const c of f.categories) {
       if (!c.id || !c.title) return 'Every category needs an id and a title.';
       for (const a of c.apps) {
-        if (!a.id && a.source !== 'local') return `An app in "${c.title}" is missing its package id.`;
+        if (!a.id) return `An app in "${c.title}" is missing its package id.`;
       }
     }
     return null;
@@ -204,11 +200,11 @@
       <button class="disclose" onclick={() => (openApp[`${ci}-${ai}`] = !appOpen(ci, ai))} aria-label="Toggle app">
         {#if appOpen(ci, ai)}<ChevronDown size={15} />{:else}<ChevronRight size={15} />{/if}
       </button>
-      <span class="tag" class:custom={app.custom}>{app.custom ? 'custom' : 'curated'}</span>
       <button class="app-name" onclick={() => (openApp[`${ci}-${ai}`] = !appOpen(ci, ai))}>
         {app.name || app.id || 'Untitled app'}
       </button>
       {#if showCat}<span class="app-cat">{cat.title || cat.id || '-'}</span>{/if}
+      {#if app.custom}<span class="tag">custom</span>{/if}
       <div class="app-sources">
         {#if app.id || app.alternates.length}<SourceBadge source={app.source} />{/if}
         {#each app.alternates as alt, k (k)}<SourceBadge source={alt.source} />{/each}
@@ -228,75 +224,33 @@
 
     {#if appOpen(ci, ai)}
       <div class="app-edit">
-        <div class="src-block">
-          <span class="fl">Sources</span>
-          <div class="src-list">
-            <div class="src-row">
-              <select class="in src" bind:value={app.source}>
-                {#each sources as s (s)}<option value={s}>{s}</option>{/each}
-              </select>
+        <div class="edit-list">
+          <div class="edit-row">
+            <span class="fl">Icon</span>
+            <AppIconControls
+              source={app.source}
+              id={app.id}
+              name={app.name ?? ''}
+              from={app.icon || app.homepage || null}
+              size={40}
+            >
               <input
-                class="in mono"
-                placeholder={app.source === 'local' ? 'installer path (.exe / .msi) - optional' : 'package id for this manager'}
-                bind:value={app.id}
+                class="in"
+                placeholder="image or page URL - defaults to the homepage"
+                bind:value={app.icon}
               />
-              {#if app.source === 'local'}
-                <button class="btn btn-ghost browse" onclick={() => browse((p) => (app.id = p))}>Browse…</button>
-              {/if}
-              <button
-                class="icon-btn danger"
-                title="Remove source"
-                disabled={app.alternates.length === 0}
-                onclick={() => removePrimary(app)}
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-            {#each app.alternates as alt, k (k)}
-              <div class="src-row">
-                <select class="in src" bind:value={alt.source}>
-                  {#each sources as s (s)}<option value={s}>{s}</option>{/each}
-                </select>
-                <input
-                  class="in mono"
-                  placeholder={alt.source === 'local' ? 'installer path (.exe / .msi) - optional' : 'package id for this manager'}
-                  bind:value={alt.id}
-                />
-                {#if alt.source === 'local'}
-                  <button class="btn btn-ghost browse" onclick={() => browse((p) => (alt.id = p))}>Browse…</button>
-                {/if}
-                <button class="icon-btn danger" title="Remove source" onclick={() => removeAlternate(app, k)}>
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            {/each}
-            <button class="btn btn-ghost add-src" onclick={() => addAlternate(app)}>
-              <Plus size={14} /> Add source
-            </button>
+            </AppIconControls>
           </div>
-        </div>
-
-        <div class="fields three">
-          <label class="f">
+          <label class="edit-row">
             <span class="fl">Name</span>
             <input class="in" placeholder="optional" bind:value={app.name} />
           </label>
-          <label class="f">
-            <span class="fl">Homepage</span>
-            <input class="in" placeholder="optional" bind:value={app.homepage} />
+          <label class="edit-row">
+            <span class="fl">Description</span>
+            <input class="in" placeholder="optional" bind:value={app.description} />
           </label>
-          <label class="f">
-            <span class="fl">Icon URL</span>
-            <input class="in" placeholder="optional" bind:value={app.icon} />
-          </label>
-        </div>
-        <label class="f">
-          <span class="fl">Description</span>
-          <input class="in" placeholder="optional" bind:value={app.description} />
-        </label>
-        <div class="fields two">
-          <label class="f">
-            <span class="fl">Tags (comma-separated)</span>
+          <label class="edit-row">
+            <span class="fl">Tags</span>
             <input
               class="in"
               placeholder="open source, free, chromium"
@@ -304,15 +258,54 @@
               onchange={(e) => (app.tags = e.currentTarget.value.split(',').map((t) => t.trim()).filter(Boolean))}
             />
           </label>
-          <label class="f">
-            <span class="fl">Donate URL</span>
+          <label class="edit-row">
+            <span class="fl">Homepage</span>
+            <input class="in" placeholder="optional" bind:value={app.homepage} />
+          </label>
+          <label class="edit-row">
+            <span class="fl">Donate</span>
             <input class="in" placeholder="optional" bind:value={app.donate} />
           </label>
+          <label class="edit-row">
+            <span class="fl">Release notes</span>
+            <input class="in" placeholder="optional" bind:value={app.releaseNotes} />
+          </label>
+
+          <div class="edit-row srcs">
+            <span class="fl">Sources</span>
+            <div class="src-list">
+              <div class="src-row">
+                <select class="src-pick {app.source}" bind:value={app.source} title="Package manager">
+                  {#each sources as s (s)}<option value={s}>{s}</option>{/each}
+                </select>
+                <input class="src-id mono" placeholder="package id" bind:value={app.id} />
+                <button
+                  class="icon-btn danger row-del"
+                  title="Remove source"
+                  aria-label="Remove source"
+                  disabled={app.alternates.length === 0}
+                  onclick={() => removePrimary(app)}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+              {#each app.alternates as alt, k (k)}
+                <div class="src-row">
+                  <select class="src-pick {alt.source}" bind:value={alt.source} title="Package manager">
+                    {#each sources as s (s)}<option value={s}>{s}</option>{/each}
+                  </select>
+                  <input class="src-id mono" placeholder="package id" bind:value={alt.id} />
+                  <button class="icon-btn danger row-del" title="Remove source" aria-label="Remove source" onclick={() => removeAlternate(app, k)}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              {/each}
+              <button class="btn btn-ghost add-src" onclick={() => addAlternate(app)}>
+                <Plus size={14} /> Add source
+              </button>
+            </div>
+          </div>
         </div>
-        <label class="f">
-          <span class="fl">Release notes URL</span>
-          <input class="in" placeholder="optional" bind:value={app.releaseNotes} />
-        </label>
       </div>
     {/if}
   </div>
@@ -501,7 +494,7 @@
     background: var(--surface);
   }
   .browse-rail {
-    flex: 0 0 200px;
+    flex: 0 0 190px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -574,7 +567,8 @@
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    min-height: 34px;
     padding: 10px 14px;
     border-bottom: 1px solid var(--border);
   }
@@ -610,8 +604,9 @@
   .app-row {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 8px;
+    gap: 10px;
+    min-height: 38px;
+    padding: 4px 14px 4px 4px;
   }
   .app-name {
     flex: 1;
@@ -620,7 +615,7 @@
     background: none;
     border: none;
     color: var(--text);
-    font-size: 0.88rem;
+    font-size: 0.9rem;
     font-weight: 500;
     padding: 2px 0;
     white-space: nowrap;
@@ -642,89 +637,151 @@
     font-size: 0.64rem;
     padding: 1px 7px;
     border-radius: var(--radius-sm);
-    border: 1px solid var(--border-strong);
-    color: var(--text-muted);
-    white-space: nowrap;
-  }
-  .tag.custom {
+    border: 1px solid var(--accent);
     color: var(--accent);
-    border-color: var(--accent);
+    white-space: nowrap;
   }
 
   .app-edit {
-    padding: 4px 10px 12px 34px;
+    --field-label: 132px;
+    padding: 2px 0 6px 34px;
+  }
+  .edit-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    border-top: 1px solid var(--border);
   }
-  .fields {
+  .edit-row {
     display: grid;
-    gap: 8px;
+    grid-template-columns: var(--field-label) minmax(0, 1fr);
+    align-items: center;
+    gap: 14px;
+    padding: 9px 14px 9px 0;
   }
-  .fields.three {
-    grid-template-columns: 1.3fr 0.8fr 1fr;
+  .edit-row + .edit-row {
+    border-top: 1px solid var(--border);
   }
-  .fields.two {
-    grid-template-columns: 1.4fr 1fr;
+  .edit-row.srcs {
+    align-items: start;
+    padding-top: 11px;
   }
-  .f {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0;
+  .edit-row.srcs .fl {
+    padding-top: 8px;
   }
   .fl {
-    font-size: 0.72rem;
+    font-size: 0.82rem;
+    font-weight: 500;
     color: var(--text-muted);
+    min-width: 0;
   }
 
-  .src-block {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
   .src-list {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    min-width: 0;
   }
   .src-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr) auto;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    padding: 5px 0;
+  }
+  .src-row + .src-row {
+    border-top: 1px solid var(--border);
+  }
+  .src-pick {
+    appearance: none;
+    justify-self: start;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    line-height: 1.5;
+    padding: 1px 7px;
+    border-radius: var(--radius-sm);
+    border: 1px solid currentColor;
+    background: transparent;
+    color: var(--local);
+    outline: none;
+  }
+  .src-pick:hover {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+  }
+  .src-pick:focus-visible {
+    box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 35%, transparent);
+  }
+  .src-pick option {
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--font-sans);
+  }
+  .src-pick.winget {
+    color: var(--winget);
+  }
+  .src-pick.scoop {
+    color: var(--scoop);
+  }
+  .src-pick.choco {
+    color: var(--choco);
+  }
+  .src-pick.msstore {
+    color: var(--msstore);
+  }
+  .src-id {
+    min-width: 0;
+    width: 100%;
+    padding: 5px 8px;
+    font-size: 0.8rem;
+    color: var(--text);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    outline: none;
+  }
+  .src-id:hover {
+    border-color: var(--border);
+  }
+  .src-id:focus {
+    background: var(--surface);
+    border-color: var(--accent);
+  }
+  .row-del {
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+  .src-row:hover .row-del,
+  .src-row:focus-within .row-del {
+    opacity: 1;
+  }
+  .row-del:disabled {
+    opacity: 0;
   }
   .add-src {
     align-self: flex-start;
-    font-size: 0.8rem;
-    padding: 4px 8px;
+    font-size: 0.82rem;
+    padding: 5px 9px;
   }
-  .browse {
-    flex-shrink: 0;
-    font-size: 0.8rem;
-    padding: 6px 10px;
-    white-space: nowrap;
-  }
-
   .in {
-    background: var(--surface);
-    border: 1px solid var(--border);
+    background: transparent;
+    border: 1px solid transparent;
     border-radius: var(--radius-sm);
     color: var(--text);
-    padding: 7px 10px;
+    padding: 6px 9px;
     font-size: 0.86rem;
     outline: none;
     min-width: 0;
     width: 100%;
   }
-  .in:focus {
-    border-color: var(--accent);
+  .in:hover:not(:disabled) {
+    border-color: var(--border);
   }
-  .in.mono {
-    font-family: var(--font-mono);
-    font-size: 0.8rem;
+  .in:focus {
+    background: var(--surface);
+    border-color: var(--accent);
   }
   .pane-head .in {
     width: auto;
+    background: var(--surface);
+    border-color: var(--border);
   }
   .title {
     flex: 1;
@@ -735,12 +792,8 @@
     font-family: var(--font-mono);
     font-size: 0.8rem;
   }
-  .src-row .src {
-    flex: 0 0 120px;
-    width: auto;
-  }
-  .src-row .mono {
-    flex: 1;
+  .mono {
+    font-family: var(--font-mono);
   }
 
   .disclose {
