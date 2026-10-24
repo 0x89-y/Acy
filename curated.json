@@ -1,5 +1,5 @@
 {
-  "version": 10,
+  "version": 11,
   "categories": [
     {
       "id": "browsers",
@@ -328,8 +328,7 @@
         { "id": "xanderfrangos.twinkletray", "source": "winget", "name": "Twinkle Tray", "homepage": "https://twinkletray.com/", "releaseNotes": "https://github.com/xanderfrangos/twinkle-tray/releases", "description": "Control the brightness and settings of external monitors from the system tray.", "tags": ["open source", "free", "local-first"] },
         { "id": "flux.flux", "source": "winget", "name": "f.lux", "homepage": "https://justgetflux.com/", "releaseNotes": "https://justgetflux.com/news/pages/v4/readme/", "description": "Adjusts display color temperature based on the time of day.", "tags": ["free", "local-first"] },
         { "id": "valinet.ExplorerPatcher", "source": "winget", "name": "ExplorerPatcher", "homepage": "https://github.com/valinet/ExplorerPatcher", "releaseNotes": "https://github.com/valinet/ExplorerPatcher/releases", "description": "Restore and customize the Windows taskbar, Start menu, and File Explorer.", "tags": ["open source", "free", "local-first"] },
-        { "id": "StartIsBack.StartAllBack", "source": "winget", "name": "StartAllBack", "homepage": "https://www.startallback.com/", "description": "Classic Start menu, taskbar, and Explorer for Windows 11.", "tags": ["paid", "local-first"], "alternates": [{ "source": "choco", "id": "StartAllBack" }] },
-        { "id": "Nilesoft.Shell", "source": "winget", "name": "Nilesoft Shell", "homepage": "https://nilesoft.org/", "releaseNotes": "https://github.com/moudey/Shell/releases", "description": "Customize and extend the Explorer right-click menu.", "tags": ["open source", "free", "local-first"], "alternates": [{ "source": "scoop", "id": "nilesoft-shell" }, { "source": "choco", "id": "nilesoft-shell" }] }
+        { "id": "StartIsBack.StartAllBack", "source": "winget", "name": "StartAllBack", "homepage": "https://www.startallback.com/", "description": "Classic Start menu, taskbar, and Explorer for Windows 11.", "tags": ["paid", "local-first"], "alternates": [{ "source": "choco", "id": "StartAllBack" }] }
       ]
     },
     {
