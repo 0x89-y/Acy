@@ -122,7 +122,6 @@
             <span class="name">Acy</span>
             <div class="ver mono">{acyVersion || '?'} → {$updaterVersion}</div>
           </div>
-          <span class="acy-badge">Acy</span>
           <button class="btn btn-accent" onclick={installUpdate} disabled={$updaterPhase === 'downloading'}>
             {$updaterPhase === 'downloading' ? 'Installing…' : 'Update Acy'}
           </button>
@@ -289,18 +288,6 @@
     height: 34px;
     flex-shrink: 0;
     object-fit: contain;
-  }
-  .acy-badge {
-    display: inline-flex;
-    align-items: center;
-    width: fit-content;
-    padding: 1px 8px;
-    border: 1px solid var(--accent);
-    border-radius: var(--radius-sm);
-    color: var(--accent);
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    line-height: 1.45;
   }
   .info {
     flex: 1;

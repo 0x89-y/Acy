@@ -256,15 +256,13 @@
               {:else}
                 <InstallButton {source} {id} {name} kind="install" onDone={onChanged} />
               {/if}
-              <span class="status muted">
-                {#if updatable && updatePkg}
-                  Update available
-                {:else if isInstalled}
+              {#if updatable && updatePkg}
+                <span class="status muted">Update available</span>
+              {:else if isInstalled}
+                <span class="status muted">
                   <Check size={13} /> Installed{installedPkg?.version ? ` · v${installedPkg.version}` : ''}
-                {:else}
-                  Not installed
-                {/if}
-              </span>
+                </span>
+              {/if}
             {:else}
               <span class="status muted">Checking status…</span>
             {/if}
@@ -336,12 +334,6 @@
                     {info.license}
                   {/if}
                 </dd>
-              </div>
-            {/if}
-            {#if homepage}
-              <div>
-                <dt>Website</dt>
-                <dd><button class="link-btn mono url" onclick={() => openUrl(homepage!)}>{homepage}</button></dd>
               </div>
             {/if}
             {#if installedPkg?.installLocation}
@@ -508,8 +500,8 @@
     color: var(--text-muted);
     background: var(--surface-2);
     border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 2px 10px;
+    border-radius: var(--radius-sm);
+    padding: 2px 8px;
     cursor: pointer;
   }
   .tag:hover {

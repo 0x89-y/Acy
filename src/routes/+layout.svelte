@@ -31,7 +31,7 @@
   let { children } = $props();
 
   let fullBleed = $derived(
-    ['/', '/settings', '/changelog', '/curated', '/activity', '/scoop-buckets'].includes(
+    ['/', '/settings', '/changelog', '/curated', '/scoop-buckets'].includes(
       $page.url.pathname
     ) || $page.url.pathname.startsWith('/app/')
   );

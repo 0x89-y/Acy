@@ -8,6 +8,7 @@
   import AppCard from '$lib/components/AppCard.svelte';
   import ViewToggle from '$lib/components/ViewToggle.svelte';
   import UpdatesSection from '$lib/components/UpdatesSection.svelte';
+  import ActivitySection from '$lib/components/ActivitySection.svelte';
   import InstallButton from '$lib/components/InstallButton.svelte';
   import * as api from '$lib/api';
   import type { CuratedApp, CuratedFile, SearchHit, Source, Variant, Package } from '$lib/types';
@@ -22,7 +23,7 @@
     isAcyPackage
   } from '$lib/stores/library';
   import { updaterPhase, updaterVersion } from '$lib/stores/updater';
-  import { bucketKey, BUCKETS, BUCKET_BY_KEY, type LibSelection } from '$lib/installedGroups';
+  import { bucketKey, BUCKETS, BUCKET_BY_KEY } from '$lib/installedGroups';
   import { runOp, summarizeBatch, installCommand } from '$lib/install';
   import { confirmAction } from '$lib/stores/confirm';
   import { copyText } from '$lib/clipboard';
@@ -36,7 +37,7 @@
     downloadCatalog
   } from '$lib/stores/curated';
   import { notice } from '$lib/stores/ops';
-  import { pendingTag, browseView } from '$lib/stores/discover';
+  import { pendingTag, browseView, librarySection } from '$lib/stores/discover';
   import type { CtxItem } from '$lib/stores/contextMenu';
 
   function curatedVariants(app: CuratedApp, managers: Record<Source, boolean>): Variant[] {
@@ -70,7 +71,6 @@
   let searchBackTo = $derived(`/?q=${encodeURIComponent(trimmed)}`);
 
   if (get(page).url.searchParams.get('view') === 'library') browseView.set('library');
-  let libSelection = $state<LibSelection>('all');
   function setMode(mode: 'discover' | 'library') {
     if (mode === $browseView) return;
     browseView.set(mode);
@@ -92,12 +92,9 @@
     return $installed.filter((p) => !hidden.has(`${p.source}:${p.id.toLowerCase()}`)).length;
   });
   $effect(() => {
-    if (
-      libSelection !== 'all' &&
-      libSelection !== 'updates' &&
-      !installedBuckets.some((b) => b.key === libSelection)
-    ) {
-      libSelection = 'all';
+    const s = $librarySection;
+    if (s !== 'all' && s !== 'updates' && s !== 'activity' && !installedBuckets.some((b) => b.key === s)) {
+      librarySection.set('all');
     }
   });
 
@@ -144,9 +141,9 @@
       .sort((a, b) => a.name.localeCompare(b.name))
   );
   let paneInstalled = $derived(
-    libSelection === 'all' || libSelection === 'updates'
+    $librarySection === 'all' || $librarySection === 'updates' || $librarySection === 'activity'
       ? installedSorted
-      : installedSorted.filter((p) => bucketKey(p) === libSelection)
+      : installedSorted.filter((p) => bucketKey(p) === $librarySection)
   );
 
   let catalogDesc = $derived.by(() => {
@@ -891,7 +888,11 @@
           <button class:on={$browseView === 'discover'} onclick={() => setMode('discover')}>Discover</button>
           <button class:on={$browseView === 'library'} onclick={() => setMode('library')}>
             Library
-            {#if managerIssues.length > 0}
+            {#if railUpdateCount > 0}
+              <span class="lib-count mono" title={`${railUpdateCount} update${railUpdateCount === 1 ? '' : 's'} available`}>
+                {railUpdateCount}
+              </span>
+            {:else if managerIssues.length > 0}
               <span class="lib-dot" title="A source needs attention"></span>
             {/if}
           </button>
@@ -913,27 +914,19 @@
               <span>{cat.title}</span><span class="rail-count mono">{cat.apps.length}</span>
             </button>
           {/each}
-          <button
-            class="rail-link updates-link"
-            onclick={() => { browseView.set('library'); libSelection = 'updates'; }}
-            title="View updates"
-          >
-            <span>Updates</span>
-            {#if railUpdateCount > 0}<span class="rail-badge mono">{railUpdateCount}</span>{/if}
-          </button>
         {:else}
           <button
             class="rail-link"
-            class:active={libSelection === 'all'}
-            onclick={() => (libSelection = 'all')}
+            class:active={$librarySection === 'all'}
+            onclick={() => librarySection.set('all')}
           >
             <span>All apps</span><span class="rail-count mono">{installedAllCount}</span>
           </button>
           {#each installedBuckets as b (b.key)}
             <button
               class="rail-link"
-              class:active={libSelection === b.key}
-              onclick={() => (libSelection = b.key)}
+              class:active={$librarySection === b.key}
+              onclick={() => librarySection.set(b.key)}
             >
               <span>{b.label}</span><span class="rail-count mono">{b.count}</span>
             </button>
@@ -953,27 +946,49 @@
           {/each}
           <button
             class="rail-link updates-link"
-            class:active={libSelection === 'updates'}
-            onclick={() => (libSelection = 'updates')}
+            class:active={$librarySection === 'updates'}
+            onclick={() => librarySection.set('updates')}
           >
             <span>Updates</span>
             {#if railUpdateCount > 0}<span class="rail-badge mono">{railUpdateCount}</span>{/if}
+          </button>
+          <button
+            class="rail-link"
+            class:active={$librarySection === 'activity'}
+            onclick={() => librarySection.set('activity')}
+          >
+            <span>Activity</span>
           </button>
         {/if}
       </div>
     {/if}
     <div class="browse-main">
       {#if $browseView === 'library'}
-        {#if libSelection === 'updates'}
+        {#if $librarySection === 'updates'}
           <UpdatesSection />
+        {:else if $librarySection === 'activity'}
+          <ActivitySection />
         {:else}
           <div class="pane-head">
-            <input
-              class="lib-filter"
-              placeholder="Filter apps…"
-              aria-label="Filter apps"
-              bind:value={libFilter}
-            />
+            <div class="search-box">
+              <Search size={18} />
+              <input
+                placeholder="Filter installed apps…"
+                aria-label="Filter installed apps"
+                bind:value={libFilter}
+                onkeydown={(e) => {
+                  if (e.key === 'Escape') {
+                    if (libFilter) libFilter = '';
+                    else e.currentTarget.blur();
+                  }
+                }}
+              />
+              {#if libFilter}
+                <button class="clear" onclick={() => (libFilter = '')} aria-label="Clear filter">
+                  <X size={15} />
+                </button>
+              {/if}
+            </div>
             {#if hiddenCount > 0}
               <button
                 class="btn btn-ghost"
@@ -1195,20 +1210,6 @@
   .clear:hover {
     background: var(--surface-hover);
     color: var(--text);
-  }
-  .lib-filter {
-    flex: 1;
-    min-width: 180px;
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius);
-    color: var(--text);
-    padding: 8px 12px;
-    font-size: 0.9rem;
-    outline: none;
-  }
-  .lib-filter:focus {
-    border-color: var(--accent);
   }
   .recents {
     display: flex;
@@ -1469,6 +1470,18 @@
     border-radius: 50%;
     flex-shrink: 0;
     background: var(--warning);
+  }
+  .lib-count {
+    font-size: 0.68rem;
+    line-height: 1.5;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: var(--accent-fill);
+    color: var(--accent-contrast);
+  }
+  .rail-switch button.on .lib-count {
+    background: color-mix(in srgb, var(--accent-contrast) 22%, transparent);
+    color: inherit;
   }
   .rail-switch button.on .lib-dot {
     background: var(--accent-contrast);

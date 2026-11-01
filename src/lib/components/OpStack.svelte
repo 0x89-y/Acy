@@ -1,7 +1,7 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
   import { ops, notices, dismissAll, dismissNotice } from '$lib/stores/ops';
-  import { setSettingsTab } from '$lib/stores/settings';
+  import { openLibrary } from '$lib/stores/discover';
   import Toast from './Toast.svelte';
 
   let dismissable = $derived(
@@ -13,7 +13,14 @@
   <div class="stack">
     {#if $ops.length > 0}
       <div class="stack-head">
-        <a class="history" href="/settings" onclick={() => setSettingsTab('about')}>Activity</a>
+        <a
+          class="history"
+          href="/"
+          onclick={(e) => {
+            e.preventDefault();
+            openLibrary('activity');
+          }}>Activity</a
+        >
         {#if dismissable > 1}
           <button class="clear-all" onclick={dismissAll} title="Dismiss finished notifications">
             Clear all

@@ -68,7 +68,6 @@
 
 <div class="shell">
   <div class="titlebar" data-tauri-drag-region>
-    <span class="logo mono" data-tauri-drag-region>acy</span>
     <div class="spacer" data-tauri-drag-region></div>
     <WindowControls />
   </div>
@@ -230,15 +229,6 @@
     padding: 0 4px 0 14px;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
-  }
-  .titlebar .logo {
-    font-size: 1.02rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-  }
-  .titlebar .logo::before {
-    content: '0x';
-    color: var(--accent);
   }
   .titlebar .spacer {
     flex: 1;

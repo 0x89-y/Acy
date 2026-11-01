@@ -54,29 +54,10 @@
   import { catalog, downloadCatalog, loadCatalogStatus, reloadCurated } from '$lib/stores/curated';
   import { confirmAction } from '$lib/stores/confirm';
   import { enqueue } from '$lib/stores/ops';
-  import { activity, type ActivityAction } from '$lib/stores/activity';
   import { CHANGELOG } from '$lib/changelog';
   import ShortcutList from '$lib/components/ShortcutList.svelte';
   import * as api from '$lib/api';
   import type { Source } from '$lib/types';
-
-  const actionLabel: Record<ActivityAction, string> = {
-    install: 'Installed',
-    update: 'Updated',
-    uninstall: 'Removed',
-    'update-all': 'Updated all',
-    setup: 'Set up'
-  };
-
-  function when(at: number): string {
-    const d = new Date(at);
-    return d.toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  }
 
   const modes: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
     { value: 'light', label: 'Light', icon: Sun },
@@ -126,7 +107,6 @@
   let customMsg = $state('');
   let customBusy = $state(false);
   let appVersion = $state('');
-  const ACTIVITY_PREVIEW = 6;
 
   onMount(async () => {
     try {
@@ -798,30 +778,6 @@
         <a class="btn btn-ghost" href="/changelog">View full changelog</a>
       </section>
 
-      <section class="group">
-        <h2>Activity</h2>
-        {#if $activity.length === 0}
-          <p class="muted hint">Your installs, updates, and removals will show up here.</p>
-        {:else}
-          <div class="log">
-            {#each $activity.slice(0, ACTIVITY_PREVIEW) as a (a.id)}
-              <div class="log-row">
-                <span class="log-dot" class:ok={a.ok} class:bad={!a.ok}></span>
-                <span class="log-txt">
-                  <strong>{actionLabel[a.action]}</strong>
-                  {a.name}
-                  {#if a.source}<span class="mono muted log-src">{a.source}</span>{/if}
-                </span>
-                <span class="log-time mono muted">{when(a.at)}</span>
-              </div>
-            {/each}
-          </div>
-          <div class="log-actions">
-            <a class="btn btn-ghost" href="/activity">View activity</a>
-          </div>
-        {/if}
-      </section>
-
     {/if}
   </div>
 </div>
@@ -1337,48 +1293,6 @@
   .log {
     text-align: left;
     padding: 4px var(--settings-pad) 12px;
-  }
-  .log-actions {
-    display: flex;
-    gap: 8px;
-    padding: 0 var(--settings-pad) 12px;
-  }
-  .log-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 7px 0;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.88rem;
-  }
-  .log-row:last-child {
-    border-bottom: none;
-  }
-  .log-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-  .log-dot.ok {
-    background: var(--success);
-  }
-  .log-dot.bad {
-    background: var(--danger);
-  }
-  .log-txt {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .log-src {
-    font-size: 0.74rem;
-  }
-  .log-time {
-    font-size: 0.74rem;
-    flex-shrink: 0;
   }
 
   .rel {

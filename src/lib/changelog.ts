@@ -7,6 +7,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.9.5',
+    date: '2026-11-01',
+    changes: [
+      'Activity moved to Library → Activity (the "Activity" link above notifications goes there too).',
+      'The Library tab shows how many updates are available; Updates no longer appears in the Discover sidebar.',
+      'The Library filter box now matches the Discover search box, with a clear button and Esc to clear.',
+      'App page: no duplicate Website row, no "Not installed" label, and square-cornered tags.',
+      'Quieter look: no dotted background, smaller dialog corners, and no logo in the setup title bar.'
+    ]
+  },
+  {
     version: '0.9.4',
     date: '2026-11-01',
     changes: [

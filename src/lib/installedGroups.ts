@@ -2,7 +2,7 @@ import type { Package, Source } from '$lib/types';
 
 export type BucketKey = Source | 'games' | 'ms-system' | 'other';
 
-export type LibSelection = 'all' | BucketKey | 'updates';
+export type LibSelection = 'all' | BucketKey | 'updates' | 'activity';
 
 const GAMES =
   /(\\steam app\b|steam app|\\epicgames-|epic games|\bgog\b|gog galaxy|gog\.com|\bea app\b|ea desktop|origin games|ubisoft|uplay|battle\.net|blizzard|battlefield|\briot\b|riot games|riot client|valorant|league of legends|hoyoplay|genshin|honkai|zenless zone|vintage story)/i;
