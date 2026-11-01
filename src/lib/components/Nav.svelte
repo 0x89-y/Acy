@@ -4,9 +4,6 @@
 </script>
 
 <header class="nav" data-tauri-drag-region>
-  <a class="brand" href="/" title="Home" aria-label="Home">
-    <span class="logo mono">acy</span>
-  </a>
   <div class="spacer" data-tauri-drag-region></div>
   <div class="right">
     <a href="/settings" class="icon-link" title="Settings" aria-label="Settings">
@@ -30,28 +27,6 @@
     background: var(--surface);
     border-bottom: 1px solid var(--border);
     user-select: none;
-  }
-  .brand {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    text-decoration: none;
-    color: inherit;
-  }
-  .logo {
-    font-size: 0.95rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-  }
-  .logo::before {
-    content: '0x';
-    color: var(--accent);
-  }
-  :global([data-accent='aurora']) .logo::before {
-    background: var(--aurora-gradient);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
   }
   .spacer {
     flex: 1;

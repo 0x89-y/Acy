@@ -56,6 +56,7 @@
   import { enqueue } from '$lib/stores/ops';
   import { activity, type ActivityAction } from '$lib/stores/activity';
   import { CHANGELOG } from '$lib/changelog';
+  import ShortcutList from '$lib/components/ShortcutList.svelte';
   import * as api from '$lib/api';
   import type { Source } from '$lib/types';
 
@@ -268,6 +269,7 @@
     { id: 'appearance', label: 'Appearance' },
     { id: 'sources', label: 'Sources' },
     { id: 'updates', label: 'Updates' },
+    { id: 'shortcuts', label: 'Shortcuts' },
     { id: 'about', label: 'About' }
   ];
   let activeTab = $derived($settings.settingsTab);
@@ -756,6 +758,14 @@
           </div>
         {/if}
       </section>
+    {:else if activeTab === 'shortcuts'}
+      <section class="group">
+        <h2>Keyboard shortcuts</h2>
+        <p class="muted hint">Press <kbd class="key">?</kbd> anywhere to bring this list up.</p>
+        <div class="shortcuts">
+          <ShortcutList />
+        </div>
+      </section>
     {:else if activeTab === 'about'}
       <section class="group">
         <h2>About</h2>
@@ -993,6 +1003,19 @@
     padding: 0 var(--settings-pad) 12px;
     max-width: 520px;
     font-size: 0.86rem;
+  }
+  .shortcuts {
+    padding: 0 var(--settings-pad);
+    max-width: 560px;
+  }
+  .key {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 1px 6px;
   }
 
   .seg {

@@ -13,7 +13,7 @@ export type AccentName =
   | 'aurora'
   | 'custom';
 
-export type SettingsTab = 'general' | 'appearance' | 'sources' | 'updates' | 'about';
+export type SettingsTab = 'general' | 'appearance' | 'sources' | 'updates' | 'shortcuts' | 'about';
 
 export type ViewMode = 'grid' | 'list';
 

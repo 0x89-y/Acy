@@ -74,7 +74,7 @@
   function setMode(mode: 'discover' | 'library') {
     if (mode === $browseView) return;
     browseView.set(mode);
-    exitSelect();
+    clearSelection();
   }
   let acyUpdatePending = $derived($updaterPhase === 'available' && !!$updaterVersion);
   let railUpdateCount = $derived($actionableUpdates.length + (acyUpdatePending ? 1 : 0));
@@ -113,6 +113,11 @@
         $settings.managers[m.source] !== false &&
         (!m.available || m.needsSetup)
     )
+  );
+  let searchSourceNames = $derived(
+    $enabledSources.length > 0
+      ? $enabledSources.map((s) => managerNames[s]).join(', ')
+      : 'package managers'
   );
   function openSources() {
     setSettingsTab('sources');
@@ -215,12 +220,9 @@
     return items;
   }
 
-  function toggleSelectInstalled(p: Package) {
-    const k = `${p.source}:${p.id}`;
-    const next = new Map(selectedApps);
-    if (next.has(k)) next.delete(k);
-    else next.set(k, { name: p.name, variants: [{ source: p.source, id: p.id }] });
-    selectedApps = next;
+  function installedPick(p: Package): Pick | null {
+    if (isAcyPackage(p)) return null;
+    return { key: `${p.source}:${p.id}`, name: p.name, variants: [{ source: p.source, id: p.id }] };
   }
   async function uninstallSelected() {
     removing = true;
@@ -235,7 +237,7 @@
     }
     installProgress = null;
     removing = false;
-    exitSelect();
+    clearSelection();
     refreshLibrary();
     if (total > 1) summarizeBatch(total, ok, 'removed');
   }
@@ -447,10 +449,13 @@
     runSearch();
   }
 
-  let selectMode = $state(false);
+  type Pick = { key: string; name: string; variants: Variant[] };
   let installing = $state(false);
   let installProgress = $state<{ current: number; total: number; name: string } | null>(null);
-  let selectedApps = $state<Map<string, { name: string; variants: Variant[] }>>(new Map());
+  let selectedApps = $state<Map<string, Pick>>(new Map());
+  let selecting = $derived(selectedApps.size > 0);
+  // Last card toggled; Shift+click selects everything between it and the clicked card.
+  let selectAnchor: string | null = null;
   function appKey(app: CuratedApp) {
     return `${app.source}:${app.id}`;
   }
@@ -459,18 +464,31 @@
       ($settings.preferredSource && vs.find((v) => v.source === $settings.preferredSource)) || vs[0]
     );
   }
-  function toggleSelectApp(app: CuratedApp) {
+  function curatedPick(app: CuratedApp): Pick | null {
     const vs = curatedVariants(app, $settings.managers);
-    if (vs.length === 0 || anyInstalled(vs)) return;
-    const k = appKey(app);
+    if (vs.length === 0 || anyInstalled(vs)) return null;
+    return { key: appKey(app), name: app.name ?? app.id, variants: vs };
+  }
+  function togglePick<T>(item: T, list: T[], toPick: (x: T) => Pick | null, e: MouseEvent) {
+    const target = toPick(item);
+    if (!target) return;
     const next = new Map(selectedApps);
-    if (next.has(k)) next.delete(k);
-    else next.set(k, { name: app.name ?? app.id, variants: vs });
+    const picks = list.map(toPick);
+    const from = e.shiftKey && selectAnchor ? picks.findIndex((p) => p?.key === selectAnchor) : -1;
+    const to = picks.findIndex((p) => p?.key === target.key);
+    if (from !== -1 && to !== -1) {
+      for (const p of picks.slice(Math.min(from, to), Math.max(from, to) + 1)) if (p) next.set(p.key, p);
+    } else if (next.has(target.key)) {
+      next.delete(target.key);
+    } else {
+      next.set(target.key, target);
+    }
+    selectAnchor = target.key;
     selectedApps = next;
   }
-  function exitSelect() {
-    selectMode = false;
+  function clearSelection() {
     selectedApps = new Map();
+    selectAnchor = null;
   }
   async function installSelected() {
     installing = true;
@@ -485,7 +503,7 @@
     }
     installProgress = null;
     installing = false;
-    exitSelect();
+    clearSelection();
     loadInstalled(true);
     if (total > 1) summarizeBatch(total, ok, 'installed');
   }
@@ -572,9 +590,9 @@
       tagMenuOpen = false;
       return;
     }
-    if (e.key === 'Escape' && selectMode && !typing) {
+    if (e.key === 'Escape' && selecting && !typing && !installing && !removing) {
       e.preventDefault();
-      exitSelect();
+      clearSelection();
       return;
     }
     if (cmdK || slash) {
@@ -652,16 +670,6 @@
 </script>
 
 <svelte:window onclick={onWindowClick} onresize={closeTagMenu} onscroll={closeTagMenu} />
-
-{#snippet selectBtn()}
-  <button
-    class="btn sel-toggle"
-    onclick={() => (selectMode ? exitSelect() : (selectMode = true))}
-    aria-pressed={selectMode}
-  >
-    {selectMode ? 'Cancel selection' : 'Select apps'}
-  </button>
-{/snippet}
 
 {#snippet uninstallAction(app: { source: Source; id: string; name: string })}
   <InstallButton
@@ -754,7 +762,7 @@
   {/if}
 {/snippet}
 
-{#if selectMode && selectedApps.size > 0}
+{#if selecting}
   <div class="sel-bar">
     <span class="sel-count" role="status" aria-live="polite">
       {#if installProgress}
@@ -764,6 +772,9 @@
       {/if}
     </span>
     <div class="sel-spacer"></div>
+    <button class="btn btn-ghost" onclick={clearSelection} disabled={installing || removing}>
+      Clear
+    </button>
     {#if $browseView === 'library'}
       <button class="btn btn-accent" onclick={uninstallSelected} disabled={removing}>
         {installProgress ? `${installProgress.current} of ${installProgress.total}…` : `Uninstall ${selectedApps.size}`}
@@ -793,9 +804,10 @@
             layout={rowLayout}
             highlight={trimmed}
             backTo={searchBackTo}
-            selectable={selectMode && !anyInstalled(vs)}
+            selectable={!anyInstalled(vs)}
             selected={selectedApps.has(appKey(app))}
-            onToggleSelect={() => toggleSelectApp(app)}
+            {selecting}
+            onToggleSelect={(e) => togglePick(app, curatedMatches, curatedPick, e)}
             onChanged={() => loadInstalled(true)}
           />
         {/each}
@@ -835,8 +847,11 @@
           : `No package-manager results for “${query}”.`}
       </p>
     {/if}
-  {:else if curatedMatches.length === 0}
-    <p class="muted pane-msg">No curated apps match “{query}”.</p>
+  {:else}
+    <p class="muted pane-msg">
+      {#if curatedMatches.length === 0}No apps in your list match “{trimmed}”.{/if}
+      Press <kbd class="kbd">Enter</kbd> to search {searchSourceNames}.
+    </p>
   {/if}
 {/snippet}
 
@@ -959,7 +974,6 @@
               aria-label="Filter apps"
               bind:value={libFilter}
             />
-            {@render selectBtn()}
             {#if hiddenCount > 0}
               <button
                 class="btn btn-ghost"
@@ -991,9 +1005,10 @@
                     layout={rowLayout}
                     backTo="/?view=library"
                     menu={installedMenu(p)}
-                    selectable={selectMode}
+                    selectable={!isAcyPackage(p)}
                     selected={selectedApps.has(`${p.source}:${p.id}`)}
-                    onToggleSelect={() => toggleSelectInstalled(p)}
+                    {selecting}
+                    onToggleSelect={(e) => togglePick(p, paneInstalled, installedPick, e)}
                     action={uninstallAction}
                   />
                 {/each}
@@ -1021,20 +1036,17 @@
                 }
               }}
             />
+            {#if searching}
+              <span class="spinner" role="status" aria-label="Searching"></span>
+            {/if}
             {#if query}
               <button class="clear" onclick={() => { query = ''; searchInput?.focus(); }} aria-label="Clear search">
                 <X size={15} />
               </button>
-            {:else}
-              <kbd class="kbd">Ctrl K</kbd>
             {/if}
           </div>
-          <button class="btn btn-accent search-btn" onclick={runSearch} disabled={!showSearch || searching}>
-            {searching ? 'Searching…' : 'Search'}
-          </button>
           <div class="pane-tools">
             {#if !showSearch && allTags.length > 0}{@render filterCluster()}{/if}
-            {@render selectBtn()}
             <ViewToggle value={$settings.discoverView} onChange={setDiscoverView} />
           </div>
         </div>
@@ -1105,10 +1117,11 @@
                   installed={anyInstalled(vs)}
                   homepage={app.icon ?? app.homepage}
                   layout={rowLayout}
-                  selectable={selectMode && !anyInstalled(vs)}
+                  selectable={!anyInstalled(vs)}
                   selected={selectedApps.has(appKey(app))}
+                  {selecting}
                   ctxExtra={uncatKeys.has(appKey(app)) ? moveMenu(app) : []}
-                  onToggleSelect={() => toggleSelectApp(app)}
+                  onToggleSelect={(e) => togglePick(app, paneApps, curatedPick, e)}
                   onChanged={() => loadInstalled(true)}
                 />
               {/each}
@@ -1151,8 +1164,21 @@
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    padding: 2px 7px;
+    padding: 1px 6px;
+  }
+  .spinner {
+    width: 14px;
+    height: 14px;
     flex-shrink: 0;
+    border: 2px solid var(--border-strong);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   .clear {
     display: inline-flex;
@@ -1169,10 +1195,6 @@
   .clear:hover {
     background: var(--surface-hover);
     color: var(--text);
-  }
-  .search-btn {
-    flex-shrink: 0;
-    white-space: nowrap;
   }
   .lib-filter {
     flex: 1;
@@ -1578,9 +1600,6 @@
   }
   .pane-msg {
     padding: 16px 14px;
-  }
-  .sel-toggle {
-    font-size: 0.85rem;
   }
   .filter-empty {
     max-width: 480px;

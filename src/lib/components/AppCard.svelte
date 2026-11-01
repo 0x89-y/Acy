@@ -22,6 +22,7 @@
     showSources = false,
     selectable = false,
     selected = false,
+    selecting = false,
     highlight = '',
     layout = 'grid',
     backTo = null,
@@ -43,15 +44,18 @@
      * choice of package manager to the detail page. */
     showSources?: boolean;
     layout?: 'grid' | 'list';
+    /** Can be ticked (hover checkbox, Ctrl/Shift+click). */
     selectable?: boolean;
     selected?: boolean;
+    /** A selection is in progress: a plain click toggles instead of opening. */
+    selecting?: boolean;
     highlight?: string;
     backTo?: string | null;
     inList?: boolean;
     ctxExtra?: CtxItem[];
     action?: Snippet<[{ source: Source; id: string; name: string }]>;
     menu?: CtxItem[] | null;
-    onToggleSelect?: () => void;
+    onToggleSelect?: (e: MouseEvent) => void;
     onChanged?: () => void;
     onAddToList?: () => void;
   } = $props();
@@ -91,8 +95,14 @@
     onChanged?.();
   }
 
+  function onMainClick(e: MouseEvent) {
+    if (!selectable || !(selecting || e.ctrlKey || e.metaKey || e.shiftKey)) return;
+    e.preventDefault();
+    onToggleSelect?.(e);
+  }
+
   function onCtx(e: MouseEvent) {
-    if (selectable) return;
+    if (selecting) return;
     if (menu) {
       openContextMenu(e, [...menu, ...ctxExtra]);
       return;
@@ -112,18 +122,17 @@
   class="card app-card"
   class:list={layout === 'list'}
   class:selected={selectable && selected}
-  class:has-add={!!onAddToList && !selectable}
+  class:selecting
+  class:has-corner={!!onAddToList || selectable}
   oncontextmenu={onCtx}
   role="group"
 >
   <a
     class="main"
     {href}
-    onclick={(e) => {
-      if (selectable) {
-        e.preventDefault();
-        onToggleSelect?.();
-      }
+    onclick={onMainClick}
+    onmousedown={(e) => {
+      if (selectable && e.shiftKey) e.preventDefault();
     }}
   >
     <AppIcon
@@ -148,7 +157,22 @@
       {/if}
     </div>
     <div class="foot-right">
-      {#if onAddToList && !selectable}
+      {#if selectable}
+        <button
+          class="pick"
+          role="checkbox"
+          aria-checked={selected}
+          aria-label={`Select ${name}`}
+          title={selected ? 'Deselect' : 'Select'}
+          onclick={(e) => onToggleSelect?.(e)}
+          onmousedown={(e) => {
+            if (e.shiftKey) e.preventDefault();
+          }}
+        >
+          <Check size={13} />
+        </button>
+      {/if}
+      {#if onAddToList}
         {#if inList}
           <span class="add-corner is-in" title="In your list" aria-label="In your list">
             <Check size={14} />
@@ -165,19 +189,7 @@
         {/if}
       {/if}
     <div class="card-action">
-      {#if selectable}
-        <label class="acheck selection-action">
-          <input
-            type="checkbox"
-            checked={selected}
-            tabindex="-1"
-            aria-label={`Select ${name}`}
-            onchange={onToggleSelect}
-          />
-          <span class="box"><Check size={13} /></span>
-          <span>{selected ? 'Selected' : 'Select'}</span>
-        </label>
-      {:else if action}
+      {#if action}
         {@render action({ source: primary.source, id: primary.id, name })}
       {:else if installed}
         <span class="installed"><Check size={14} /> Installed</span>
@@ -326,7 +338,7 @@
     top: 12px;
     right: 12px;
   }
-  .app-card:not(.list).has-add .main {
+  .app-card:not(.list).has-corner .main {
     padding-right: 32px;
   }
   .card-action {
@@ -347,11 +359,42 @@
   .installed :global(svg) {
     color: var(--success);
   }
-  .selection-action {
-    justify-content: flex-end;
-    gap: 7px;
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    font-weight: 500;
+  .pick {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    flex-shrink: 0;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 6px;
+    background: var(--surface);
+    color: transparent;
+    opacity: 0;
+    transition: opacity 0.12s, background 0.12s, border-color 0.12s;
+  }
+  .app-card:not(.list) .pick {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+  }
+  .app-card:hover .pick,
+  .app-card:focus-within .pick,
+  .app-card.selecting .pick {
+    opacity: 1;
+  }
+  .pick:hover {
+    border-color: var(--accent);
+  }
+  .pick[aria-checked='true'] {
+    opacity: 1;
+    background: var(--accent-fill);
+    border-color: var(--accent);
+    color: var(--accent-contrast);
+  }
+  .pick:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 </style>

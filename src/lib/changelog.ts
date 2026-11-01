@@ -7,6 +7,18 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.9.4',
+    date: '2026-11-01',
+    changes: [
+      'Simpler toolbar: no Search button (press Enter), no "Select apps" button, and a single grid/list toggle.',
+      'Select apps from their cards: hover for a checkbox, or Ctrl+click. Shift+click selects a range. Once something is selected, clicking a card toggles it, and Esc clears the selection.',
+      'Typing in search shows a hint to press Enter to search your package managers, and a spinner while it runs.',
+      'New Settings → Shortcuts tab listing every keyboard shortcut (also available anywhere with ?).',
+      'Removed the logo from the title bar.',
+      'Acy itself can no longer be picked for a bulk uninstall in the Library.'
+    ]
+  },
+  {
     version: '0.9.3',
     date: '2026-10-24',
     changes: [
