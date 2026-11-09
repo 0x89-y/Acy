@@ -427,6 +427,47 @@ async fn resolve_icon(source_url: &str) -> Option<Vec<u8>> {
     favicon_service(base.host_str()?).await
 }
 
+/// What the webview gets for an icon. Raster files are served straight from
+/// the cache through the asset protocol (scoped to the icons dir in
+/// `tauri.conf.json`), so big images (Steam art) don't cross IPC as base64.
+/// `version` is the file's mtime, a cache-buster for re-downloads. SVGs stay
+/// data URLs: the asset protocol sniffs the type from the bytes or the
+/// extension, and our `.img` files give it neither for SVG.
+#[derive(serde::Serialize)]
+#[serde(untagged)]
+pub enum IconRef {
+    Data(String),
+    File { path: String, version: u64 },
+}
+
+fn file_ref(path: &std::path::Path, head: &[u8]) -> IconRef {
+    if mime_of(head) == "image/svg+xml" {
+        if let Ok(bytes) = std::fs::read(path) {
+            return IconRef::Data(to_data_url(&bytes));
+        }
+    }
+    let version = std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    IconRef::File {
+        path: path.to_string_lossy().into_owned(),
+        version,
+    }
+}
+
+// Disk cache only: never spawns a package manager or touches the network.
+// Reads just enough of the file to tell SVG from raster.
+pub fn cached_icon(app: &AppHandle, source: Source, id: &str) -> Option<IconRef> {
+    use std::io::Read;
+    let path = cache_path(app, source, id)?;
+    let mut head = Vec::with_capacity(256);
+    std::fs::File::open(&path).ok()?.take(256).read_to_end(&mut head).ok()?;
+    (!head.is_empty()).then(|| file_ref(&path, &head))
+}
+
 pub async fn get_icon(
     app: &AppHandle,
     source: Source,
@@ -434,14 +475,11 @@ pub async fn get_icon(
     homepage: Option<String>,
     steamgrid_key: Option<String>,
     game_name: Option<String>,
-) -> Option<String> {
-    let path = cache_path(app, source, &id)?;
-
-    if let Ok(bytes) = std::fs::read(&path) {
-        if !bytes.is_empty() {
-            return Some(to_data_url(&bytes));
-        }
+) -> Option<IconRef> {
+    if let Some(icon) = cached_icon(app, source, &id) {
+        return Some(icon);
     }
+    let path = cache_path(app, source, &id)?;
 
     if let Some(none) = none_path(app, source, &id) {
         if no_icon_marker_fresh(&none) {
@@ -472,8 +510,7 @@ pub async fn get_icon(
         None => {
             let homepage = match homepage {
                 Some(h) if !h.trim().is_empty() => Some(h),
-                _ => sources::for_source(source)
-                    .info(&id)
+                _ => sources::info_cached(source, &id)
                     .await
                     .ok()
                     .flatten()
@@ -488,11 +525,13 @@ pub async fn get_icon(
 
     match bytes {
         Some(bytes) => {
-            let _ = std::fs::write(&path, &bytes);
             if let Some(none) = none_path(app, source, &id) {
                 let _ = std::fs::remove_file(none);
             }
-            Some(to_data_url(&bytes))
+            Some(match std::fs::write(&path, &bytes) {
+                Ok(()) => file_ref(&path, &bytes),
+                Err(_) => IconRef::Data(to_data_url(&bytes)),
+            })
         }
         None => {
             if let Some(none) = none_path(app, source, &id) {
@@ -624,6 +663,39 @@ mod tests {
         assert_eq!(pick_game_id(&data, "Diablo II"), Some(10));
         assert_eq!(pick_game_id(&serde_json::json!([]), "x"), None);
         assert_eq!(pick_game_id(&serde_json::json!({}), "x"), None);
+    }
+
+    // The frontend (`api.iconSrc`) relies on this exact shape.
+    #[test]
+    fn icon_ref_serializes_as_string_or_path_object() {
+        assert_eq!(
+            serde_json::to_value(IconRef::Data("data:image/svg+xml;base64,x".into())).unwrap(),
+            serde_json::json!("data:image/svg+xml;base64,x")
+        );
+        assert_eq!(
+            serde_json::to_value(IconRef::File { path: r"C:\c\winget_x.img".into(), version: 7 })
+                .unwrap(),
+            serde_json::json!({ "path": r"C:\c\winget_x.img", "version": 7 })
+        );
+    }
+
+    #[test]
+    fn file_ref_inlines_svg_and_serves_raster_as_file() {
+        let dir = std::env::temp_dir().join(format!("acy-icon-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let svg = dir.join("a.img");
+        let png = dir.join("b.img");
+        std::fs::write(&svg, b"<svg xmlns='http://www.w3.org/2000/svg'/>").unwrap();
+        std::fs::write(&png, b"\x89PNG\r\n\x1a\nrest").unwrap();
+        assert!(matches!(
+            file_ref(&svg, b"<svg"),
+            IconRef::Data(url) if url.starts_with("data:image/svg+xml;base64,")
+        ));
+        assert!(matches!(
+            file_ref(&png, b"\x89PNG"),
+            IconRef::File { path, version } if path.ends_with("b.img") && version > 0
+        ));
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

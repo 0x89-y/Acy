@@ -1,6 +1,7 @@
 <script lang="ts">
   import { settings } from '$lib/stores/settings';
-  import { loadIcon, iconCacheVersion } from '$lib/stores/icons';
+  import { requestIcon, iconCacheVersion } from '$lib/stores/icons';
+  import { onceVisible } from '$lib/visibility';
   import { steamAppId } from '$lib/installedGroups';
   import type { Source } from '$lib/types';
 
@@ -10,7 +11,8 @@
     source = null,
     id = null,
     homepage = null,
-    gameName = null
+    gameName = null,
+    cacheOnly = false
   }: {
     name: string;
     size?: number;
@@ -18,6 +20,7 @@
     id?: string | null;
     homepage?: string | null;
     gameName?: string | null;
+    cacheOnly?: boolean;
   } = $props();
 
   const palette = [
@@ -40,6 +43,14 @@
 
   let iconUrl = $state<string | null>(null);
   let loading = $state(false);
+  // Nothing is fetched until the icon is on screen (long Library/search lists).
+  let visible = $state(false);
+
+  function watch(node: Element) {
+    if (visible) return;
+    const stop = onceVisible(node, () => (visible = true));
+    return { destroy: stop };
+  }
 
   $effect(() => {
     void $iconCacheVersion;
@@ -49,23 +60,33 @@
     const i = id;
     const h = homepage;
     const g = gameName;
+    const c = cacheOnly;
     iconUrl = null;
-    if (enabled && s && i) {
-      loading = true;
-      loadIcon(s, i, h, key, g).then((url) => {
-        if (source === s && id === i) {
-          iconUrl = url;
-          loading = false;
-        }
-      });
-    } else {
+    if (!(enabled && s && i)) {
       loading = false;
+      return;
     }
+    loading = true;
+    if (!visible) return;
+    // Released when this re-runs or the card unmounts; a fetch nobody waits
+    // on any more gets cancelled.
+    const req = requestIcon(s, i, h, key, g, c);
+    let live = true;
+    req.promise.then((url) => {
+      if (!live) return;
+      iconUrl = url;
+      loading = false;
+    });
+    return () => {
+      live = false;
+      req.release();
+    };
   });
 </script>
 
 {#if iconUrl}
   <img
+    use:watch
     class="icon img"
     class:cover={isGameArt}
     src={iconUrl}
@@ -73,9 +94,10 @@
     style="width:{size}px; height:{size}px;"
   />
 {:else if loading}
-  <div class="skel skeleton" style="width:{size}px; height:{size}px;"></div>
+  <div use:watch class="skel skeleton" style="width:{size}px; height:{size}px;"></div>
 {:else}
   <div
+    use:watch
     class="icon"
     style="--c:{color}; width:{size}px; height:{size}px; font-size:{Math.round(size * 0.42)}px;"
   >

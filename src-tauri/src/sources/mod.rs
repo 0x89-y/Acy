@@ -1,6 +1,9 @@
 use crate::model::{ManagerStatus, Package, SearchHit, Source};
 use async_trait::async_trait;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, LazyLock, Mutex};
+use std::time::{Duration, Instant};
+use tokio::sync::OnceCell;
 
 pub mod choco;
 pub mod msstore;
@@ -31,6 +34,40 @@ pub fn for_source(source: Source) -> Box<dyn PackageSource> {
         Source::Choco => Box::new(choco::Choco),
         Source::Msstore => Box::new(msstore::Msstore),
     }
+}
+
+const INFO_TTL: Duration = Duration::from_secs(10 * 60);
+
+type InfoCell = Arc<OnceCell<(Instant, Option<Package>)>>;
+
+static INFO: LazyLock<Mutex<HashMap<(Source, String), InfoCell>>> = LazyLock::new(Default::default);
+
+fn info_fresh(cell: &InfoCell) -> bool {
+    cell.get().is_none_or(|(at, _)| at.elapsed() < INFO_TTL)
+}
+
+/// `info()` memoized for a few minutes, with concurrent calls for the same
+/// package sharing one run. The app page and its icon both need `winget show`
+/// for the same id at the same moment; this makes that one process, not two.
+/// Errors aren't cached, so the next call retries.
+pub async fn info_cached(source: Source, id: &str) -> anyhow::Result<Option<Package>> {
+    let key = (source, id.to_lowercase());
+    let cell = {
+        let mut map = INFO.lock().unwrap_or_else(|e| e.into_inner());
+        match map.get(&key) {
+            Some(cell) if info_fresh(cell) => cell.clone(),
+            _ => {
+                map.retain(|_, c| info_fresh(c));
+                let cell = InfoCell::default();
+                map.insert(key, cell.clone());
+                cell
+            }
+        }
+    };
+    let (_, pkg) = cell
+        .get_or_try_init(|| async { Ok::<_, anyhow::Error>((Instant::now(), for_source(source).info(id).await?)) })
+        .await?;
+    Ok(pkg.clone())
 }
 
 pub fn all() -> Vec<Box<dyn PackageSource>> {

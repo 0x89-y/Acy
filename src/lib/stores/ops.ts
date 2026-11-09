@@ -76,6 +76,15 @@ export function dismissAll() {
   for (const id of removed) retryable.delete(id);
 }
 
+// Takes a job that hasn't started out of the queue; its caller sees `false`.
+export function cancelQueued(id: string) {
+  const i = queue.findIndex((job) => job.id === id);
+  if (i === -1) return;
+  const [job] = queue.splice(i, 1);
+  dismiss(id);
+  job.resolve(false);
+}
+
 export function retry(id: string) {
   const args = retryable.get(id);
   if (!args) return;

@@ -3,10 +3,12 @@
   import { ops, notices, dismissAll, dismissNotice } from '$lib/stores/ops';
   import { openLibrary } from '$lib/stores/discover';
   import Toast from './Toast.svelte';
+  import QueuedOps from './QueuedOps.svelte';
 
   let dismissable = $derived(
     $ops.filter((o) => o.state === 'done' || o.state === 'error').length
   );
+  let queued = $derived($ops.filter((o) => o.state === 'queued'));
 </script>
 
 {#if $ops.length > 0 || $notices.length > 0}
@@ -37,11 +39,12 @@
         </button>
       </div>
     {/each}
-    {#each $ops as op, i (op.id)}
-      {@const queueAhead = op.state === 'queued'
-        ? $ops.slice(0, i).filter((item) => item.state === 'queued' || item.state === 'running').length
-        : 0}
-      <Toast {op} {queueAhead} />
+    {#each $ops as op (op.id)}
+      {#if op.state !== 'queued'}
+        <Toast {op} />
+      {:else if op.id === queued[0].id}
+        <QueuedOps ops={queued} />
+      {/if}
     {/each}
   </div>
 {/if}

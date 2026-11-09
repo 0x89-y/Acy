@@ -159,8 +159,7 @@ pub async fn list_updates(sources: Vec<Source>) -> Result<Vec<Package>, String> 
 
 #[tauri::command]
 pub async fn app_info(source: Source, id: String) -> Result<Option<Package>, String> {
-    sources::for_source(source)
-        .info(&id)
+    sources::info_cached(source, &id)
         .await
         .map_err(|e| e.to_string())
 }
@@ -371,7 +370,24 @@ pub async fn scoop_cleanup(app: AppHandle, op_id: String) -> Result<i32, String>
         .map_err(|e| e.to_string())
 }
 
+// In-flight icon fetches the frontend may cancel (`cancel_icon`) once no card
+// wants the icon any more. A cancel can race ahead of its `app_icon` call, so
+// it leaves a `Cancelled` tombstone that the late call consumes.
+enum IconTicket {
+    Waiting(tokio::sync::oneshot::Sender<()>),
+    Cancelled,
+}
+
+static ICON_TICKETS: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<u64, IconTicket>>,
+> = std::sync::LazyLock::new(Default::default);
+
+fn icon_tickets() -> std::sync::MutexGuard<'static, std::collections::HashMap<u64, IconTicket>> {
+    ICON_TICKETS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn app_icon(
     app: AppHandle,
     source: Source,
@@ -379,8 +395,51 @@ pub async fn app_icon(
     homepage: Option<String>,
     steamgrid_key: Option<String>,
     game_name: Option<String>,
-) -> Option<String> {
-    crate::icons::get_icon(&app, source, id, homepage, steamgrid_key, game_name).await
+    cache_only: Option<bool>,
+    ticket: Option<u64>,
+) -> Result<Option<crate::icons::IconRef>, String> {
+    if cache_only.unwrap_or(false) {
+        return Ok(crate::icons::cached_icon(&app, source, &id));
+    }
+    let fetch = crate::icons::get_icon(&app, source, id, homepage, steamgrid_key, game_name);
+    let Some(ticket) = ticket else {
+        return Ok(fetch.await);
+    };
+    let cancelled = {
+        let mut tickets = icon_tickets();
+        if let Some(IconTicket::Cancelled) = tickets.remove(&ticket) {
+            return Err("cancelled".into());
+        }
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        tickets.insert(ticket, IconTicket::Waiting(tx));
+        rx
+    };
+    // Dropping `fetch` on cancel releases its FETCH_SEM permit, aborts HTTP
+    // requests and kills a running `winget show` (runner sets kill_on_drop).
+    let res = tokio::select! {
+        icon = fetch => Ok(icon),
+        Ok(()) = cancelled => Err("cancelled".into()),
+    };
+    icon_tickets().remove(&ticket);
+    res
+}
+
+#[tauri::command]
+pub fn cancel_icon(ticket: u64) {
+    let mut tickets = icon_tickets();
+    match tickets.remove(&ticket) {
+        Some(IconTicket::Waiting(tx)) => {
+            let _ = tx.send(());
+        }
+        Some(IconTicket::Cancelled) | None => {
+            // Tombstones for fetches that already finished are never consumed;
+            // keep them from piling up.
+            if tickets.len() > 512 {
+                tickets.retain(|_, t| matches!(t, IconTicket::Waiting(_)));
+            }
+            tickets.insert(ticket, IconTicket::Cancelled);
+        }
+    }
 }
 
 #[tauri::command]
@@ -416,7 +475,7 @@ pub async fn refresh_app_icon(
     homepage: Option<String>,
     steamgrid_key: Option<String>,
     game_name: Option<String>,
-) -> Option<String> {
+) -> Option<crate::icons::IconRef> {
     crate::icons::forget_icon(&app, source, &id);
     crate::icons::get_icon(&app, source, id, homepage, steamgrid_key, game_name).await
 }

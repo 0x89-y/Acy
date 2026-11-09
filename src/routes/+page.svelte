@@ -832,6 +832,7 @@
               backTo={searchBackTo}
               inList={hitInList(hit)}
               onAddToList={() => addHit(hit)}
+              iconCacheOnly
               onChanged={() => loadInstalled(true)}
             />
           {/each}

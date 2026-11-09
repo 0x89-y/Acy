@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
   CuratedFile,
@@ -78,6 +78,17 @@ export const curatedCatalogStatus = () =>
 export const appIconState = (source: Source, id: string) =>
   invoke<{ cached: boolean; deleted: boolean }>('app_icon_state', { source, id });
 
+/** An icon from the backend: a data URL (SVGs), or a cached file served
+ * through the asset protocol. `version` (mtime) busts the webview cache after
+ * a re-download. Mirrors `icons::IconRef`. */
+export type IconRef = string | { path: string; version: number };
+
+export function iconSrc(icon: IconRef | null): string | null {
+  if (!icon) return null;
+  if (typeof icon === 'string') return icon;
+  return `${convertFileSrc(icon.path)}?v=${icon.version}`;
+}
+
 export const refreshAppIcon = (
   source: Source,
   id: string,
@@ -85,13 +96,13 @@ export const refreshAppIcon = (
   steamGridKey?: string | null,
   gameName?: string | null
 ) =>
-  invoke<string | null>('refresh_app_icon', {
+  invoke<IconRef | null>('refresh_app_icon', {
     source,
     id,
     homepage: homepage ?? null,
     steamgridKey: steamGridKey || null,
     gameName: gameName || null
-  });
+  }).then(iconSrc);
 
 export const iconCacheStats = () =>
   invoke<{ icons: number; bytes: number }>('icon_cache_stats');

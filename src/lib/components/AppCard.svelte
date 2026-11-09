@@ -19,6 +19,7 @@
     installed = false,
     homepage = null,
     gameName = null,
+    iconCacheOnly = false,
     showSources = false,
     selectable = false,
     selected = false,
@@ -40,6 +41,7 @@
     installed?: boolean;
     homepage?: string | null;
     gameName?: string | null;
+    iconCacheOnly?: boolean;
     /** Show the source/launcher pills (Library). Browsing cards leave the
      * choice of package manager to the detail page. */
     showSources?: boolean;
@@ -141,6 +143,7 @@
       id={primary.id}
       {homepage}
       {gameName}
+      cacheOnly={iconCacheOnly}
       size={layout === 'list' ? 34 : 44}
     />
     <div class="meta">

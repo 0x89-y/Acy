@@ -7,6 +7,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.9.6',
+    date: '2026-11-09',
+    changes: [
+      'Faster package-manager search: results no longer download icons in the background, and only show icons Acy already has.',
+      'Icons load as they scroll into view, and downloads for cards you\'ve left are stopped instead of running on.',
+      'Opening an app page looks up its details once instead of twice, and reopening it within a few minutes doesn\'t look them up again.',
+      'Icons are loaded straight from disk, which uses less memory with large game art.',
+      'Waiting installs are grouped into one card, and you can remove any of them from the queue.'
+    ]
+  },
+  {
     version: '0.9.5',
     date: '2026-11-01',
     changes: [

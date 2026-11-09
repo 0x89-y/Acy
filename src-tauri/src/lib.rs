@@ -66,6 +66,7 @@ pub fn run() {
             commands::upgrade,
             commands::bootstrap_manager,
             commands::app_icon,
+            commands::cancel_icon,
             commands::clear_icon_cache,
             commands::icon_cache_stats,
             commands::refetch_missing_icons,
