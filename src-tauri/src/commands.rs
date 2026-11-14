@@ -85,6 +85,19 @@ pub async fn pick_catalog_file(app: AppHandle) -> Option<String> {
 }
 
 #[tauri::command]
+pub async fn pick_folder(app: AppHandle) -> Option<String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog().file().pick_folder(move |path| {
+        let _ = tx.send(path);
+    });
+    rx.await
+        .ok()
+        .flatten()
+        .and_then(|fp| fp.into_path().ok())
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
 pub async fn search(query: String, sources: Vec<Source>) -> Result<Vec<SearchHit>, String> {
     let query = query.trim().to_string();
     if query.is_empty() {
@@ -170,8 +183,15 @@ pub async fn install(
     source: Source,
     id: String,
     op_id: String,
+    location: Option<String>,
 ) -> Result<i32, String> {
-    let (program, args) = sources::for_source(source).install_cmd(&id);
+    let (program, mut args) = sources::for_source(source).install_cmd(&id);
+    // Only winget can be told where to install (and only per install, not on upgrade).
+    if source == Source::Winget {
+        if let Some(base) = location.as_deref() {
+            args.extend(sources::winget::location_args(base, &id));
+        }
+    }
     runner::stream(&app, &op_id, OP_EVENT, &program, &args)
         .await
         .map_err(|e| e.to_string())

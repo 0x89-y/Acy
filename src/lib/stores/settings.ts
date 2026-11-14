@@ -33,6 +33,8 @@ export interface Settings {
   customAccent: string;
   managers: Record<Source, boolean>;
   preferredSource: Source | null;
+  /** Base folder for winget installs (each app gets a subfolder); '' = installer default. */
+  installLocation: string;
   showOutput: boolean;
   downloadIcons: boolean;
   steamGridKey: string;
@@ -58,6 +60,7 @@ const DEFAULTS: Settings = {
   customAccent: '#7c3aed',
   managers: { winget: true, scoop: true, choco: true, msstore: true },
   preferredSource: null,
+  installLocation: '',
   showOutput: false,
   downloadIcons: false,
   steamGridKey: '',
@@ -130,6 +133,10 @@ export function setManagerEnabled(source: Source, enabled: boolean) {
 
 export function setPreferredSource(source: Source | null) {
   settings.update((s) => ({ ...s, preferredSource: source }));
+}
+
+export function setInstallLocation(value: string) {
+  settings.update((s) => ({ ...s, installLocation: value.trim() }));
 }
 
 export function setShowOutput(value: boolean) {

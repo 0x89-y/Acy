@@ -7,6 +7,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.9.7',
+    date: '2026-11-15',
+    changes: [
+      'New Settings → General → Install location: pick a folder for winget installs. Each app goes in its own subfolder.',
+      'Installers that don\'t support a custom folder (such as Store/MSIX apps) still use their default, and updates stay where the app is.'
+    ]
+  },
+  {
     version: '0.9.6',
     date: '2026-11-09',
     changes: [

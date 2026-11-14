@@ -40,6 +40,7 @@ export const setCustomCatalog = (source: string, isUrl: boolean) =>
 export const clearCustomCatalog = () => invoke<void>('clear_custom_catalog');
 
 export const pickCatalogFile = () => invoke<string | null>('pick_catalog_file');
+export const pickFolder = () => invoke<string | null>('pick_folder');
 
 export const search = (query: string, sources: Source[]) =>
   invoke<SearchHit[]>('search', { query, sources });
@@ -55,8 +56,8 @@ export const listUpdates = (sources: Source[]) =>
 export const appInfo = (source: Source, id: string) =>
   invoke<Package | null>('app_info', { source, id });
 
-export const install = (source: Source, id: string, opId: string) =>
-  invoke<number>('install', { source, id, opId });
+export const install = (source: Source, id: string, opId: string, location?: string) =>
+  invoke<number>('install', { source, id, opId, location: location || null });
 
 export const scoopNeededBucket = (id: string) =>
   invoke<string | null>('scoop_needed_bucket', { id });

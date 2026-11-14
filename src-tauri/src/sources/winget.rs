@@ -260,6 +260,27 @@ impl PackageSource for Winget {
 
 }
 
+/// `--location <base>\<id>` for `winget install`, or nothing if `base` isn't an
+/// absolute folder. Each app gets its own subfolder: most installers put their
+/// files straight into the directory they're given, so a shared one would mix
+/// apps together. Installers that don't support a custom location ignore it.
+pub fn location_args(base: &str, id: &str) -> Vec<String> {
+    let base = base.trim();
+    if base.is_empty() || !std::path::Path::new(base).is_absolute() {
+        return Vec::new();
+    }
+    let base = base.trim_end_matches(['\\', '/']);
+    let folder: String = id
+        .chars()
+        .map(|c| if c.is_control() || r#"<>:"/\|?*"#.contains(c) { '_' } else { c })
+        .collect();
+    let folder = folder.trim_matches(['.', ' ']);
+    if folder.is_empty() {
+        return Vec::new();
+    }
+    vec![s("--location"), format!("{base}\\{folder}")]
+}
+
 async fn cli_list_installed() -> anyhow::Result<Vec<Package>> {
     let out = runner::capture("winget", &[s("list"), s("--accept-source-agreements")]).await?;
     let pkgs = Winget::map_cli_table(&out, true);
@@ -559,6 +580,18 @@ Brave              Brave.Brave         1.66.110  winget
         assert_eq!(pkgs[0].id, "Mozilla.Firefox");
         assert_eq!(pkgs[0].version.as_deref(), Some("152.0.2"));
         assert!(pkgs[0].name.starts_with("Mozilla Firefox"));
+    }
+
+    #[test]
+    fn location_gets_a_per_app_subfolder() {
+        let args = |b: &str, id: &str| location_args(b, id);
+        assert_eq!(args(r"D:\Apps", "Mozilla.Firefox"), [r"--location", r"D:\Apps\Mozilla.Firefox"]);
+        assert_eq!(args(r"D:\Apps\\", "Git.Git"), [r"--location", r"D:\Apps\Git.Git"]);
+        assert_eq!(args(r"D:\", "Git.Git"), [r"--location", r"D:\Git.Git"]);
+        assert_eq!(args(r"D:\Apps", r"a/b:c"), [r"--location", r"D:\Apps\a_b_c"]);
+        assert!(args("", "Git.Git").is_empty());
+        assert!(args(r"relative\dir", "Git.Git").is_empty());
+        assert!(args(r"D:\Apps", "..").is_empty());
     }
 
     #[test]

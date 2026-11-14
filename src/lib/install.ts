@@ -100,7 +100,7 @@ export async function runOp(
   return enqueue(
     `${VERBS[kind]} ${name}`,
     (opId) => {
-      if (kind === 'install') return api.install(source, id, opId);
+      if (kind === 'install') return api.install(source, id, opId, get(settings).installLocation);
       if (kind === 'update') return api.upgrade(source, id, opId);
       return api.uninstall(source, id, opId);
     },

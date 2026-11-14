@@ -28,6 +28,7 @@
     setManagerEnabled,
     setPreferredSource,
     setShowOutput,
+    setInstallLocation,
     setDownloadIcons,
     setSteamGridKey,
     setCloseToTray,
@@ -141,6 +142,11 @@
       customMsg = typeof e === 'string' ? e : 'Could not load that catalog.';
     }
     customBusy = false;
+  }
+
+  async function chooseInstallLocation() {
+    const path = await api.pickFolder();
+    if (path) setInstallLocation(path);
   }
 
   async function chooseCustomFile() {
@@ -286,6 +292,35 @@
               <span class="slider"></span>
             </span>
           </label>
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>Installation</h2>
+        <div class="opt-list">
+          <div class="key-row">
+            <div class="key-head">
+              <span class="opt-label">Install location</span>
+              {#if $settings.installLocation}
+                <span class="custom-path mono" title={$settings.installLocation}
+                  >{$settings.installLocation}\&lt;app&gt;</span
+                >
+              {:else}
+                <span class="key-hint muted">Installer default (usually Program Files)</span>
+              {/if}
+              <span class="key-hint muted"
+                >winget only. Each app goes in its own subfolder. Installers that don't support a
+                custom folder (e.g. Store/MSIX apps) still use their default. Updates stay where
+                the app is.</span
+              >
+            </div>
+            <div class="seg-actions">
+              <button class="seg-act" onclick={chooseInstallLocation}>Choose folder…</button>
+              {#if $settings.installLocation}
+                <button class="seg-act" onclick={() => setInstallLocation('')}>Reset</button>
+              {/if}
+            </div>
+          </div>
         </div>
       </section>
 

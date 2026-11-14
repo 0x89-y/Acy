@@ -55,6 +55,7 @@ pub fn run() {
             commands::set_custom_catalog,
             commands::clear_custom_catalog,
             commands::pick_catalog_file,
+            commands::pick_folder,
             commands::search,
             commands::list_installed,
             commands::list_installed_fast,
