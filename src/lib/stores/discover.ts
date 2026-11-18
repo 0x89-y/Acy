@@ -1,20 +1,15 @@
-import { writable } from 'svelte/store';
 import { goto } from '$app/navigation';
 import type { LibSelection } from '$lib/installedGroups';
 
-export const pendingTag = writable<string | null>(null);
-
-export const browseView = writable<'discover' | 'library'>('discover');
-
-export const librarySection = writable<LibSelection>('all');
-
+/** Shows every app with this tag (from a tag on an app's page). */
 export function filterByTag(tag: string) {
-  pendingTag.set(tag);
-  goto('/');
+  goto(`/?view=all&tag=${encodeURIComponent(tag)}`);
 }
 
+/** Jumps to a part of the app that used to live under "Library". */
 export function openLibrary(section: LibSelection) {
-  browseView.set('library');
-  librarySection.set(section);
-  goto('/');
+  if (section === 'updates') goto('/updates');
+  else if (section === 'activity') goto('/activity');
+  else if (section === 'all') goto('/installed');
+  else goto(`/installed?group=${encodeURIComponent(section)}`);
 }

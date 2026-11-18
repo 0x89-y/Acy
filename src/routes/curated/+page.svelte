@@ -414,7 +414,7 @@
     border-bottom: 1px solid var(--border);
   }
   .rail-title {
-    font-size: 0.95rem;
+    font-size: var(--fs-body);
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
@@ -436,11 +436,12 @@
     border-radius: var(--radius-sm);
     color: var(--text);
     padding: 6px 10px;
-    font-size: 0.85rem;
+    font-size: var(--fs-md);
     outline: none;
   }
   .head-filter:focus {
     border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
   }
   .save-btn {
     flex-shrink: 0;
@@ -469,7 +470,7 @@
   }
   .status {
     flex-shrink: 0;
-    font-size: 0.78rem;
+    font-size: var(--fs-xs);
     padding: 8px 12px;
     border-bottom: 1px solid var(--border);
   }
@@ -491,7 +492,8 @@
     display: flex;
     align-items: stretch;
     overflow: hidden;
-    background: var(--surface);
+    /* The content panel (+layout) already paints the surface. */
+    background: transparent;
   }
   .browse-rail {
     flex: 0 0 190px;
@@ -521,7 +523,7 @@
     border-radius: 0;
     background: transparent;
     color: var(--text-muted);
-    font-size: 0.9rem;
+    font-size: var(--fs-base);
     font-weight: 500;
   }
   .rail-link:first-child {
@@ -543,7 +545,7 @@
     border-left-color: var(--accent);
   }
   .rail-count {
-    font-size: 0.72rem;
+    font-size: var(--fs-2xs);
     color: var(--text-muted);
   }
   .rail-link.active .rail-count {
@@ -592,13 +594,13 @@
     background: var(--surface-2);
   }
   .app-cat {
-    font-size: 0.72rem;
+    font-size: var(--fs-2xs);
     color: var(--text-muted);
     flex-shrink: 0;
     white-space: nowrap;
   }
   .pane-title {
-    font-size: 0.95rem;
+    font-size: var(--fs-body);
     font-weight: 600;
   }
   .app-row {
@@ -615,7 +617,7 @@
     background: none;
     border: none;
     color: var(--text);
-    font-size: 0.9rem;
+    font-size: var(--fs-base);
     font-weight: 500;
     padding: 2px 0;
     white-space: nowrap;
@@ -634,7 +636,7 @@
   .tag {
     flex-shrink: 0;
     font-family: var(--font-mono);
-    font-size: 0.64rem;
+    font-size: var(--fs-2xs);
     padding: 1px 7px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--accent);
@@ -669,7 +671,7 @@
     padding-top: 8px;
   }
   .fl {
-    font-size: 0.82rem;
+    font-size: var(--fs-sm);
     font-weight: 500;
     color: var(--text-muted);
     min-width: 0;
@@ -694,20 +696,16 @@
     appearance: none;
     justify-self: start;
     font-family: var(--font-mono);
-    font-size: 0.68rem;
+    font-size: var(--fs-2xs);
     line-height: 1.5;
     padding: 1px 7px;
     border-radius: var(--radius-sm);
     border: 1px solid currentColor;
     background: transparent;
     color: var(--local);
-    outline: none;
   }
   .src-pick:hover {
     background: color-mix(in srgb, currentColor 12%, transparent);
-  }
-  .src-pick:focus-visible {
-    box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 35%, transparent);
   }
   .src-pick option {
     background: var(--surface);
@@ -730,7 +728,7 @@
     min-width: 0;
     width: 100%;
     padding: 5px 8px;
-    font-size: 0.8rem;
+    font-size: var(--fs-sm);
     color: var(--text);
     background: transparent;
     border: 1px solid transparent;
@@ -743,6 +741,7 @@
   .src-id:focus {
     background: var(--surface);
     border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
   }
   .row-del {
     opacity: 0;
@@ -757,7 +756,7 @@
   }
   .add-src {
     align-self: flex-start;
-    font-size: 0.82rem;
+    font-size: var(--fs-sm);
     padding: 5px 9px;
   }
   .in {
@@ -766,7 +765,7 @@
     border-radius: var(--radius-sm);
     color: var(--text);
     padding: 6px 9px;
-    font-size: 0.86rem;
+    font-size: var(--fs-md);
     outline: none;
     min-width: 0;
     width: 100%;
@@ -777,6 +776,7 @@
   .in:focus {
     background: var(--surface);
     border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
   }
   .pane-head .in {
     width: auto;
@@ -790,7 +790,7 @@
   .id {
     flex: 0 0 150px;
     font-family: var(--font-mono);
-    font-size: 0.8rem;
+    font-size: var(--fs-sm);
   }
   .mono {
     font-family: var(--font-mono);
@@ -841,6 +841,6 @@
 
   .add {
     margin: 12px 14px;
-    font-size: 0.85rem;
+    font-size: var(--fs-md);
   }
 </style>

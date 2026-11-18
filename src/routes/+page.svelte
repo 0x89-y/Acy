@@ -1,288 +1,110 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
-  import { get } from 'svelte/store';
+  import { tick } from 'svelte';
   import { page } from '$app/stores';
-  import { goto } from '$app/navigation';
-  import { openUrl } from '@tauri-apps/plugin-opener';
-  import { Check, Funnel, Search, X } from '@lucide/svelte';
+  import { Check, Funnel, X, ArrowRight } from '@lucide/svelte';
   import AppCard from '$lib/components/AppCard.svelte';
+  import AppIcon from '$lib/components/AppIcon.svelte';
   import ViewToggle from '$lib/components/ViewToggle.svelte';
-  import UpdatesSection from '$lib/components/UpdatesSection.svelte';
-  import ActivitySection from '$lib/components/ActivitySection.svelte';
-  import InstallButton from '$lib/components/InstallButton.svelte';
-  import * as api from '$lib/api';
-  import type { CuratedApp, CuratedFile, SearchHit, Source, Variant, Package } from '$lib/types';
-  import { enabledSources, managers } from '$lib/stores/managers';
-  import { settings, setDiscoverView, setSettingsTab, hideApp, unhideApp } from '$lib/stores/settings';
+  import type { CuratedApp } from '$lib/types';
+  import { managers } from '$lib/stores/managers';
+  import { settings, setDiscoverView, setSettingsTab } from '$lib/stores/settings';
+  import { installedKeys, loadInstalled } from '$lib/stores/library';
   import {
-    installedKeys,
-    loadInstalled,
-    actionableUpdates,
-    installed,
-    refreshLibrary,
-    isAcyPackage
-  } from '$lib/stores/library';
-  import { updaterPhase, updaterVersion } from '$lib/stores/updater';
-  import { bucketKey, BUCKETS, BUCKET_BY_KEY } from '$lib/installedGroups';
-  import { runOp, summarizeBatch, installCommand } from '$lib/install';
-  import { confirmAction } from '$lib/stores/confirm';
-  import { copyText } from '$lib/clipboard';
-  import {
-    addToCurated,
-    searchHitToInput,
-    curatedKeys as allCuratedKeys,
-    curatedKey,
+    curated,
+    loadCurated,
+    reloadCurated,
     moveCuratedApp,
     catalog,
     downloadCatalog
   } from '$lib/stores/curated';
+  import { queueApps, installApps, batch, type QueuedApp } from '$lib/stores/queue';
+  import { confirmAction } from '$lib/stores/confirm';
   import { notice } from '$lib/stores/ops';
-  import { pendingTag, browseView, librarySection } from '$lib/stores/discover';
+  import {
+    browseCategories,
+    curatedVariants,
+    resolveCollections,
+    uniqueApps,
+    variantKey,
+    type ResolvedCollection
+  } from '$lib/catalog';
   import type { CtxItem } from '$lib/stores/contextMenu';
 
-  function curatedVariants(app: CuratedApp, managers: Record<Source, boolean>): Variant[] {
-    const seen = new Set<Source>();
-    const out: Variant[] = [];
-    for (const v of [{ source: app.source, id: app.id }, ...app.alternates]) {
-      if (managers[v.source] === false || seen.has(v.source)) continue;
-      seen.add(v.source);
-      out.push(v);
-    }
-    return out;
-  }
+  $effect(() => {
+    loadCurated();
+    loadInstalled();
+  });
 
-  function anyInstalled(variants: Variant[]): boolean {
-    return variants.some((v) => $installedKeys.has(key(v.source, v.id)));
-  }
-
-  let query = $state('');
-  let searchInput = $state<HTMLInputElement | null>(null);
+  let params = $derived($page.url.searchParams);
+  let view = $derived(
+    params.get('collection')
+      ? 'collection'
+      : params.get('cat')
+        ? 'category'
+        : params.get('view') === 'all'
+          ? 'all'
+          : 'home'
+  );
 
   let noManagers = $derived($managers.length > 0 && $managers.every((m) => !m.available));
-  let curated = $state<CuratedFile | null>(null);
-  let results = $state<SearchHit[]>([]);
-  let searching = $state(false);
-  let searchError = $state<string | null>(null);
-  let loadingCurated = $state(true);
-
-  let searchedQuery = $state('');
-  let trimmed = $derived(query.trim());
-  let showSearch = $derived(trimmed.length > 0);
-  let searchBackTo = $derived(`/?q=${encodeURIComponent(trimmed)}`);
-
-  if (get(page).url.searchParams.get('view') === 'library') browseView.set('library');
-  function setMode(mode: 'discover' | 'library') {
-    if (mode === $browseView) return;
-    browseView.set(mode);
-    clearSelection();
-  }
-  let acyUpdatePending = $derived($updaterPhase === 'available' && !!$updaterVersion);
-  let railUpdateCount = $derived($actionableUpdates.length + (acyUpdatePending ? 1 : 0));
-
-  let installedBuckets = $derived.by(() => {
-    const hidden = new Set($settings.hiddenApps);
-    const items = $installed.filter((p) => !hidden.has(`${p.source}:${p.id.toLowerCase()}`));
-    return BUCKETS.map((b) => ({
-      ...b,
-      count: items.filter((p) => bucketKey(p) === b.key).length
-    })).filter((b) => b.count > 0);
-  });
-  let installedAllCount = $derived.by(() => {
-    const hidden = new Set($settings.hiddenApps);
-    return $installed.filter((p) => !hidden.has(`${p.source}:${p.id.toLowerCase()}`)).length;
-  });
-  $effect(() => {
-    const s = $librarySection;
-    if (s !== 'all' && s !== 'updates' && s !== 'activity' && !installedBuckets.some((b) => b.key === s)) {
-      librarySection.set('all');
-    }
-  });
-
-  const managerNames: Record<Source, string> = {
-    winget: 'winget',
-    scoop: 'Scoop',
-    choco: 'Chocolatey',
-    msstore: 'Microsoft Store'
-  };
-  let managerIssues = $derived(
-    $managers.filter(
-      (m) =>
-        $settings.managers[m.source] !== false &&
-        (!m.available || m.needsSetup)
-    )
+  let categories = $derived(
+    browseCategories($curated, $settings.managers, $settings.showCuratedApps)
   );
-  let searchSourceNames = $derived(
-    $enabledSources.length > 0
-      ? $enabledSources.map((s) => managerNames[s]).join(', ')
-      : 'package managers'
+  let allApps = $derived(
+    uniqueApps(categories).sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id))
   );
-  function openSources() {
-    setSettingsTab('sources');
-    goto('/settings');
-  }
-  let setupBannerDismissed = $state(false);
-  let showSetupBanner = $derived(managerIssues.length > 0 && !setupBannerDismissed);
-  let setupIssueNames = $derived(managerIssues.map((m) => managerNames[m.source]).join(', '));
-
-  let libFilter = $state('');
-  let showHidden = $state(false);
-  let removing = $state(false);
-  const hideKey = (p: Package) => `${p.source}:${p.id.toLowerCase()}`;
-  let hiddenSet = $derived(new Set($settings.hiddenApps));
-  let hiddenCount = $derived($installed.filter((p) => hiddenSet.has(hideKey(p))).length);
-  let libQ = $derived(libFilter.trim().toLowerCase());
-  let installedSorted = $derived(
-    [...$installed]
-      .filter(
-        (p) =>
-          (showHidden || !hiddenSet.has(hideKey(p))) &&
-          (!libQ || p.name.toLowerCase().includes(libQ) || p.id.toLowerCase().includes(libQ))
-      )
-      .sort((a, b) => a.name.localeCompare(b.name))
-  );
-  let paneInstalled = $derived(
-    $librarySection === 'all' || $librarySection === 'updates' || $librarySection === 'activity'
-      ? installedSorted
-      : installedSorted.filter((p) => bucketKey(p) === $librarySection)
+  let collections = $derived(
+    $settings.showCuratedApps ? resolveCollections($curated, categories) : []
   );
 
-  let catalogDesc = $derived.by(() => {
-    const desc = new Map<string, string>();
-    const k = (s: Source, i: string) => `${s}:${i.toLowerCase()}`;
-    for (const cat of curated?.categories ?? []) {
-      for (const app of cat.apps) {
-        if (!app.description) continue;
-        desc.set(k(app.source, app.id), app.description);
-        for (const alt of app.alternates ?? []) desc.set(k(alt.source, alt.id), app.description);
-      }
-    }
-    return desc;
+  const variantsOf = (app: CuratedApp) => curatedVariants(app, $settings.managers);
+  const isInstalled = (app: CuratedApp) =>
+    variantsOf(app).some((v) => $installedKeys.has(variantKey(v)));
+  const toQueued = (app: CuratedApp): QueuedApp => ({
+    key: variantKey(app),
+    name: app.name ?? app.id,
+    variants: variantsOf(app)
   });
-  const descFor = (p: Package) =>
-    catalogDesc.get(hideKey(p)) ?? `${p.id}${p.version ? ` · ${p.version}` : ''}`;
 
-  let managedByName = $derived.by(() => {
-    const m = new Map<string, Set<Source>>();
-    for (const p of $installed) {
-      const b = BUCKET_BY_KEY.get(bucketKey(p));
-      if (!b || !b.managed) continue;
-      const n = p.name.trim().toLowerCase();
-      if (!n) continue;
-      if (!m.has(n)) m.set(n, new Set());
-      m.get(n)!.add(p.source);
-    }
-    return m;
-  });
-  function dupeSuffix(p: Package): string {
-    const set = managedByName.get(p.name.trim().toLowerCase());
-    if (!set || set.size < 2) return '';
-    const others = [...set].filter((s) => s !== p.source);
-    return others.length ? ` · also via ${others.join(', ')}` : '';
-  }
-
-  async function uninstallOne(p: Package) {
-    if (isAcyPackage(p)) {
-      await confirmAction({
-        title: "Acy can't uninstall itself",
-        message: 'To remove Acy, use Windows Settings → Apps.',
-        confirmLabel: 'OK',
-        alert: true
-      });
-      return;
-    }
-    const ok = await confirmAction({ title: `Remove ${p.name}?`, confirmLabel: 'Uninstall', danger: true });
-    if (!ok) return;
-    await runOp('uninstall', p.source, p.id, p.name);
-    refreshLibrary();
-  }
-
-  function installedMenu(p: Package): CtxItem[] {
-    const back = encodeURIComponent('/?view=library');
-    const items: CtxItem[] = [
-      { label: 'Uninstall', danger: true, onSelect: () => uninstallOne(p) },
-      {
-        label: 'Open details',
-        onSelect: () => goto(`/app/${p.source}/${encodeURIComponent(p.id)}?back=${back}`)
-      }
-    ];
-    const cmd = installCommand(p.source, p.id);
-    if (cmd) items.push({ label: 'Copy command', onSelect: () => copyText(cmd) });
-    items.push({ label: 'Copy id', onSelect: () => copyText(p.id) });
-    if (p.homepage) items.push({ label: 'Open homepage', onSelect: () => openUrl(p.homepage!) });
-    items.push(
-      hiddenSet.has(hideKey(p))
-        ? { label: 'Unhide from list', onSelect: () => unhideApp(hideKey(p)) }
-        : { label: 'Hide from list', onSelect: () => hideApp(hideKey(p)) }
-    );
-    return items;
-  }
-
-  function installedPick(p: Package): Pick | null {
-    if (isAcyPackage(p)) return null;
-    return { key: `${p.source}:${p.id}`, name: p.name, variants: [{ source: p.source, id: p.id }] };
-  }
-  async function uninstallSelected() {
-    removing = true;
-    const total = selectedApps.size;
-    let ok = 0;
-    let current = 0;
-    for (const entry of selectedApps.values()) {
-      current++;
-      installProgress = { current, total, name: entry.name };
-      const v = entry.variants[0];
-      if (await runOp('uninstall', v.source, v.id, entry.name)) ok++;
-    }
-    installProgress = null;
-    removing = false;
-    clearSelection();
-    refreshLibrary();
-    if (total > 1) summarizeBatch(total, ok, 'removed');
-  }
-
-  let rightClass: 'grid' | 'pane-rows' = $derived(
-    $settings.discoverView === 'list' ? 'pane-rows' : 'grid'
+  // --- Category / All / Collection views ---------------------------------
+  let currentCategory = $derived(
+    view === 'category' ? (categories.find((c) => c.id === params.get('cat')) ?? null) : null
   );
-  let rowLayout: 'grid' | 'list' = $derived($settings.discoverView === 'list' ? 'list' : 'grid');
-  let searchedCurrent = $derived(showSearch && searchedQuery === trimmed);
+  let currentCollection = $derived(
+    view === 'collection'
+      ? (collections.find((c) => c.id === params.get('collection')) ?? null)
+      : null
+  );
+  let baseApps = $derived(
+    view === 'category'
+      ? (currentCategory?.apps ?? [])
+      : view === 'collection'
+        ? (currentCollection?.apps ?? [])
+        : allApps
+  );
 
-  let browseCats = $derived.by(() => {
-    const cats = curated?.categories ?? [];
-    if ($settings.showCuratedApps) return cats;
-    return cats
-      .map((cat) => ({ ...cat, apps: cat.apps.filter((a) => a.custom) }))
-      .filter((cat) => cat.apps.length > 0);
-  });
-
-  let allTags = $derived.by(() => {
-    const set = new Set<string>();
-    for (const cat of browseCats)
-      for (const app of cat.apps)
-        if (curatedVariants(app, $settings.managers).length > 0)
-          for (const t of app.tags ?? []) set.add(t);
-    return [...set].sort();
-  });
+  // Tag filter (All apps and categories). A ?tag= link presets it.
   let activeTags = $state<Set<string>>(new Set());
   let tagMatchMode = $state<'all' | 'any'>('all');
-  let tagMenuOpen = $state(false);
-  let tagQuery = $state('');
-  let tagFilterRoot = $state<HTMLDivElement | null>(null);
-  let tagSearchInput = $state<HTMLInputElement | null>(null);
-  let filterTrigger = $state<HTMLButtonElement | null>(null);
-  let filterPos = $state<{ top: number; left: number } | null>(null);
-  let activeTagList = $derived([...activeTags].sort());
-  let matchingTagOptions = $derived(
-    allTags.filter((tag) => tag.toLowerCase().includes(tagQuery.trim().toLowerCase()))
-  );
-  let tagCounts = $derived.by(() => {
-    const counts = new Map<string, number>();
-    for (const cat of browseCats) {
-      for (const app of cat.apps) {
-        if (curatedVariants(app, $settings.managers).length === 0) continue;
-        for (const tag of new Set(app.tags ?? [])) counts.set(tag, (counts.get(tag) ?? 0) + 1);
-      }
-    }
-    return counts;
+  $effect(() => {
+    const t = params.get('tag');
+    activeTags = t ? new Set([t]) : new Set();
   });
+  let allTags = $derived([...new Set(baseApps.flatMap((a) => a.tags ?? []))].sort());
+  let tagCounts = $derived.by(() => {
+    const m = new Map<string, number>();
+    for (const a of baseApps) for (const t of new Set(a.tags ?? [])) m.set(t, (m.get(t) ?? 0) + 1);
+    return m;
+  });
+  let activeTagList = $derived([...activeTags].sort());
+  function matchesTags(app: CuratedApp) {
+    if (activeTags.size === 0) return true;
+    const t = new Set(app.tags ?? []);
+    return tagMatchMode === 'all'
+      ? activeTagList.every((x) => t.has(x))
+      : activeTagList.some((x) => t.has(x));
+  }
+  let gridApps = $derived(baseApps.filter(matchesTags));
 
   function toggleTag(t: string) {
     const next = new Set(activeTags);
@@ -290,859 +112,314 @@
     else next.add(t);
     activeTags = next;
   }
-  function matchesTags(app: CuratedApp): boolean {
-    if (activeTags.size === 0) return true;
-    const t = new Set(app.tags ?? []);
-    return tagMatchMode === 'all'
-      ? activeTagList.every((tag) => t.has(tag))
-      : activeTagList.some((tag) => t.has(tag));
-  }
-  function clearTags() {
-    activeTags = new Set();
-  }
+
+  let tagMenuOpen = $state(false);
+  let tagQuery = $state('');
+  let tagFilterRoot = $state<HTMLDivElement | null>(null);
+  let tagSearchInput = $state<HTMLInputElement | null>(null);
+  let filterTrigger = $state<HTMLButtonElement | null>(null);
+  let filterPos = $state<{ top: number; left: number } | null>(null);
+  let matchingTagOptions = $derived(
+    allTags.filter((t) => t.toLowerCase().includes(tagQuery.trim().toLowerCase()))
+  );
   async function toggleTagMenu() {
     tagMenuOpen = !tagMenuOpen;
-    if (tagMenuOpen) {
-      const r = filterTrigger?.getBoundingClientRect();
-      if (r) {
-        const w = Math.min(330, window.innerWidth - 48);
-        const left = Math.max(12, Math.min(r.left, window.innerWidth - w - 12));
-        filterPos = { top: r.bottom + 7, left };
-      } else {
-        filterPos = null;
-      }
-      tagQuery = '';
-      await tick();
-      tagSearchInput?.focus();
+    if (!tagMenuOpen) return;
+    const r = filterTrigger?.getBoundingClientRect();
+    if (r) {
+      const w = Math.min(330, window.innerWidth - 48);
+      filterPos = { top: r.bottom + 7, left: Math.max(12, Math.min(r.right - w, window.innerWidth - w - 12)) };
     }
-  }
-  function closeTagMenu() {
-    if (tagMenuOpen) tagMenuOpen = false;
+    tagQuery = '';
+    await tick();
+    tagSearchInput?.focus();
   }
   function onWindowClick(e: MouseEvent) {
     if (tagMenuOpen && !tagFilterRoot?.contains(e.target as Node)) tagMenuOpen = false;
   }
-
-  let visibleCategories = $derived(
-    browseCats
-      .map((cat) => ({
-        ...cat,
-        apps: cat.apps.filter(
-          (a) => curatedVariants(a, $settings.managers).length > 0 && matchesTags(a)
-        )
-      }))
-      .filter((cat) => cat.apps.length > 0)
-  );
-
-  let selectedCat = $state<string>('all');
-  $effect(() => {
-    if (selectedCat !== 'all' && !visibleCategories.some((c) => c.id === selectedCat)) {
-      selectedCat = 'all';
-    }
-  });
-  let paneApps = $derived.by(() => {
-    const cats =
-      selectedCat === 'all'
-        ? visibleCategories
-        : visibleCategories.filter((c) => c.id === selectedCat);
-    const seen = new Set<string>();
-    const out: CuratedApp[] = [];
-    for (const c of cats)
-      for (const a of c.apps) {
-        const k = `${a.source}:${a.id.toLowerCase()}`;
-        if (!seen.has(k)) {
-          seen.add(k);
-          out.push(a);
-        }
-      }
-    if (selectedCat === 'all') {
-      out.sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
-    }
-    return out;
-  });
-  let paneTitle = $derived(
-    selectedCat === 'all'
-      ? 'All apps'
-      : (visibleCategories.find((c) => c.id === selectedCat)?.title ?? 'All apps')
-  );
-  let allAppsCount = $derived(
-    new Set(
-      visibleCategories.flatMap((c) => c.apps.map((a) => `${a.source}:${a.id.toLowerCase()}`))
-    ).size
-  );
-  let uncatKeys = $derived(
-    new Set(
-      (visibleCategories.find((c) => c.id === 'uncategorized')?.apps ?? []).map(
-        (a) => `${a.source}:${a.id}`
-      )
-    )
-  );
-
-  let curatedMatches = $derived.by(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [] as CuratedApp[];
-    const seen = new Set<string>();
-    const out: CuratedApp[] = [];
-    for (const cat of browseCats) {
-      for (const app of cat.apps) {
-        if (curatedVariants(app, $settings.managers).length === 0) continue;
-        const name = (app.name ?? app.id).toLowerCase();
-        const tagHit = (app.tags ?? []).some((t) => t.toLowerCase().includes(q));
-        if (name.includes(q) || app.id.toLowerCase().includes(q) || tagHit) {
-          const k = `${app.source}:${app.id.toLowerCase()}`;
-          if (!seen.has(k)) {
-            seen.add(k);
-            out.push(app);
-          }
-        }
-      }
-    }
-    return out;
-  });
-
-  let curatedKeys = $derived(
-    new Set(
-      curatedMatches.flatMap((a) =>
-        [{ source: a.source, id: a.id }, ...a.alternates].map(
-          (v) => `${v.source}:${v.id.toLowerCase()}`
-        )
-      )
-    )
-  );
-
-  let managerResults = $derived(
-    results.filter(
-      (hit) => !hit.variants.some((v) => curatedKeys.has(`${v.source}:${v.id.toLowerCase()}`))
-    )
-  );
-
-  function key(source: Source, id: string) {
-    return `${source}:${id.toLowerCase()}`;
-  }
-
-  const RECENT_KEY = 'acy-recent-searches';
-  function loadRecent(): string[] {
-    try {
-      const r = localStorage.getItem(RECENT_KEY);
-      const v = r ? JSON.parse(r) : [];
-      return Array.isArray(v) ? v.slice(0, 6) : [];
-    } catch {
-      return [];
-    }
-  }
-  let recent = $state<string[]>(loadRecent());
-  let searchFocused = $state(false);
-  let showRecent = $derived(searchFocused && !trimmed && recent.length > 0);
-  function recordSearch(q: string) {
-    recent = [q, ...recent.filter((r) => r.toLowerCase() !== q.toLowerCase())].slice(0, 6);
-    try {
-      localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
-    } catch {
-    }
-  }
-  function useRecent(q: string) {
-    query = q;
-    searchInput?.focus();
-    runSearch();
-  }
-
-  type Pick = { key: string; name: string; variants: Variant[] };
-  let installing = $state(false);
-  let installProgress = $state<{ current: number; total: number; name: string } | null>(null);
-  let selectedApps = $state<Map<string, Pick>>(new Map());
-  let selecting = $derived(selectedApps.size > 0);
-  // Last card toggled; Shift+click selects everything between it and the clicked card.
-  let selectAnchor: string | null = null;
-  function appKey(app: CuratedApp) {
-    return `${app.source}:${app.id}`;
-  }
-  function chosenVariant(vs: Variant[]): Variant {
-    return (
-      ($settings.preferredSource && vs.find((v) => v.source === $settings.preferredSource)) || vs[0]
-    );
-  }
-  function curatedPick(app: CuratedApp): Pick | null {
-    const vs = curatedVariants(app, $settings.managers);
-    if (vs.length === 0 || anyInstalled(vs)) return null;
-    return { key: appKey(app), name: app.name ?? app.id, variants: vs };
-  }
-  function togglePick<T>(item: T, list: T[], toPick: (x: T) => Pick | null, e: MouseEvent) {
-    const target = toPick(item);
-    if (!target) return;
-    const next = new Map(selectedApps);
-    const picks = list.map(toPick);
-    const from = e.shiftKey && selectAnchor ? picks.findIndex((p) => p?.key === selectAnchor) : -1;
-    const to = picks.findIndex((p) => p?.key === target.key);
-    if (from !== -1 && to !== -1) {
-      for (const p of picks.slice(Math.min(from, to), Math.max(from, to) + 1)) if (p) next.set(p.key, p);
-    } else if (next.has(target.key)) {
-      next.delete(target.key);
-    } else {
-      next.set(target.key, target);
-    }
-    selectAnchor = target.key;
-    selectedApps = next;
-  }
-  function clearSelection() {
-    selectedApps = new Map();
-    selectAnchor = null;
-  }
-  async function installSelected() {
-    installing = true;
-    const total = selectedApps.size;
-    let ok = 0;
-    let current = 0;
-    for (const entry of selectedApps.values()) {
-      current++;
-      installProgress = { current, total, name: entry.name };
-      const v = chosenVariant(entry.variants);
-      if (await runOp('install', v.source, v.id, entry.name)) ok++;
-    }
-    installProgress = null;
-    installing = false;
-    clearSelection();
-    loadInstalled(true);
-    if (total > 1) summarizeBatch(total, ok, 'installed');
-  }
-
-  let resultsEl = $state<HTMLElement | null>(null);
-  function resultCards(): HTMLElement[] {
-    return resultsEl ? Array.from(resultsEl.querySelectorAll<HTMLElement>('a.main')) : [];
-  }
-  function onResultsKey(e: KeyboardEvent) {
-    if (!showSearch || !e.key.startsWith('Arrow')) return;
-    const active = document.activeElement as HTMLElement | null;
-    const inInput = active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA';
-    const items = resultCards();
-    if (items.length === 0) return;
-    if (inInput) {
-      if (e.key === 'ArrowDown' && active === searchInput) {
-        e.preventDefault();
-        items[0].focus();
-      }
-      return;
-    }
-    let cols = items.length;
-    if (items.length > 1) {
-      const top0 = items[0].offsetTop;
-      const firstWrap = items.findIndex((it) => it.offsetTop !== top0);
-      cols = firstWrap === -1 ? items.length : Math.max(1, firstWrap);
-    }
-    const idx = items.indexOf(active as HTMLElement);
-    if (idx === -1) {
-      e.preventDefault();
-      items[0].focus();
-      return;
-    }
-    let next = idx;
-    if (e.key === 'ArrowRight') next++;
-    else if (e.key === 'ArrowLeft') next--;
-    else if (e.key === 'ArrowDown') next += cols;
-    else if (e.key === 'ArrowUp') next -= cols;
-    next = Math.max(0, Math.min(items.length - 1, next));
-    if (next !== idx) {
-      e.preventDefault();
-      items[next].focus();
-    }
-  }
-
-  onMount(() => {
-    window.addEventListener('keydown', onShortcut);
-    window.addEventListener('keydown', onResultsKey);
-
-    const q = get(page).url.searchParams.get('q');
-    if (q) {
-      browseView.set('discover');
-      query = q;
-      runSearch();
-    }
-
-    (async () => {
-      try {
-        curated = await api.getCurated();
-      } catch (e) {
-        console.error('curated load failed', e);
-      } finally {
-        loadingCurated = false;
-      }
-      loadInstalled();
-    })();
-
-    return () => {
-      window.removeEventListener('keydown', onShortcut);
-      window.removeEventListener('keydown', onResultsKey);
-    };
-  });
-
-  function onShortcut(e: KeyboardEvent) {
-    const target = e.target as HTMLElement | null;
-    const typing =
-      target?.tagName === 'INPUT' ||
-      target?.tagName === 'TEXTAREA' ||
-      target?.isContentEditable;
-    const cmdK = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k';
-    const slash = e.key === '/' && !typing;
+  function onWindowKey(e: KeyboardEvent) {
     if (e.key === 'Escape' && tagMenuOpen) {
       e.preventDefault();
       tagMenuOpen = false;
-      return;
-    }
-    if (e.key === 'Escape' && selecting && !typing && !installing && !removing) {
-      e.preventDefault();
-      clearSelection();
-      return;
-    }
-    if (cmdK || slash) {
-      e.preventDefault();
-      searchInput?.focus();
-      searchInput?.select();
+      filterTrigger?.focus();
     }
   }
 
-  function onInput() {
-    searchError = null;
-  }
-
-  async function runSearch() {
-    const q = query.trim();
-    if (!q) return;
-    searching = true;
-    searchError = null;
-    try {
-      results = await api.search(q, get(enabledSources));
-      searchedQuery = q;
-      recordSearch(q);
-    } catch (e) {
-      searchError = String(e);
-      results = [];
-    } finally {
-      searching = false;
-    }
-  }
-
-  function hitInstalled(hit: SearchHit): boolean {
-    return hit.variants.some((v) => $installedKeys.has(key(v.source, v.id)));
-  }
-
-  let curatedKeySet = $derived(allCuratedKeys(curated));
-  function hitInList(hit: SearchHit): boolean {
-    return hit.variants.some((v) => curatedKeySet.has(curatedKey(v.source, v.id)));
-  }
-
-  async function addHit(hit: SearchHit) {
-    const res = await addToCurated(searchHitToInput(hit));
-    if (res !== 'error') curated = await api.getCurated();
-    if (res === 'added') notice(`Added ${hit.name} to your list.`, 'ok');
-    else if (res === 'exists') notice(`${hit.name} is already in your list.`, 'ok');
-    else notice(`Couldn't add ${hit.name} to your list.`, 'error');
-  }
-
-  $effect(() => {
-    const t = $pendingTag;
-    if (!t) return;
-    browseView.set('discover');
-    activeTags = new Set([t]);
-    query = '';
-    pendingTag.set(null);
-    if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
-  });
-
+  // Apps in the "uncategorized" bucket (added from search) can be filed away.
+  let uncatKeys = $derived(
+    new Set(
+      (categories.find((c) => c.id === 'uncategorized')?.apps ?? []).map((a) => variantKey(a))
+    )
+  );
   function moveMenu(app: CuratedApp): CtxItem[] {
-    return (curated?.categories ?? [])
+    if (!uncatKeys.has(variantKey(app))) return [];
+    return ($curated?.categories ?? [])
       .filter((c) => c.id !== 'uncategorized')
       .map((c) => ({
         label: `Move to ${c.title || c.id}`,
-        onSelect: () => moveApp(app, c.id, c.title || c.id)
+        onSelect: async () => {
+          if (await moveCuratedApp(app.source, app.id, c.id)) {
+            await reloadCurated();
+            notice(`Moved ${app.name ?? app.id} to ${c.title || c.id}.`, 'ok');
+          } else {
+            notice(`Couldn't move ${app.name ?? app.id}.`, 'error');
+          }
+        }
       }));
   }
-  async function moveApp(app: CuratedApp, toId: string, toTitle: string) {
-    const ok = await moveCuratedApp(app.source, app.id, toId);
-    if (ok) {
-      curated = await api.getCurated();
-      notice(`Moved ${app.name ?? app.id} to ${toTitle}.`, 'ok');
-    } else {
-      notice(`Couldn't move ${app.name ?? app.id}.`, 'error');
-    }
+
+  // --- Home ---------------------------------------------------------------
+  let bodyWidth = $state(0);
+  // One row per category shelf: as many cards as fit at ≥230px each.
+  let shelfCols = $derived(Math.max(1, Math.floor((bodyWidth - 48) / 230)));
+
+  async function installCollection(c: ResolvedCollection) {
+    const todo = c.apps.filter((a) => !isInstalled(a));
+    if (todo.length === 0) return;
+    const names = todo.map((a) => a.name ?? a.id);
+    const ok = await confirmAction({
+      title: `Install ${todo.length} ${todo.length === 1 ? 'app' : 'apps'}?`,
+      message: `${names.join(', ')}.\n\nThey install one after another; progress shows at the bottom.`,
+      confirmLabel: `Install ${todo.length}`
+    });
+    if (ok) await installApps(todo.map(toQueued));
   }
+
+  function queueCollection(c: ResolvedCollection) {
+    const todo = c.apps.filter((a) => !isInstalled(a));
+    queueApps(todo.map(toQueued));
+    notice(`Added ${todo.length} ${todo.length === 1 ? 'app' : 'apps'} to the install queue.`, 'ok');
+  }
+
+  let rowLayout: 'grid' | 'list' = $derived($settings.discoverView === 'list' ? 'list' : 'grid');
+  let backTo = $derived($page.url.pathname + $page.url.search);
 </script>
 
-<svelte:window onclick={onWindowClick} onresize={closeTagMenu} onscroll={closeTagMenu} />
+<svelte:window onclick={onWindowClick} onkeydown={onWindowKey} onresize={() => (tagMenuOpen = false)} />
 
-{#snippet uninstallAction(app: { source: Source; id: string; name: string })}
-  <InstallButton
-    source={app.source}
-    id={app.id}
-    name={app.name}
-    kind="uninstall"
-    onDone={() => refreshLibrary()}
+{#snippet card(app: CuratedApp, layout: 'grid' | 'list')}
+  <AppCard
+    name={app.name ?? app.id}
+    description={app.description}
+    variants={variantsOf(app)}
+    installed={isInstalled(app)}
+    homepage={app.icon ?? app.homepage}
+    {layout}
+    {backTo}
+    ctxExtra={moveMenu(app)}
+    onChanged={() => loadInstalled(true)}
   />
 {/snippet}
 
+{#snippet emptyState()}
+  {#if noManagers}
+    <div class="empty">
+      <h2>No package managers found</h2>
+      <p class="muted">
+        Acy works on top of winget, Scoop or Chocolatey, and none were detected on this PC. Install one
+        from Settings to start discovering and installing apps.
+      </p>
+      <a class="btn btn-accent" href="/settings" onclick={() => setSettingsTab('sources')}>Open Sources</a>
+    </div>
+  {:else if !$settings.showCuratedApps}
+    <div class="empty">
+      <h2>No apps in your list yet</h2>
+      <p class="muted">
+        You're only showing apps you've added. Search for an app to add it, or turn on “Show curated
+        apps” in Settings → Sources.
+      </p>
+    </div>
+  {:else if $catalog.status === 'downloading' || ($curated === null && $catalog.status !== 'error')}
+    <div class="sk-grid" aria-busy="true" aria-label="Loading apps">
+      {#each Array(8) as _, i (i)}
+        <div class="sk-card">
+          <div class="skeleton sk-icon"></div>
+          <div class="sk-lines">
+            <div class="skeleton sk-line lg"></div>
+            <div class="skeleton sk-line sm"></div>
+          </div>
+        </div>
+      {/each}
+    </div>
+  {:else}
+    <div class="empty">
+      <h2>Couldn't download the catalog</h2>
+      <p class="muted">
+        {$catalog.message || "Acy's curated apps are fetched from GitHub and haven't downloaded yet."}
+      </p>
+      <button class="btn" onclick={() => downloadCatalog()}>Try again</button>
+    </div>
+  {/if}
+{/snippet}
+
 {#snippet filterCluster()}
-  <div class="filter-wrap" bind:this={tagFilterRoot}>
-    <button
-      class="btn filter-trigger"
-      class:on={activeTags.size > 0}
-      bind:this={filterTrigger}
-      onclick={toggleTagMenu}
-      title="Filter by tags"
-      aria-label="Filter by tags"
-      aria-haspopup="dialog"
-      aria-expanded={tagMenuOpen}
-    >
-      <Funnel size={16} />
-      {#if activeTags.size > 0}<span class="filter-count">{activeTags.size}</span>{/if}
-    </button>
-
-    {#if tagMenuOpen}
-      <div
-        class="filter-pop card"
-        role="dialog"
-        aria-label="Filter apps by tag"
-        style="top:{filterPos?.top ?? 0}px; left:{filterPos?.left ?? 0}px"
-      >
-        <div class="filter-head">
-          <strong>Filter by tags</strong>
-          {#if activeTags.size > 0}
-            <button class="clear-tags" onclick={clearTags}>Clear all</button>
-          {/if}
-        </div>
-        <input
-          class="tag-search"
-          bind:this={tagSearchInput}
-          bind:value={tagQuery}
-          placeholder="Find a tag…"
-          aria-label="Find a tag"
-        />
-        <div class="match-mode" aria-label="Tag matching mode">
-          <button class:on={tagMatchMode === 'all'} onclick={() => (tagMatchMode = 'all')}>
-            Match all
-          </button>
-          <button class:on={tagMatchMode === 'any'} onclick={() => (tagMatchMode = 'any')}>
-            Match any
-          </button>
-        </div>
-        <div class="tag-options">
-          {#each matchingTagOptions as tag (tag)}
-            <button
-              class="tag-option"
-              class:on={activeTags.has(tag)}
-              onclick={() => toggleTag(tag)}
-              aria-pressed={activeTags.has(tag)}
-            >
-              <span class="tag-check">{#if activeTags.has(tag)}<Check size={13} />{/if}</span>
-              <span>{tag}</span>
-              <span class="tag-count mono">{tagCounts.get(tag) ?? 0}</span>
-            </button>
-          {/each}
-          {#if matchingTagOptions.length === 0}
-            <span class="no-tags muted">No matching tags.</span>
-          {/if}
-        </div>
-      </div>
-    {/if}
-  </div>
-
-  {#each activeTagList.slice(0, 2) as tag (tag)}
-    <button class="active-tag" onclick={() => toggleTag(tag)} title={`Remove ${tag} filter`}>
+  {#each activeTagList as tag (tag)}
+    <button class="active-tag" onclick={() => toggleTag(tag)} aria-label={`Remove ${tag} filter`} title={`Remove ${tag} filter`}>
       {tag} <X size={12} />
     </button>
   {/each}
-  {#if activeTagList.length > 2}
-    <button
-      class="active-more"
-      onclick={(e) => {
-        e.stopPropagation();
-        toggleTagMenu();
-      }}>+{activeTagList.length - 2}</button
-    >
-  {/if}
-{/snippet}
-
-{#if selecting}
-  <div class="sel-bar">
-    <span class="sel-count" role="status" aria-live="polite">
-      {#if installProgress}
-        {installProgress.current} of {installProgress.total} · {installProgress.name}
-      {:else}
-        {selectedApps.size} selected
-      {/if}
-    </span>
-    <div class="sel-spacer"></div>
-    <button class="btn btn-ghost" onclick={clearSelection} disabled={installing || removing}>
-      Clear
-    </button>
-    {#if $browseView === 'library'}
-      <button class="btn btn-accent" onclick={uninstallSelected} disabled={removing}>
-        {installProgress ? `${installProgress.current} of ${installProgress.total}…` : `Uninstall ${selectedApps.size}`}
-      </button>
-    {:else}
-      <button class="btn btn-accent" onclick={installSelected} disabled={installing}>
-        {installProgress ? `${installProgress.current} of ${installProgress.total}…` : `Install ${selectedApps.size}`}
-      </button>
-    {/if}
-  </div>
-{/if}
-
-{#snippet searchResultList(cls: 'grid' | 'pane-rows')}
-  {@const rowLayout = cls === 'grid' ? 'grid' : 'list'}
-  {#if curatedMatches.length > 0}
-    <section class="res-section">
-      <h2 class="res-head">From your list</h2>
-      <div class={cls}>
-        {#each curatedMatches as app (app.source + app.id)}
-          {@const vs = curatedVariants(app, $settings.managers)}
-          <AppCard
-            name={app.name ?? app.id}
-            description={app.description}
-            variants={vs}
-            installed={anyInstalled(vs)}
-            homepage={app.icon ?? app.homepage}
-            layout={rowLayout}
-            highlight={trimmed}
-            backTo={searchBackTo}
-            selectable={!anyInstalled(vs)}
-            selected={selectedApps.has(appKey(app))}
-            {selecting}
-            onToggleSelect={(e) => togglePick(app, curatedMatches, curatedPick, e)}
-            onChanged={() => loadInstalled(true)}
-          />
-        {/each}
-      </div>
-    </section>
-  {/if}
-
-  {#if searching}
-    <p class="muted pane-msg">Searching package managers…</p>
-  {:else if searchError}
-    <p class="error pane-msg">{searchError}</p>
-  {:else if searchedCurrent}
-    {#if managerResults.length > 0}
-      <section class="res-section">
-        <h2 class="res-head">From package managers</h2>
-        <div class={cls}>
-          {#each managerResults as hit (hit.name + hit.variants[0].id)}
-            <AppCard
-              name={hit.name}
-              description={hit.description}
-              variants={hit.variants.map((v) => ({ source: v.source, id: v.id }))}
-              installed={hitInstalled(hit)}
-              layout={rowLayout}
-              highlight={trimmed}
-              backTo={searchBackTo}
-              inList={hitInList(hit)}
-              onAddToList={() => addHit(hit)}
-              iconCacheOnly
-              onChanged={() => loadInstalled(true)}
-            />
-          {/each}
-        </div>
-      </section>
-    {:else}
-      <p class="muted pane-msg">
-        {curatedMatches.length === 0
-          ? `No results for “${query}”.`
-          : `No package-manager results for “${query}”.`}
-      </p>
-    {/if}
-  {:else}
-    <p class="muted pane-msg">
-      {#if curatedMatches.length === 0}No apps in your list match “{trimmed}”.{/if}
-      Press <kbd class="kbd">Enter</kbd> to search {searchSourceNames}.
-    </p>
-  {/if}
-{/snippet}
-
-{#if noManagers}
-  <div class="empty card">
-    <h2>No package managers found</h2>
-    <p class="muted">
-      Acy works on top of winget, Scoop, or Chocolatey, and none were detected on this machine.
-      Install one from Settings to start discovering and installing apps.
-    </p>
-    <a class="btn btn-accent" href="/settings">Open Settings</a>
-  </div>
-{:else}
-  {#if showSetupBanner}
-    <div class="setup-banner" role="status">
-      <span class="setup-banner-dot"></span>
-      <span class="setup-banner-text">
-        {setupIssueNames}
-        {managerIssues.length > 1 ? 'need' : 'needs'} setup before you can search or install
-        {managerIssues.length > 1 ? 'from them' : 'from it'}.
-      </span>
-      <button class="btn btn-ghost setup-banner-action" onclick={openSources}>Open Sources</button>
+  {#if allTags.length > 0}
+    <div class="filter-wrap" bind:this={tagFilterRoot}>
       <button
-        class="setup-banner-close"
-        onclick={() => (setupBannerDismissed = true)}
-        title="Dismiss"
-        aria-label="Dismiss"
+        class="btn filter-trigger"
+        class:on={activeTags.size > 0}
+        bind:this={filterTrigger}
+        onclick={toggleTagMenu}
+        aria-haspopup="dialog"
+        aria-expanded={tagMenuOpen}
       >
-        <X size={15} />
+        <Funnel size={15} /> Filter
+        {#if activeTags.size > 0}<span class="filter-count">{activeTags.size}</span>{/if}
       </button>
-    </div>
-  {/if}
-  <div class="browse-panel" bind:this={resultsEl}>
-    {#if !showSearch}
-      <div class="browse-rail">
-        <div class="rail-switch">
-          <button class:on={$browseView === 'discover'} onclick={() => setMode('discover')}>Discover</button>
-          <button class:on={$browseView === 'library'} onclick={() => setMode('library')}>
-            Library
-            {#if railUpdateCount > 0}
-              <span class="lib-count mono" title={`${railUpdateCount} update${railUpdateCount === 1 ? '' : 's'} available`}>
-                {railUpdateCount}
-              </span>
-            {:else if managerIssues.length > 0}
-              <span class="lib-dot" title="A source needs attention"></span>
-            {/if}
-          </button>
-        </div>
-        {#if $browseView === 'discover'}
-          <button
-            class="rail-link"
-            class:active={selectedCat === 'all'}
-            onclick={() => (selectedCat = 'all')}
-          >
-            <span>All apps</span><span class="rail-count mono">{allAppsCount}</span>
-          </button>
-          {#each visibleCategories as cat (cat.id)}
-            <button
-              class="rail-link"
-              class:active={selectedCat === cat.id}
-              onclick={() => (selectedCat = cat.id)}
-            >
-              <span>{cat.title}</span><span class="rail-count mono">{cat.apps.length}</span>
-            </button>
-          {/each}
-        {:else}
-          <button
-            class="rail-link"
-            class:active={$librarySection === 'all'}
-            onclick={() => librarySection.set('all')}
-          >
-            <span>All apps</span><span class="rail-count mono">{installedAllCount}</span>
-          </button>
-          {#each installedBuckets as b (b.key)}
-            <button
-              class="rail-link"
-              class:active={$librarySection === b.key}
-              onclick={() => librarySection.set(b.key)}
-            >
-              <span>{b.label}</span><span class="rail-count mono">{b.count}</span>
-            </button>
-          {/each}
-          {#each managerIssues as m (m.source)}
-            <button
-              class="rail-link setup-link"
-              onclick={openSources}
-              title={`Set up ${managerNames[m.source]} in Settings`}
-            >
-              <span class="setup-name">
-                <span class="dot" class:warn={m.available} class:off={!m.available}></span>
-                {managerNames[m.source]}
-              </span>
-              <span class="rail-warn mono">set up</span>
-            </button>
-          {/each}
-          <button
-            class="rail-link updates-link"
-            class:active={$librarySection === 'updates'}
-            onclick={() => librarySection.set('updates')}
-          >
-            <span>Updates</span>
-            {#if railUpdateCount > 0}<span class="rail-badge mono">{railUpdateCount}</span>{/if}
-          </button>
-          <button
-            class="rail-link"
-            class:active={$librarySection === 'activity'}
-            onclick={() => librarySection.set('activity')}
-          >
-            <span>Activity</span>
-          </button>
-        {/if}
-      </div>
-    {/if}
-    <div class="browse-main">
-      {#if $browseView === 'library'}
-        {#if $librarySection === 'updates'}
-          <UpdatesSection />
-        {:else if $librarySection === 'activity'}
-          <ActivitySection />
-        {:else}
-          <div class="pane-head">
-            <div class="search-box">
-              <Search size={18} />
-              <input
-                placeholder="Filter installed apps…"
-                aria-label="Filter installed apps"
-                bind:value={libFilter}
-                onkeydown={(e) => {
-                  if (e.key === 'Escape') {
-                    if (libFilter) libFilter = '';
-                    else e.currentTarget.blur();
-                  }
-                }}
-              />
-              {#if libFilter}
-                <button class="clear" onclick={() => (libFilter = '')} aria-label="Clear filter">
-                  <X size={15} />
-                </button>
-              {/if}
-            </div>
-            {#if hiddenCount > 0}
-              <button
-                class="btn btn-ghost"
-                onclick={() => (showHidden = !showHidden)}
-                aria-pressed={showHidden}
-              >
-                {showHidden ? 'Hide hidden' : `Show hidden (${hiddenCount})`}
-              </button>
-            {/if}
-            <div class="pane-tools">
-              <ViewToggle value={$settings.discoverView} onChange={setDiscoverView} />
-            </div>
-          </div>
-          <div class="pane-scroll">
-            {#if paneInstalled.length === 0}
-              <p class="pane-msg muted">
-                {libFilter ? `No installed apps match “${libFilter}”.` : 'No apps in this group.'}
-              </p>
-            {:else}
-              <div class={rightClass}>
-                {#each paneInstalled as p (p.source + p.id)}
-                  <AppCard
-                    name={p.name}
-                    description={descFor(p) + dupeSuffix(p)}
-                    variants={[{ source: p.source, id: p.id }]}
-                    homepage={p.homepage}
-                    gameName={bucketKey(p) === 'games' ? p.name : null}
-                    showSources
-                    layout={rowLayout}
-                    backTo="/?view=library"
-                    menu={installedMenu(p)}
-                    selectable={!isAcyPackage(p)}
-                    selected={selectedApps.has(`${p.source}:${p.id}`)}
-                    {selecting}
-                    onToggleSelect={(e) => togglePick(p, paneInstalled, installedPick, e)}
-                    action={uninstallAction}
-                  />
-                {/each}
-              </div>
+      {#if tagMenuOpen}
+        <div
+          class="filter-pop card"
+          role="dialog"
+          aria-label="Filter apps by tag"
+          style="top:{filterPos?.top ?? 0}px; left:{filterPos?.left ?? 0}px"
+        >
+          <div class="filter-head">
+            <strong>Filter by tags</strong>
+            {#if activeTags.size > 0}
+              <button class="link-btn" onclick={() => (activeTags = new Set())}>Clear all</button>
             {/if}
           </div>
-        {/if}
-      {:else}
-        <div class="pane-head">
-          <div class="search-box">
-            <Search size={18} />
-            <input
-              bind:this={searchInput}
-              aria-label="Search apps"
-              placeholder="Search apps…"
-              bind:value={query}
-              oninput={onInput}
-              onfocus={() => (searchFocused = true)}
-              onblur={() => setTimeout(() => (searchFocused = false), 120)}
-              onkeydown={(e) => {
-                if (e.key === 'Enter') runSearch();
-                else if (e.key === 'Escape') {
-                  if (query) query = '';
-                  else searchInput?.blur();
-                }
-              }}
-            />
-            {#if searching}
-              <span class="spinner" role="status" aria-label="Searching"></span>
-            {/if}
-            {#if query}
-              <button class="clear" onclick={() => { query = ''; searchInput?.focus(); }} aria-label="Clear search">
-                <X size={15} />
-              </button>
-            {/if}
+          <input class="text-input" bind:this={tagSearchInput} bind:value={tagQuery} placeholder="Find a tag…" aria-label="Find a tag" />
+          <div class="match-mode" role="group" aria-label="Tag matching mode">
+            <button class:on={tagMatchMode === 'all'} aria-pressed={tagMatchMode === 'all'} onclick={() => (tagMatchMode = 'all')}>Match all</button>
+            <button class:on={tagMatchMode === 'any'} aria-pressed={tagMatchMode === 'any'} onclick={() => (tagMatchMode = 'any')}>Match any</button>
           </div>
-          <div class="pane-tools">
-            {#if !showSearch && allTags.length > 0}{@render filterCluster()}{/if}
-            <ViewToggle value={$settings.discoverView} onChange={setDiscoverView} />
-          </div>
-        </div>
-        {#if showRecent}
-          <div class="recents">
-            <span class="recents-label muted">Recent</span>
-            {#each recent as r (r)}
-              <button class="recent" onmousedown={(e) => e.preventDefault()} onclick={() => useRecent(r)}>
-                {r}
+          <div class="tag-options">
+            {#each matchingTagOptions as tag (tag)}
+              <button class="tag-option" class:on={activeTags.has(tag)} onclick={() => toggleTag(tag)} aria-pressed={activeTags.has(tag)}>
+                <span class="tag-check">{#if activeTags.has(tag)}<Check size={13} />{/if}</span>
+                <span>{tag}</span>
+                <span class="tag-count mono">{tagCounts.get(tag) ?? 0}</span>
               </button>
             {/each}
+            {#if matchingTagOptions.length === 0}<span class="no-tags muted">No matching tags.</span>{/if}
           </div>
-        {/if}
-        <div class="pane-scroll">
-          {#if loadingCurated}
-            <div class="sk-grid">
-              {#each Array(8) as _, i (i)}
-                <div class="card sk-card">
-                  <div class="sk-top">
-                    <div class="skeleton sk-icon"></div>
-                    <div class="sk-lines">
-                      <div class="skeleton sk-line lg"></div>
-                      <div class="skeleton sk-line sm"></div>
-                    </div>
+        </div>
+      {/if}
+    </div>
+  {/if}
+  <ViewToggle value={$settings.discoverView} onChange={setDiscoverView} />
+{/snippet}
+
+{#if view === 'home'}
+  <div class="view">
+    <header class="view-head">
+      <div>
+        <h1>Discover</h1>
+        <p class="view-sub">Hand-picked apps, installed through the package managers you already use.</p>
+      </div>
+      {#if allApps.length > 0}
+        <a class="btn" href="/?view=all">Browse all {allApps.length} apps <ArrowRight size={15} /></a>
+      {/if}
+    </header>
+    <div class="view-body" bind:clientWidth={bodyWidth}>
+      {#if categories.length === 0}
+        {@render emptyState()}
+      {:else}
+        {#if collections.length > 0}
+          <section class="block" aria-labelledby="collections-title">
+            <div class="block-head"><h2 id="collections-title">Collections</h2></div>
+            <div class="collections">
+              {#each collections as c (c.id)}
+                {@const todo = c.apps.filter((a) => !isInstalled(a))}
+                <article class="collection">
+                  <div class="icons" aria-hidden="true">
+                    {#each c.apps.slice(0, 5) as a (variantKey(a))}
+                      <AppIcon name={a.name ?? a.id} size={34} source={a.source} id={a.id} homepage={a.icon ?? a.homepage} />
+                    {/each}
                   </div>
-                  <div class="skeleton sk-line full"></div>
-                </div>
+                  <h3><a href={`/?collection=${encodeURIComponent(c.id)}`}>{c.title}</a></h3>
+                  {#if c.description}<p class="muted">{c.description}</p>{/if}
+                  <div class="coll-foot">
+                    <span class="muted coll-count">
+                      {c.apps.length} apps{todo.length < c.apps.length ? ` · ${c.apps.length - todo.length} installed` : ''}
+                    </span>
+                    {#if todo.length > 0}
+                      <button class="btn btn-accent small" onclick={() => installCollection(c)} disabled={!!$batch}>
+                        Install {todo.length}
+                      </button>
+                    {:else}
+                      <span class="all-installed"><Check size={14} /> All installed</span>
+                    {/if}
+                  </div>
+                </article>
               {/each}
             </div>
-          {:else if showSearch}
-            {@render searchResultList(rightClass)}
-          {:else if visibleCategories.length === 0 && activeTags.size > 0}
-            <div class="filter-empty">
-              <h2>No apps match these filters</h2>
-              <p class="muted">Try fewer tags or switch between matching all and matching any.</p>
-              <button class="btn" onclick={clearTags}>Clear filters</button>
+          </section>
+        {/if}
+
+        {#each categories as cat (cat.id)}
+          <section class="block" aria-labelledby={`cat-${cat.id}`}>
+            <div class="block-head">
+              <h2 id={`cat-${cat.id}`}>{cat.title}</h2>
+              <a class="see-all" href={`/?cat=${encodeURIComponent(cat.id)}`}>
+                See all {cat.apps.length} <ArrowRight size={14} />
+              </a>
             </div>
-          {:else if visibleCategories.length === 0 && !$settings.showCuratedApps}
-            <div class="filter-empty">
-              <h2>No apps in your list yet</h2>
-              <p class="muted">
-                You're showing only apps you've added. Search for an app to add it, or turn on
-                “Show curated apps” in Settings → Sources.
-              </p>
-            </div>
-          {:else if visibleCategories.length === 0 && $catalog.status === 'downloading'}
-            <div class="filter-empty">
-              <h2>Downloading the catalog…</h2>
-              <p class="muted">Acy's curated apps are fetched from GitHub, not shipped with it.</p>
-            </div>
-          {:else if visibleCategories.length === 0 && ($catalog.status === 'error' || $catalog.status === 'missing')}
-            <div class="filter-empty">
-              <h2>Couldn't download the catalog</h2>
-              <p class="muted">
-                {$catalog.message ||
-                  "Acy's curated apps are fetched from GitHub, and haven't downloaded yet."}
-              </p>
-              <button class="btn" onclick={() => downloadCatalog()}>Try again</button>
-            </div>
-          {:else}
-            <div class={rightClass}>
-              {#each paneApps as app (app.source + app.id)}
-                {@const vs = curatedVariants(app, $settings.managers)}
-                <AppCard
-                  name={app.name ?? app.id}
-                  description={app.description}
-                  variants={vs}
-                  installed={anyInstalled(vs)}
-                  homepage={app.icon ?? app.homepage}
-                  layout={rowLayout}
-                  selectable={!anyInstalled(vs)}
-                  selected={selectedApps.has(appKey(app))}
-                  {selecting}
-                  ctxExtra={uncatKeys.has(appKey(app)) ? moveMenu(app) : []}
-                  onToggleSelect={(e) => togglePick(app, paneApps, curatedPick, e)}
-                  onChanged={() => loadInstalled(true)}
-                />
+            <div class="shelf" style="--cols:{shelfCols}">
+              {#each cat.apps.slice(0, shelfCols) as app (variantKey(app))}
+                {@render card(app, 'grid')}
               {/each}
             </div>
-          {/if}
+          </section>
+        {/each}
+      {/if}
+    </div>
+  </div>
+{:else}
+  <div class="view">
+    <header class="view-head">
+      <div>
+        {#if view === 'collection'}
+          <h1>{currentCollection?.title ?? 'Collection'}</h1>
+          {#if currentCollection?.description}<p class="view-sub">{currentCollection.description}</p>{/if}
+        {:else}
+          <h1>{view === 'all' ? 'All apps' : (currentCategory?.title ?? 'Category')}</h1>
+          <p class="view-sub">
+            {gridApps.length === baseApps.length
+              ? `${baseApps.length} apps`
+              : `${gridApps.length} of ${baseApps.length} apps`}
+          </p>
+        {/if}
+      </div>
+      {#if view === 'collection' && currentCollection}
+        {@const todo = currentCollection.apps.filter((a) => !isInstalled(a))}
+        {#if todo.length > 0}
+          <button class="btn" onclick={() => queueCollection(currentCollection!)}>Add {todo.length} to queue</button>
+          <button class="btn btn-accent" onclick={() => installCollection(currentCollection!)} disabled={!!$batch}>
+            Install {todo.length}
+          </button>
+        {/if}
+        <ViewToggle value={$settings.discoverView} onChange={setDiscoverView} />
+      {:else}
+        {@render filterCluster()}
+      {/if}
+    </header>
+    <div class="view-body">
+      {#if categories.length === 0}
+        {@render emptyState()}
+      {:else if baseApps.length === 0}
+        <div class="empty">
+          <h2>Nothing here</h2>
+          <p class="muted">This {view === 'collection' ? 'collection' : 'category'} has no apps for the package managers you have turned on.</p>
+          <a class="btn" href="/">Back to Discover</a>
+        </div>
+      {:else if gridApps.length === 0}
+        <div class="empty">
+          <h2>No apps match these filters</h2>
+          <p class="muted">Try fewer tags, or switch between matching all and matching any.</p>
+          <button class="btn" onclick={() => (activeTags = new Set())}>Clear filters</button>
+        </div>
+      {:else}
+        <div class={rowLayout === 'list' ? 'rows' : 'grid'}>
+          {#each gridApps as app (variantKey(app))}
+            {@render card(app, rowLayout)}
+          {/each}
         </div>
       {/if}
     </div>
@@ -1150,101 +427,171 @@
 {/if}
 
 <style>
-  .search-box {
+  .block {
+    padding: 4px 24px 22px;
+  }
+  .block-head {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    flex: 1;
-    min-width: 180px;
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius);
-    padding: 0 12px;
-    color: var(--text-muted);
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
   }
-  .search-box:focus-within {
-    border-color: var(--accent);
+  .block-head h2 {
+    font-size: var(--fs-lg);
   }
-  .search-box input {
-    flex: 1;
-    border: none;
-    background: transparent;
-    color: var(--text);
-    padding: 8px 0;
-    outline: none;
-  }
-  .kbd {
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 1px 6px;
-  }
-  .spinner {
-    width: 14px;
-    height: 14px;
-    flex-shrink: 0;
-    border: 2px solid var(--border-strong);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-  }
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-  .clear {
+  .see-all {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    padding: 4px;
-    border: none;
-    background: transparent;
-    color: var(--text-muted);
-    border-radius: var(--radius-sm);
-    line-height: 0;
+    gap: 4px;
+    font-size: var(--fs-md);
+    font-weight: 500;
   }
-  .clear:hover {
-    background: var(--surface-hover);
-    color: var(--text);
-  }
-  .recents {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--border);
-  }
-  .recents-label {
-    font-size: 0.78rem;
-  }
-  .recent {
+  .shelf {
+    display: grid;
+    grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
     border: 1px solid var(--border);
-    background: var(--surface);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  /* On a backdrop there's no panel behind the grid, so give it the card fill
+     the other pages' cards use. */
+  :global(html[data-backdrop]) .shelf,
+  :global(html[data-backdrop]) .grid,
+  :global(html[data-backdrop]) .rows {
+    background: var(--surface-2);
+  }
+  .shelf :global(.app-card) {
+    border-top: none !important;
+  }
+  .shelf :global(.app-card:first-child) {
+    border-left: none !important;
+  }
+  .collections {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  .collection {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+  }
+  .collection h3 {
+    font-size: var(--fs-body);
+    margin-top: 6px;
+  }
+  .collection h3 a {
     color: var(--text);
-    padding: 4px 12px;
-    border-radius: var(--radius-sm);
-    font-size: 0.82rem;
   }
-  .recent:hover {
-    background: var(--surface-hover);
-    border-color: var(--border-strong);
+  .collection p {
+    margin: 0;
+    font-size: var(--fs-sm);
   }
+  .icons {
+    display: flex;
+  }
+  .icons :global(> *) {
+    box-shadow: 0 0 0 2px var(--surface-2);
+    border-radius: 28%;
+  }
+  .icons :global(> * + *) {
+    margin-left: -8px;
+  }
+  .coll-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: auto;
+    padding-top: 8px;
+  }
+  .coll-count {
+    font-size: var(--fs-sm);
+  }
+  .all-installed {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+  }
+  .all-installed :global(svg) {
+    color: var(--success);
+  }
+  .small {
+    padding: 6px 12px;
+    font-size: var(--fs-md);
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    border-bottom: 1px solid var(--border);
+    margin-left: -1px;
+  }
+  .rows {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--border);
+  }
+  .empty {
+    max-width: 480px;
+    margin: 40px auto;
+    padding: 0 24px;
+    text-align: center;
+  }
+  .empty h2 {
+    font-size: var(--fs-lg);
+  }
+  .empty p {
+    margin: 8px 0 18px;
+    font-size: var(--fs-md);
+  }
+  .sk-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+    padding: 4px 24px 24px;
+  }
+  .sk-card {
+    display: flex;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .sk-icon {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+  }
+  .sk-lines {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+  }
+  .sk-line {
+    height: 11px;
+  }
+  .sk-line.lg {
+    width: 62%;
+  }
+  .sk-line.sm {
+    width: 40%;
+  }
+
+  /* Tag filter */
   .filter-wrap {
     position: relative;
-    flex-shrink: 0;
   }
   .filter-trigger {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 7px 9px;
+    padding: 7px 11px;
   }
   .filter-trigger.on {
     color: var(--accent);
@@ -1260,7 +607,7 @@
     border-radius: var(--radius-sm);
     background: var(--accent-fill);
     color: var(--accent-contrast);
-    font-size: 0.7rem;
+    font-size: var(--fs-2xs);
     font-weight: 600;
   }
   .filter-pop {
@@ -1268,6 +615,7 @@
     z-index: 60;
     width: min(330px, calc(100vw - 48px));
     padding: 14px;
+    box-shadow: var(--shadow);
   }
   .filter-head {
     display: flex;
@@ -1275,27 +623,15 @@
     justify-content: space-between;
     gap: 12px;
     margin-bottom: 10px;
-    font-size: 0.9rem;
+    font-size: var(--fs-base);
   }
-  .clear-tags {
-    padding: 2px 4px;
+  .link-btn {
+    min-height: 24px;
+    padding: 2px 6px;
     border: 0;
     background: transparent;
     color: var(--accent);
-    font-size: 0.78rem;
-  }
-  .tag-search {
-    width: 100%;
-    padding: 8px 10px;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm);
-    outline: none;
-    background: var(--surface-2);
-    color: var(--text);
-    font-size: 0.84rem;
-  }
-  .tag-search:focus {
-    border-color: var(--accent);
+    font-size: var(--fs-xs);
   }
   .match-mode {
     display: grid;
@@ -1313,12 +649,11 @@
     border-radius: 5px;
     background: transparent;
     color: var(--text-muted);
-    font-size: 0.77rem;
+    font-size: var(--fs-xs);
   }
   .match-mode button.on {
     background: var(--surface);
     color: var(--text);
-    box-shadow: var(--card-shadow);
   }
   .tag-options {
     max-height: 245px;
@@ -1339,7 +674,7 @@
     background: transparent;
     color: var(--text);
     text-align: left;
-    font-size: 0.82rem;
+    font-size: var(--fs-sm);
   }
   .tag-option:hover,
   .tag-option.on {
@@ -1361,377 +696,22 @@
   }
   .tag-count {
     color: var(--text-muted);
-    font-size: 0.7rem;
+    font-size: var(--fs-2xs);
   }
   .no-tags {
     padding: 12px 8px;
-    font-size: 0.82rem;
+    font-size: var(--fs-sm);
   }
-  .active-tag,
-  .active-more {
+  .active-tag {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    min-height: 28px;
-    padding: 3px 9px;
+    min-height: 30px;
+    padding: 3px 10px;
     border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-pill);
     background: var(--surface-2);
     color: var(--text);
-    font-size: 0.76rem;
-  }
-  .active-more {
-    min-width: 32px;
-    justify-content: center;
-  }
-  .setup-banner {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 9px 14px;
-    background: color-mix(in srgb, var(--warning) 12%, var(--surface));
-    border-bottom: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
-    font-size: 0.86rem;
-  }
-  .setup-banner-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    background: var(--warning);
-  }
-  .setup-banner-text {
-    flex: 1;
-    min-width: 0;
-  }
-  .setup-banner-action {
-    flex-shrink: 0;
-    font-size: 0.82rem;
-  }
-  .setup-banner-close {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    padding: 5px;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-muted);
-    line-height: 0;
-  }
-  .setup-banner-close:hover {
-    background: var(--surface-hover);
-    color: var(--text);
-  }
-  .browse-panel {
-    display: flex;
-    align-items: stretch;
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-    background: var(--surface);
-  }
-  .browse-rail {
-    flex: 0 0 190px;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-    border-right: 1px solid var(--border);
-    background: var(--surface-2);
-  }
-  .rail-switch {
-    display: flex;
-    gap: 2px;
-    flex-shrink: 0;
-    margin: 8px;
-    padding: 2px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-  }
-  .rail-switch button {
-    flex: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 5px;
-    padding: 5px 8px;
-    border: 0;
-    border-radius: 5px;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 0.82rem;
-    font-weight: 500;
-  }
-  .lib-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    background: var(--warning);
-  }
-  .lib-count {
-    font-size: 0.68rem;
-    line-height: 1.5;
-    padding: 0 5px;
-    border-radius: 4px;
-    background: var(--accent-fill);
-    color: var(--accent-contrast);
-  }
-  .rail-switch button.on .lib-count {
-    background: color-mix(in srgb, var(--accent-contrast) 22%, transparent);
-    color: inherit;
-  }
-  .rail-switch button.on .lib-dot {
-    background: var(--accent-contrast);
-  }
-  .rail-switch button.on {
-    background: var(--accent-fill);
-    color: var(--accent-contrast);
-  }
-  .rail-badge {
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    background: var(--accent-fill);
-    color: var(--accent-contrast);
-    border-radius: var(--radius-sm);
-    padding: 0 6px;
-    line-height: 1.5;
-  }
-  .rail-link {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    text-align: left;
-    padding: 9px 14px;
-    border: none;
-    border-top: 1px solid var(--border);
-    border-left: 2px solid transparent;
-    border-radius: 0;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 0.9rem;
-    font-weight: 500;
-  }
-  .rail-link:first-child {
-    border-top: none;
-  }
-  .updates-link {
-    margin-top: auto;
-  }
-  .setup-name {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-  .rail-warn {
-    font-size: 0.66rem;
-    color: var(--text-muted);
-  }
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-  .dot.warn {
-    background: var(--warning);
-  }
-  .dot.off {
-    background: var(--text-muted);
-  }
-  .rail-link:hover {
-    background: var(--surface-hover);
-    color: var(--text);
-  }
-  .rail-link.active {
-    background: var(--surface);
-    color: var(--text);
-    border-left-color: var(--accent);
-  }
-  .rail-count {
-    font-size: 0.72rem;
-    color: var(--text-muted);
-  }
-  .rail-link.active .rail-count {
-    color: var(--accent);
-  }
-  .browse-main {
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  .pane-head {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 10px;
-    min-height: 34px;
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--border);
-  }
-  .pane-tools {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 8px;
-  }
-  .pane-scroll {
-    flex: 1;
-    min-height: 0;
-    overflow: hidden auto;
-  }
-  .sk-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 14px;
-    padding: 14px;
-  }
-  .pane-rows {
-    display: flex;
-    flex-direction: column;
-  }
-  .pane-scroll .grid {
-    gap: 0;
-    margin: -1px 0 0 -1px;
-  }
-  .browse-main .res-section {
-    margin-bottom: 0;
-  }
-  .browse-main .res-head {
-    margin-bottom: 0;
-    padding: 14px 14px 10px;
-  }
-  .pane-msg {
-    padding: 16px 14px;
-  }
-  .filter-empty {
-    max-width: 480px;
-    margin: 38px auto;
-    padding: 30px;
-    text-align: center;
-  }
-  .filter-empty h2 {
-    font-size: 1.05rem;
-  }
-  .filter-empty p {
-    margin: 7px 0 18px;
-    font-size: 0.88rem;
-  }
-  .sel-bar {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-  }
-  .sel-count {
-    font-size: 0.9rem;
-    font-weight: 600;
-  }
-  .sel-spacer {
-    flex: 1;
-  }
-  .empty {
-    padding: 40px 32px;
-    text-align: center;
-    max-width: 520px;
-    margin: 40px auto;
-  }
-  .empty h2 {
-    font-size: 1.1rem;
-    margin-bottom: 10px;
-  }
-  .empty p {
-    font-size: 0.92rem;
-    margin: 0 auto 20px;
-    max-width: 420px;
-  }
-  .sk-card {
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-  .sk-top {
-    display: flex;
-    gap: 12px;
-  }
-  .sk-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-sm);
-    flex-shrink: 0;
-  }
-  .sk-lines {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-    justify-content: center;
-  }
-  .sk-line {
-    height: 11px;
-  }
-  .sk-line.lg {
-    width: 62%;
-  }
-  .sk-line.sm {
-    width: 40%;
-  }
-  .sk-line.full {
-    width: 100%;
-    height: 9px;
-  }
-  .res-section {
-    margin-bottom: 24px;
-  }
-  .res-head {
-    font-size: 1.05rem;
-    font-weight: 600;
-    margin-bottom: 12px;
-  }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 14px;
-  }
-  .error {
-    color: var(--danger);
-    font-family: var(--font-mono);
-    font-size: 0.85rem;
-    white-space: pre-wrap;
-  }
-  @media (max-width: 720px) {
-    .browse-panel {
-      flex-direction: column;
-      height: auto;
-    }
-    .browse-rail {
-      flex: none;
-      flex-direction: row;
-      flex-wrap: wrap;
-      overflow: visible;
-      border-right: none;
-      border-bottom: 1px solid var(--border);
-    }
-    .rail-link {
-      flex: 1 1 auto;
-      justify-content: center;
-      border-top: none;
-      border-left: none;
-    }
+    font-size: var(--fs-xs);
   }
 </style>

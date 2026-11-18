@@ -1,35 +1,21 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
-  import { ops, notices, dismissAll, dismissNotice } from '$lib/stores/ops';
-  import { openLibrary } from '$lib/stores/discover';
-  import Toast from './Toast.svelte';
-  import QueuedOps from './QueuedOps.svelte';
+  import { ops, notices, dismissNotice } from '$lib/stores/ops';
 
-  let dismissable = $derived(
-    $ops.filter((o) => o.state === 'done' || o.state === 'error').length
-  );
-  let queued = $derived($ops.filter((o) => o.state === 'queued'));
+  // Spoken status per operation. Kept to the state (not the streaming output)
+  // so screen readers hear "Installing X: done" once, not every log line.
+  const SPOKEN = { queued: 'queued', running: 'in progress', done: 'done', error: 'failed' };
 </script>
 
-{#if $ops.length > 0 || $notices.length > 0}
+<!-- Always mounted: a live region only announces changes made after it exists. -->
+<div class="sr-only" aria-live="polite">
+  {#each $ops as op (op.id)}<span>{op.title}: {SPOKEN[op.state]}. </span>{/each}
+  {#each $notices as n (n.id)}<span>{n.message} </span>{/each}
+</div>
+
+<!-- Short confirmations ("Added X to your list"). Operations live in the queue tray. -->
+{#if $notices.length > 0}
   <div class="stack">
-    {#if $ops.length > 0}
-      <div class="stack-head">
-        <a
-          class="history"
-          href="/"
-          onclick={(e) => {
-            e.preventDefault();
-            openLibrary('activity');
-          }}>Activity</a
-        >
-        {#if dismissable > 1}
-          <button class="clear-all" onclick={dismissAll} title="Dismiss finished notifications">
-            Clear all
-          </button>
-        {/if}
-      </div>
-    {/if}
     {#each $notices as n (n.id)}
       <div class="notice card" class:warn={n.kind === 'warn'} class:err={n.kind === 'error'}>
         <span class="dot"></span>
@@ -39,13 +25,6 @@
         </button>
       </div>
     {/each}
-    {#each $ops as op (op.id)}
-      {#if op.state !== 'queued'}
-        <Toast {op} />
-      {:else if op.id === queued[0].id}
-        <QueuedOps ops={queued} />
-      {/if}
-    {/each}
   </div>
 {/if}
 
@@ -53,43 +32,13 @@
   .stack {
     position: fixed;
     right: 18px;
-    bottom: 18px;
+    bottom: calc(var(--tray-h, 0px) + 16px);
     z-index: 40;
     display: flex;
     flex-direction: column;
     gap: 10px;
-    width: min(420px, calc(100vw - 36px));
-    max-height: calc(100vh - 36px);
-    overflow-y: auto;
+    width: min(380px, calc(100vw - 36px));
   }
-  .stack-head {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-  }
-  .history,
-  .clear-all {
-    border: 1px solid var(--border-strong);
-    background: var(--surface);
-    color: var(--text);
-    padding: 4px 12px;
-    border-radius: var(--radius-sm);
-    font-size: 0.78rem;
-    font-weight: 500;
-    box-shadow: var(--shadow);
-  }
-  .history {
-    text-decoration: none;
-  }
-  .clear-all {
-    font-family: inherit;
-  }
-  .history:hover,
-  .clear-all:hover {
-    background: var(--surface-hover);
-  }
-
   .notice {
     display: flex;
     align-items: center;
@@ -113,12 +62,16 @@
   .notice .msg {
     flex: 1;
     min-width: 0;
-    font-size: 0.88rem;
+    font-size: var(--fs-md);
     font-weight: 500;
   }
   .notice .x {
     display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
+    min-width: 24px;
+    min-height: 24px;
     padding: 4px;
     border: none;
     background: transparent;

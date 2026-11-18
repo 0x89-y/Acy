@@ -24,8 +24,9 @@
   } = $props();
 
   const palette = [
-    '#6750a4', '#7d5260', '#1e88e5', '#43a047',
-    '#fb8c00', '#8e24aa', '#00897b', '#5e35b1'
+    // Each clears 4.5:1 under the white initial.
+    '#6750a4', '#7d5260', '#1565c0', '#2e7d32',
+    '#c2410c', '#8e24aa', '#00796b', '#5e35b1'
   ];
 
   function hash(s: string): number {

@@ -18,7 +18,7 @@
 <style>
   .badge {
     font-family: var(--font-mono);
-    font-size: 0.68rem;
+    font-size: var(--fs-2xs);
     padding: 1px 7px;
     border-radius: var(--radius-sm);
     border: 1px solid currentColor;

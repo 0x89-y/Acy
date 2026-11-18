@@ -1,18 +1,38 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getVersion } from '@tauri-apps/api/app';
+  import { openUrl } from '@tauri-apps/plugin-opener';
   import {
     Sun,
     Moon,
     Monitor,
     Pipette,
-    ArrowLeft,
     RefreshCw,
     Trash2,
     Link,
     FileText,
-    SquarePen
+    SquarePen,
+    Terminal,
+    FolderDown,
+    AppWindow,
+    Bell,
+    BellRing,
+    WandSparkles,
+    RotateCcw,
+    SunMoon,
+    Palette,
+    Layers,
+    Image,
+    KeyRound,
+    Star,
+    Package,
+    BookOpen,
+    Sparkles,
+    ExternalLink,
+    ChevronDown,
+    ScrollText
   } from '@lucide/svelte';
+  import SettingCard from '$lib/components/SettingCard.svelte';
   import {
     updaterPhase,
     updaterVersion,
@@ -37,13 +57,14 @@
     setRefreshOnStartup,
     setAutoCheckUpdates,
     setShowCuratedApps,
-    setSettingsTab,
+    setBackdrop,
+    BACKDROPS,
+    SETTINGS_TABS,
     restartSetup,
     resetSettings,
     setCustomAccent,
     ACCENTS,
-    type ThemeMode,
-    type SettingsTab
+    type ThemeMode
   } from '$lib/stores/settings';
   import { managers, loadManagers } from '$lib/stores/managers';
   import {
@@ -250,556 +271,488 @@
     if (on) backgroundCheck();
   }
 
-  const tabs: { id: SettingsTab; label: string }[] = [
-    { id: 'general', label: 'General' },
-    { id: 'appearance', label: 'Appearance' },
-    { id: 'sources', label: 'Sources' },
-    { id: 'updates', label: 'Updates' },
-    { id: 'shortcuts', label: 'Shortcuts' },
-    { id: 'about', label: 'About' }
-  ];
   let activeTab = $derived($settings.settingsTab);
+
+  const TAB_INTRO: Record<string, string> = {
+    general: 'How installs behave, the tray, and resetting Acy.',
+    appearance: 'Theme, accent colour, window backdrop and app icons.',
+    sources: 'The package managers Acy uses, and where its app catalog comes from.',
+    updates: 'Checking your apps for updates, and updating Acy itself.',
+    shortcuts: 'Keys that work anywhere in Acy.',
+    about: 'Version, licence and what changed recently.'
+  };
+
+  function managerState(source: Source): { label: string; kind: 'ok' | 'warn' | 'off' } {
+    const st = statusOf(source);
+    if (!st) return { label: 'Checking…', kind: 'off' };
+    if (!st.available) return { label: 'Not installed', kind: 'off' };
+    if (st.needsSetup) return { label: 'Needs setup', kind: 'warn' };
+    return { label: 'Installed', kind: 'ok' };
+  }
 </script>
 
-<div class="settings-layout">
-  <nav class="side" aria-label="Settings sections">
-    <div class="rail-head">
-      <a class="back-btn" href="/" title="Back" aria-label="Back"><ArrowLeft size={17} /></a>
-      <span class="rail-title">Settings</span>
+
+{#snippet toggleSwitch(checked: boolean, onchange: (on: boolean) => void, label?: string)}
+  <span class="switch">
+    <input type="checkbox" {checked} aria-label={label} onchange={(e) => onchange(e.currentTarget.checked)} />
+    <span class="slider" aria-hidden="true"></span>
+  </span>
+{/snippet}
+
+<div class="view">
+  <header class="view-head">
+    <div>
+      <h1>{SETTINGS_TABS.find((t) => t.id === activeTab)?.label ?? 'Settings'}</h1>
+      <p class="view-sub">{TAB_INTRO[activeTab]}</p>
     </div>
-    <div class="rail-links">
-      {#each tabs as t (t.id)}
-        <button class="side-link" class:active={activeTab === t.id} onclick={() => setSettingsTab(t.id)}>
-          {t.label}
-        </button>
-      {/each}
-    </div>
-  </nav>
+  </header>
 
-  <div class="panes">
-    {#if activeTab === 'general'}
-      <section class="group">
-        <h2>Behavior</h2>
-        <div class="opt-list">
-          <label class="opt-row">
-            <span class="opt-label">Show command output while installing</span>
-            <span class="switch">
-              <input
-                type="checkbox"
-                checked={$settings.showOutput}
-                onchange={(e) => setShowOutput(e.currentTarget.checked)}
-              />
-              <span class="slider"></span>
-            </span>
-          </label>
-        </div>
-      </section>
-
-      <section class="group">
-        <h2>Installation</h2>
-        <div class="opt-list">
-          <div class="key-row">
-            <div class="key-head">
-              <span class="opt-label">Install location</span>
-              {#if $settings.installLocation}
-                <span class="custom-path mono" title={$settings.installLocation}
-                  >{$settings.installLocation}\&lt;app&gt;</span
-                >
-              {:else}
-                <span class="key-hint muted">Installer default (usually Program Files)</span>
-              {/if}
-              <span class="key-hint muted"
-                >winget only. Each app goes in its own subfolder. Installers that don't support a
-                custom folder (e.g. Store/MSIX apps) still use their default. Updates stay where
-                the app is.</span
-              >
-            </div>
-            <div class="seg-actions">
-              <button class="seg-act" onclick={chooseInstallLocation}>Choose folder…</button>
-              {#if $settings.installLocation}
-                <button class="seg-act" onclick={() => setInstallLocation('')}>Reset</button>
-              {/if}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="group">
-        <h2>Tray &amp; notifications</h2>
-        <div class="opt-list">
-          <label class="opt-row">
-            <span class="opt-label">Close to tray instead of quitting</span>
-            <span class="switch">
-              <input
-                type="checkbox"
-                checked={$settings.closeToTray}
-                onchange={(e) => setCloseToTray(e.currentTarget.checked)}
-              />
-              <span class="slider"></span>
-            </span>
-          </label>
-          <label class="opt-row">
-            <span class="opt-label">Notify when long operations finish</span>
-            <span class="switch">
-              <input
-                type="checkbox"
-                checked={$settings.notifyOperations}
-                onchange={(e) => setNotifyOperations(e.currentTarget.checked)}
-              />
-              <span class="slider"></span>
-            </span>
-          </label>
-        </div>
-      </section>
-
-      <section class="group">
-        <h2>Setup &amp; reset</h2>
-        <div class="reset-row">
-          <button class="btn btn-accent" onclick={restartSetup}>Run setup again</button>
-          <button class="btn" onclick={resetAll}>Reset all settings</button>
-        </div>
-      </section>
-    {:else if activeTab === 'appearance'}
-      <section class="group">
-        <h2>Theme &amp; accent</h2>
-        <div class="opt-list">
-          <div class="opt-row">
-            <span class="opt-label">Theme</span>
-            <div class="seg">
-              {#each modes as m (m.value)}
-                {@const Icon = m.icon}
-                <button
-                  class="seg-btn"
-                  class:on={$settings.themeMode === m.value}
-                  onclick={() => setThemeMode(m.value)}
-                >
-                  <Icon size={16} />
-                  {m.label}
-                </button>
-              {/each}
-            </div>
-          </div>
-          <div class="opt-row">
-            <span class="opt-label">Accent</span>
-            <div class="accents">
-              {#each ACCENTS as a (a.name)}
-                <button
-                  class="swatch"
-                  class:on={$settings.accent === a.name}
-                  class:aurora={a.name === 'aurora'}
-                  style="--sw:{a.color}"
-                  onclick={() => setAccent(a.name)}
-                  title={a.label}
-                  aria-label={a.label}
-                ></button>
-              {/each}
-              <label
-                class="swatch custom"
-                class:on={$settings.accent === 'custom'}
-                style="--sw:{$settings.customAccent}"
-                title="Custom colour"
-              >
-                <input
-                  type="color"
-                  value={$settings.customAccent}
-                  oninput={(e) => setCustomAccent(e.currentTarget.value)}
-                  aria-label="Custom accent colour"
-                />
-                <Pipette size={13} class="pip" />
-              </label>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="group">
-        <div class="group-head">
-          <h2>App icons</h2>
-          <div class="head-actions">
-            {#if $iconRefetch.status === 'running' && $iconRefetch.total > 0}
-              <span class="icon-msg muted"
-                >{Math.min($iconRefetch.current + 1, $iconRefetch.total)} / {$iconRefetch.total}</span
-              >
-            {:else if $iconRefetch.status === 'done'}
-              <span class="icon-msg muted">{$iconRefetch.message}</span>
-            {/if}
-            {#if iconStats && !iconRefetching}
-              <span class="head-ver muted" title="Disk space used by cached icons">
-                {iconStats.icons === 0
-                  ? 'No icons cached'
-                  : `${iconStats.icons} ${iconStats.icons === 1 ? 'icon' : 'icons'} · ${formatBytes(iconStats.bytes)}`}
-              </span>
-            {/if}
-            <button
-              class="icon-btn"
-              title="Re-download missing icons"
-              aria-label="Re-download missing icons"
-              onclick={refetchMissingIcons}
-              disabled={!$settings.downloadIcons || iconRefetching || clearing}
-            >
-              <RefreshCw size={16} class={iconRefetching ? 'icon-spin' : ''} />
-            </button>
-            <button
-              class="icon-btn"
-              title="Clear icon cache"
-              aria-label="Clear icon cache"
-              onclick={clearIcons}
-              disabled={clearing || iconRefetching}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        </div>
-        <div class="opt-list">
-          <label class="opt-row">
-            <span class="opt-label">Download &amp; cache app icons</span>
-            <span class="switch">
-              <input
-                type="checkbox"
-                checked={$settings.downloadIcons}
-                onchange={(e) => setDownloadIcons(e.currentTarget.checked)}
-              />
-              <span class="slider"></span>
-            </span>
-          </label>
-          <div class="key-row">
-            <div class="key-head">
-              <span class="opt-label">SteamGridDB API key</span>
-              <span class="key-hint muted"
-                >Optional - fetches icons for Steam and other launcher games (Epic, GOG, EA,
-                Ubisoft, Battle.net).</span
-              >
-            </div>
-            <input
-              class="key-input mono"
-              type="password"
-              autocomplete="off"
-              spellcheck="false"
-              placeholder="Paste key…"
-              value={$settings.steamGridKey}
-              onchange={(e) => setSteamGridKey(e.currentTarget.value)}
-            />
-          </div>
-        </div>
-      </section>
-    {:else if activeTab === 'sources'}
-      <section class="group source-group">
-        <h2>Package managers</h2>
-        <div class="field pref">
-          <span class="field-label">Preferred source</span>
-          <select
-            class="pref-select"
-            value={$settings.preferredSource ?? ''}
-            onchange={(e) => setPreferredSource((e.currentTarget.value || null) as Source | null)}
+  <div class="view-body">
+    <div class="page">
+      {#if activeTab === 'general'}
+        <section class="group" aria-labelledby="h-installing">
+          <h2 id="h-installing">Installing</h2>
+          <SettingCard
+            toggle
+            icon={Terminal}
+            title="Show command output"
+            description="Open the live log for every install, update and removal in the progress bar."
           >
-            <option value="">No preference (choose each time)</option>
-            {#each allManagers as s (s)}
-              <option value={s}>{names[s]}</option>
-            {/each}
-          </select>
-        </div>
-        <div class="mgr-list">
+            {#snippet control()}{@render toggleSwitch($settings.showOutput, setShowOutput)}{/snippet}
+          </SettingCard>
+          <SettingCard icon={FolderDown} title="Install location">
+            {#snippet description()}
+              {#if $settings.installLocation}
+                <span class="mono path" title={$settings.installLocation}>{$settings.installLocation}\&lt;app&gt;</span>
+              {:else}
+                Installer default (usually Program Files).
+              {/if}
+              winget only; each app gets its own subfolder. Store/MSIX apps and installers without
+              folder support keep their default, and updates stay where the app is.
+            {/snippet}
+            {#snippet control()}
+              <button class="btn" onclick={chooseInstallLocation}>Choose folder…</button>
+              {#if $settings.installLocation}
+                <button class="btn btn-ghost" onclick={() => setInstallLocation('')}>Reset</button>
+              {/if}
+            {/snippet}
+          </SettingCard>
+        </section>
+
+        <section class="group" aria-labelledby="h-window">
+          <h2 id="h-window">Window &amp; notifications</h2>
+          <SettingCard
+            toggle
+            icon={AppWindow}
+            title="Close to tray"
+            description="Closing the window keeps Acy running in the system tray instead of quitting."
+          >
+            {#snippet control()}{@render toggleSwitch($settings.closeToTray, setCloseToTray)}{/snippet}
+          </SettingCard>
+          <SettingCard
+            toggle
+            icon={Bell}
+            title="Notify when long operations finish"
+            description="A Windows notification when an install or update that took a while is done and Acy is in the background."
+          >
+            {#snippet control()}{@render toggleSwitch($settings.notifyOperations, setNotifyOperations)}{/snippet}
+          </SettingCard>
+        </section>
+
+        <section class="group" aria-labelledby="h-reset">
+          <h2 id="h-reset">Setup &amp; reset</h2>
+          <SettingCard
+            icon={WandSparkles}
+            title="Run setup again"
+            description="Go through the first-run setup: package managers, theme and the app catalog."
+          >
+            {#snippet control()}<button class="btn" onclick={restartSetup}>Run setup</button>{/snippet}
+          </SettingCard>
+          <SettingCard
+            danger
+            icon={RotateCcw}
+            title="Reset all settings"
+            description="Every preference goes back to its default. Installed apps and your app list are not touched."
+          >
+            {#snippet control()}<button class="btn danger-outline" onclick={resetAll}>Reset…</button>{/snippet}
+          </SettingCard>
+        </section>
+      {:else if activeTab === 'appearance'}
+        <section class="group" aria-labelledby="h-look">
+          <h2 id="h-look">Look</h2>
+          <SettingCard icon={SunMoon} title="Theme" titleId="theme-label" description="Follow Windows, or always use light or dark.">
+            {#snippet control()}
+              <div class="seg" role="group" aria-labelledby="theme-label">
+                {#each modes as m (m.value)}
+                  {@const Icon = m.icon}
+                  <button
+                    class="seg-btn"
+                    class:on={$settings.themeMode === m.value}
+                    aria-pressed={$settings.themeMode === m.value}
+                    onclick={() => setThemeMode(m.value)}
+                  >
+                    <Icon size={15} />
+                    {m.label}
+                  </button>
+                {/each}
+              </div>
+            {/snippet}
+          </SettingCard>
+          <SettingCard icon={Palette} title="Accent colour" description="Used for buttons, selection and highlights.">
+            {#snippet control()}
+              <div class="accents">
+                {#each ACCENTS as a (a.name)}
+                  <button
+                    class="swatch"
+                    class:on={$settings.accent === a.name}
+                    class:aurora={a.name === 'aurora'}
+                    style="--sw:{a.color}"
+                    onclick={() => setAccent(a.name)}
+                    title={a.label}
+                    aria-label={a.label}
+                    aria-pressed={$settings.accent === a.name}
+                  ></button>
+                {/each}
+                <label class="swatch custom" class:on={$settings.accent === 'custom'} style="--sw:{$settings.customAccent}" title="Custom colour">
+                  <input
+                    type="color"
+                    value={$settings.customAccent}
+                    oninput={(e) => setCustomAccent(e.currentTarget.value)}
+                    aria-label="Custom accent colour"
+                  />
+                  <Pipette size={13} class="pip" />
+                </label>
+              </div>
+            {/snippet}
+          </SettingCard>
+          <SettingCard icon={Layers} title="Window backdrop" titleId="backdrop-label">
+            {#snippet description()}
+              Mica tints the window with your wallpaper colour, Mica Alt more strongly, and Acrylic
+              blurs what's behind it. Windows 11 only, and not while Windows shows your accent colour
+              on title bars.
+            {/snippet}
+            {#snippet control()}
+              <div class="seg" role="group" aria-labelledby="backdrop-label">
+                {#each BACKDROPS as b (b.value)}
+                  <button
+                    class="seg-btn"
+                    class:on={$settings.backdrop === b.value}
+                    aria-pressed={$settings.backdrop === b.value}
+                    onclick={() => setBackdrop(b.value)}
+                  >
+                    {b.label}
+                  </button>
+                {/each}
+              </div>
+            {/snippet}
+          </SettingCard>
+        </section>
+
+        <section class="group" aria-labelledby="h-icons">
+          <h2 id="h-icons">App icons</h2>
+          <SettingCard icon={Image} title="Download app icons">
+            {#snippet description()}
+              Fetches each app's icon from its website and keeps it on this PC.
+              {#if iconStats}
+                <span class="nowrap">
+                  {iconStats.icons === 0
+                    ? 'Nothing cached yet.'
+                    : `${iconStats.icons} ${iconStats.icons === 1 ? 'icon' : 'icons'} cached · ${formatBytes(iconStats.bytes)}.`}
+                </span>
+              {/if}
+            {/snippet}
+            {#snippet control()}{@render toggleSwitch($settings.downloadIcons, setDownloadIcons, 'Download app icons')}{/snippet}
+            <div class="sub-actions">
+              <button
+                class="btn btn-ghost small"
+                onclick={refetchMissingIcons}
+                disabled={!$settings.downloadIcons || iconRefetching || clearing}
+              >
+                <RefreshCw size={14} class={iconRefetching ? 'icon-spin' : ''} />
+                {iconRefetching && $iconRefetch.status === 'running' && $iconRefetch.total > 0
+                  ? `Downloading ${Math.min($iconRefetch.current + 1, $iconRefetch.total)} of ${$iconRefetch.total}…`
+                  : 'Re-download missing'}
+              </button>
+              <button class="btn btn-ghost small" onclick={clearIcons} disabled={clearing || iconRefetching}>
+                <Trash2 size={14} /> Clear cache
+              </button>
+              {#if $iconRefetch.status === 'done'}<span class="muted small-text">{$iconRefetch.message}</span>{/if}
+            </div>
+          </SettingCard>
+          <SettingCard
+            icon={KeyRound}
+            title="SteamGridDB API key"
+            description="Optional. Fetches icons for Steam and other launcher games (Epic, GOG, EA, Ubisoft, Battle.net)."
+          >
+            {#snippet control()}
+              <input
+                class="text-input mono key-input"
+                type="password"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="Paste key…"
+                aria-label="SteamGridDB API key"
+                value={$settings.steamGridKey}
+                onchange={(e) => setSteamGridKey(e.currentTarget.value)}
+              />
+            {/snippet}
+          </SettingCard>
+        </section>
+      {:else if activeTab === 'sources'}
+        <section class="group" aria-labelledby="h-managers">
+          <h2 id="h-managers">Package managers</h2>
+          <SettingCard
+            icon={Star}
+            title="Preferred source"
+            titleId="pref-label"
+            description="Which manager Install uses when an app is available from several."
+          >
+            {#snippet control()}
+              <select
+                class="text-input select"
+                aria-labelledby="pref-label"
+                value={$settings.preferredSource ?? ''}
+                onchange={(e) => setPreferredSource((e.currentTarget.value || null) as Source | null)}
+              >
+                <option value="">No preference</option>
+                {#each allManagers as s (s)}
+                  <option value={s}>{names[s]}</option>
+                {/each}
+              </select>
+            {/snippet}
+          </SettingCard>
           {#each allManagers as s (s)}
             {@const st = statusOf(s)}
-            <div class="mgr-row" class:is-on={$settings.managers[s] !== false}>
-              <div class="mgr-meta">
-                <span class="mgr-name">{names[s]}</span>
-                <span class="mgr-desc muted">{MANAGER_INFO[s]}</span>
-              </div>
-              <div class="mgr-actions">
-                {#if s === 'winget' && st?.available}
-                  <button
-                    class="icon-btn"
-                    title="Update winget sources"
-                    aria-label="Update winget sources"
-                    disabled={maintBusy !== null}
-                    onclick={() =>
-                      runMaint('Update winget sources', 'winget-src', api.wingetUpdateSources)}
-                  >
-                    <RefreshCw size={16} class={maintBusy === 'winget-src' ? 'icon-spin' : ''} />
+            {@const state = managerState(s)}
+            <SettingCard icon={Package} title={names[s]}>
+              {#snippet description()}
+                <span class="pill {state.kind}">{state.label}</span>
+                {MANAGER_INFO[s]}
+              {/snippet}
+              {#snippet control()}
+                {#if st && !st.available}
+                  <button class="btn" onclick={() => install(s)} disabled={busy === s}>
+                    {busy === s ? 'Installing…' : 'Install'}
                   </button>
                 {/if}
-                {#if s === 'scoop'}
-                  {#if st?.available}
-                    <a class="btn btn-ghost mgr-btn" href="/scoop-buckets">Manage buckets</a>
+                {@render toggleSwitch($settings.managers[s] !== false, (on) => setManagerEnabled(s, on), `Use ${names[s]}`)}
+              {/snippet}
+              {#if st?.available && (s === 'winget' || s === 'scoop')}
+                <div class="sub-actions">
+                  {#if s === 'winget'}
                     <button
-                      class="icon-btn"
-                      title="Update Scoop"
-                      aria-label="Update Scoop"
+                      class="btn btn-ghost small"
+                      disabled={maintBusy !== null}
+                      onclick={() => runMaint('Update winget sources', 'winget-src', api.wingetUpdateSources)}
+                    >
+                      <RefreshCw size={14} class={maintBusy === 'winget-src' ? 'icon-spin' : ''} /> Update sources
+                    </button>
+                  {:else}
+                    <a class="btn btn-ghost small" href="/scoop-buckets"><Package size={14} /> Manage buckets</a>
+                    <button
+                      class="btn btn-ghost small"
                       disabled={maintBusy !== null}
                       onclick={() => runMaint('Update Scoop', 'scoop-up', api.scoopUpdate)}
                     >
-                      <RefreshCw size={16} class={maintBusy === 'scoop-up' ? 'icon-spin' : ''} />
+                      <RefreshCw size={14} class={maintBusy === 'scoop-up' ? 'icon-spin' : ''} /> Update Scoop
                     </button>
                     <button
-                      class="icon-btn"
-                      title="Clean up Scoop"
-                      aria-label="Clean up Scoop"
+                      class="btn btn-ghost small"
                       disabled={maintBusy !== null}
                       onclick={() => runMaint('Clean up Scoop', 'scoop-clean', api.scoopCleanup)}
                     >
-                      <Trash2 size={16} />
-                    </button>
-                  {:else}
-                    <button class="btn btn-ghost mgr-btn" disabled title="Install Scoop first">
-                      Manage buckets
+                      <Trash2 size={14} /> Clean up old versions
                     </button>
                   {/if}
-                {/if}
-                {#if st && !st.available}
-                  <button class="btn mgr-btn" onclick={() => install(s)} disabled={busy === s}>
-                    {busy === s ? 'Working…' : 'Install'}
-                  </button>
-                {:else}
-                  <span
-                    class="mgr-state mono"
-                    class:ok={st?.available}
-                    class:off={!st?.available}
-                  >
-                    {st?.available ? 'available' : 'not installed'}
-                  </span>
-                {/if}
-                <label class="switch" title="Enable {names[s]}">
-                  <input
-                    type="checkbox"
-                    checked={$settings.managers[s] !== false}
-                    onchange={(e) => setManagerEnabled(s, e.currentTarget.checked)}
-                  />
-                  <span class="slider"></span>
-                </label>
-              </div>
-            </div>
+                </div>
+              {/if}
+            </SettingCard>
           {/each}
-        </div>
-      </section>
+        </section>
 
-      <section class="group source-group">
-        <div class="group-head">
-          <h2>Curated catalog</h2>
-          <div class="head-actions">
-            {#if !customCat && catalogPhase !== 'available' && catalogMsg}
-              <span class="icon-msg muted">{catalogMsg}</span>
-            {/if}
-            <a
-              class="icon-btn"
-              href="/curated"
-              title="Open catalog editor"
-              aria-label="Open catalog editor"
-            >
-              <SquarePen size={16} />
-            </a>
-            {#if !customCat}
-              <button
-                class="icon-btn"
-                title="Check for catalog updates"
-                aria-label="Check for catalog updates"
-                onclick={checkCatalog}
-                disabled={catalogPhase === 'checking' || catalogPhase === 'applying'}
-              >
-                <RefreshCw
-                  size={16}
-                  class={catalogPhase === 'checking' || catalogPhase === 'applying'
-                    ? 'icon-spin'
-                    : ''}
-                />
-              </button>
-            {/if}
-          </div>
-        </div>
-        <div class="opt-list">
-          <label class="opt-row">
-            <span class="opt-meta">
-              <span class="opt-label">Show curated apps</span>
-              <span class="opt-desc muted">
-                {#if $catalog.status === 'downloading'}
-                  Downloading Acy's app catalog…
-                {:else if $catalog.status === 'error'}
-                  {$catalog.message}
-                {:else if customCat}
-                  Using your own catalog (below).
-                {:else if $settings.showCuratedApps && $catalog.status === 'ready'}
-                  {$catalog.appCount} apps · catalog v{$catalog.version}
-                {:else}
-                  Downloads Acy's app catalog from GitHub.
-                {/if}
-              </span>
-            </span>
-            <span class="switch">
-              <input
-                type="checkbox"
-                checked={$settings.showCuratedApps}
-                onchange={(e) => toggleCurated(e.currentTarget.checked)}
-              />
-              <span class="slider"></span>
-            </span>
-          </label>
-          {#if $settings.showCuratedApps && $catalog.status === 'error'}
-            <div class="seg-actions">
-              <button class="seg-act" onclick={() => downloadCatalog()}>Try again</button>
+        <section class="group" aria-labelledby="h-catalog">
+          <h2 id="h-catalog">App catalog</h2>
+          <SettingCard icon={BookOpen} title="Show curated apps">
+            {#snippet description()}
+              {#if $catalog.status === 'downloading'}
+                Downloading Acy's app catalog…
+              {:else if $catalog.status === 'error'}
+                {$catalog.message}
+              {:else if customCat}
+                Using your own catalog (below).
+              {:else if $settings.showCuratedApps && $catalog.status === 'ready'}
+                {$catalog.appCount} apps · catalog v{$catalog.version}
+              {:else}
+                Hand-picked apps on Discover, downloaded from Acy's GitHub.
+              {/if}
+            {/snippet}
+            {#snippet control()}{@render toggleSwitch($settings.showCuratedApps, toggleCurated, 'Show curated apps')}{/snippet}
+            <div class="sub-actions">
+              {#if $settings.showCuratedApps && $catalog.status === 'error'}
+                <button class="btn btn-ghost small" onclick={() => downloadCatalog()}>
+                  <RefreshCw size={14} /> Try again
+                </button>
+              {:else if catalogPhase === 'available'}
+                <button class="btn btn-accent small" onclick={applyCatalog}>Update to v{catalogVersion}</button>
+              {:else if !customCat}
+                <button
+                  class="btn btn-ghost small"
+                  onclick={checkCatalog}
+                  disabled={catalogPhase === 'checking' || catalogPhase === 'applying'}
+                >
+                  <RefreshCw size={14} class={catalogPhase === 'checking' || catalogPhase === 'applying' ? 'icon-spin' : ''} />
+                  {catalogPhase === 'applying' ? 'Updating…' : 'Check for updates'}
+                </button>
+              {/if}
+              <a class="btn btn-ghost small" href="/curated"><SquarePen size={14} /> Edit your list</a>
+              {#if catalogMsg && catalogPhase !== 'available'}<span class="muted small-text">{catalogMsg}</span>{/if}
             </div>
-          {/if}
-        </div>
-        {#if catalogPhase === 'available'}
-          <div class="icon-actions">
-            <div class="seg-actions">
-              <button class="seg-act" onclick={applyCatalog}>Update to v{catalogVersion}</button>
-            </div>
-            <span class="icon-msg accent-msg">Catalog v{catalogVersion} is available.</span>
-          </div>
-        {/if}
-        <div class="custom-cat">
-          {#if customCat}
-            <div class="custom-active">
-              <span class="custom-src">
-                {#if customCat.isUrl}<Link size={14} />{:else}<FileText size={14} />{/if}
-                <span class="custom-path mono">{customCat.source}</span>
-              </span>
-              <span class="custom-meta muted">v{customCat.version} · {customCat.appCount} apps</span
-              >
-            </div>
-            <div class="seg-actions">
-              <button class="seg-act" onclick={refreshCustomCatalog} disabled={customBusy}>
-                {customBusy ? 'Working…' : 'Refresh'}
-              </button>
-              <button class="seg-act" onclick={removeCustomCatalog} disabled={customBusy}>
-                Remove
-              </button>
-            </div>
-          {:else}
-            <span class="opt-label">Use custom catalog</span>
-            <div class="custom-row">
-              <button class="seg-act" onclick={chooseCustomFile} disabled={customBusy}>
-                Choose file…
-              </button>
-              <input
-                class="key-input mono custom-input"
-                type="text"
-                placeholder="https://…/curated.json"
-                autocomplete="off"
-                spellcheck="false"
-                bind:value={customUrl}
-                onkeydown={(e) => e.key === 'Enter' && useCustomUrl()}
-              />
-              <button
-                class="seg-act"
-                onclick={useCustomUrl}
-                disabled={customBusy || !customUrl.trim()}
-              >
-                Use URL
-              </button>
-            </div>
-          {/if}
-          {#if customMsg}<span class="icon-msg muted">{customMsg}</span>{/if}
-        </div>
-      </section>
-    {:else if activeTab === 'updates'}
-      <section class="group">
-        <h2>App updates</h2>
-        <div class="opt-list">
-          <label class="opt-row">
-            <span class="opt-label">Check for updates on startup</span>
-            <span class="switch">
-              <input
-                type="checkbox"
-                checked={$settings.refreshOnStartup}
-                onchange={(e) => setRefreshOnStartup(e.currentTarget.checked)}
-              />
-              <span class="slider"></span>
-            </span>
-          </label>
-          <label class="opt-row">
-            <span class="opt-label">Notify when new updates are found</span>
-            <span class="switch">
-              <input
-                type="checkbox"
-                checked={$settings.notifyUpdates}
-                onchange={(e) => setNotifyUpdates(e.currentTarget.checked)}
-              />
-              <span class="slider"></span>
-            </span>
-          </label>
-        </div>
-      </section>
+          </SettingCard>
 
-      <section class="group">
-        <div class="group-head">
-          <h2>Acy updates</h2>
-          <div class="head-actions">
-            {#if $updaterPhase === 'available'}
-              <span class="head-status accent">v{$updaterVersion} available</span>
-            {:else if $updaterPhase === 'uptodate'}
-              <span class="head-status ok">You're on the latest version.</span>
-            {:else if $updaterPhase === 'error'}
-              <span class="head-status err" title="Update check failed: {$updaterError}"
-                >Update check failed</span
-              >
-            {/if}
-            <span class="head-ver muted">Acy <span class="mono">v{appVersion || '…'}</span></span>
-            <button
-              class="icon-btn"
-              title="Check for updates"
-              aria-label="Check for updates"
-              onclick={checkForUpdate}
-              disabled={$updaterPhase === 'checking' || $updaterPhase === 'downloading'}
-            >
-              <RefreshCw size={16} class={$updaterPhase === 'checking' ? 'icon-spin' : ''} />
+          <details class="setting-expander" open={!!customCat}>
+            <summary>
+              <span class="ic" aria-hidden="true"><Link size={20} /></span>
+              <span class="text">
+                <span class="title">Custom catalog</span>
+                <span class="desc">
+                  {#if customCat}
+                    In use: v{customCat.version} · {customCat.appCount} apps
+                  {:else}
+                    Use your own catalog file or URL instead of Acy's.
+                  {/if}
+                </span>
+              </span>
+              <ChevronDown size={18} class="chev" aria-hidden="true" />
+            </summary>
+            <div class="expander-body">
+              {#if customCat}
+                <div class="custom-src">
+                  {#if customCat.isUrl}<Link size={14} />{:else}<FileText size={14} />{/if}
+                  <span class="mono path">{customCat.source}</span>
+                </div>
+                <div class="sub-actions">
+                  <button class="btn small" onclick={refreshCustomCatalog} disabled={customBusy}>
+                    {customBusy ? 'Working…' : 'Reload'}
+                  </button>
+                  <button class="btn btn-ghost small" onclick={removeCustomCatalog} disabled={customBusy}>
+                    Stop using it
+                  </button>
+                </div>
+              {:else}
+                <div class="custom-row">
+                  <button class="btn small" onclick={chooseCustomFile} disabled={customBusy}>
+                    <FileText size={14} /> Choose file…
+                  </button>
+                  <span class="muted small-text">or</span>
+                  <input
+                    class="text-input mono"
+                    type="url"
+                    placeholder="https://…/curated.json"
+                    aria-label="Catalog URL"
+                    autocomplete="off"
+                    spellcheck="false"
+                    bind:value={customUrl}
+                    onkeydown={(e) => e.key === 'Enter' && useCustomUrl()}
+                  />
+                  <button class="btn small" onclick={useCustomUrl} disabled={customBusy || !customUrl.trim()}>
+                    Use URL
+                  </button>
+                </div>
+              {/if}
+              {#if customMsg}<p class="muted small-text" role="status">{customMsg}</p>{/if}
+            </div>
+          </details>
+        </section>
+      {:else if activeTab === 'updates'}
+        <section class="group" aria-labelledby="h-app-updates">
+          <h2 id="h-app-updates">Your apps</h2>
+          <SettingCard
+            toggle
+            icon={RefreshCw}
+            title="Check for updates on startup"
+            description="Look for newer versions of your installed apps when Acy opens (and every 30 minutes)."
+          >
+            {#snippet control()}{@render toggleSwitch($settings.refreshOnStartup, setRefreshOnStartup)}{/snippet}
+          </SettingCard>
+          <SettingCard
+            toggle
+            icon={BellRing}
+            title="Notify when updates are found"
+            description="A Windows notification when new app updates turn up while Acy is in the background."
+          >
+            {#snippet control()}{@render toggleSwitch($settings.notifyUpdates, setNotifyUpdates)}{/snippet}
+          </SettingCard>
+        </section>
+
+        <section class="group" aria-labelledby="h-acy-updates">
+          <h2 id="h-acy-updates">Acy</h2>
+          <SettingCard icon={Sparkles} title={`Acy v${appVersion || '…'}`}>
+            {#snippet description()}
+              {#if $updaterPhase === 'available'}
+                <span class="pill ok">Update available</span> Version {$updaterVersion} is ready to install.
+              {:else if $updaterPhase === 'uptodate'}
+                You're on the latest version.
+              {:else if $updaterPhase === 'checking'}
+                Checking for updates…
+              {:else if $updaterPhase === 'downloading'}
+                Downloading the update…
+              {:else if $updaterPhase === 'error'}
+                <span class="err-text">Update check failed: {$updaterError}</span>
+              {:else}
+                Updates come from Acy's GitHub releases.
+              {/if}
+            {/snippet}
+            {#snippet control()}
+              {#if $updaterPhase === 'available'}
+                <button class="btn btn-accent" onclick={installUpdate}>Install v{$updaterVersion}</button>
+              {:else if $updaterPhase === 'downloading'}
+                <button class="btn btn-accent" disabled>Downloading…</button>
+              {:else}
+                <button class="btn" onclick={checkForUpdate} disabled={$updaterPhase === 'checking'}>
+                  <RefreshCw size={14} class={$updaterPhase === 'checking' ? 'icon-spin' : ''} />
+                  Check for updates
+                </button>
+              {/if}
+            {/snippet}
+          </SettingCard>
+          <SettingCard
+            toggle
+            icon={Bell}
+            title="Check for Acy updates automatically"
+            description="Look for a new version of Acy in the background and tell you when there is one."
+          >
+            {#snippet control()}{@render toggleSwitch($settings.autoCheckUpdates, onAutoCheckToggle)}{/snippet}
+          </SettingCard>
+        </section>
+      {:else if activeTab === 'shortcuts'}
+        <section class="group" aria-labelledby="h-keys">
+          <h2 id="h-keys">Keyboard</h2>
+          <p class="note muted">Press <kbd class="key">?</kbd> anywhere to bring this list up.</p>
+          <div class="panel">
+            <ShortcutList />
+          </div>
+        </section>
+      {:else if activeTab === 'about'}
+        <section class="group" aria-label="About Acy">
+          <div class="identity">
+            <img src="/acy-icon.png" alt="" width="56" height="56" />
+            <div class="identity-text">
+              <span class="identity-name">Acy</span>
+              <span class="muted">Version <span class="mono">{appVersion || '…'}</span> · MIT licence</span>
+            </div>
+            <button class="btn" onclick={() => openUrl('https://github.com/0x89-y/Acy')}>
+              <ExternalLink size={14} /> GitHub
             </button>
           </div>
-        </div>
+        </section>
 
-        <div class="opt-list">
-          <label class="opt-row">
-            <span class="opt-label">Automatically check for Acy updates</span>
-            <span class="switch">
-              <input
-                type="checkbox"
-                checked={$settings.autoCheckUpdates}
-                onchange={(e) => onAutoCheckToggle(e.currentTarget.checked)}
-              />
-              <span class="slider"></span>
-            </span>
-          </label>
-        </div>
-
-        {#if $updaterPhase === 'available'}
-          <div class="upd">
-            <button class="btn btn-accent" onclick={installUpdate}>
-              Download &amp; install v{$updaterVersion}
-            </button>
-          </div>
-        {:else if $updaterPhase === 'downloading'}
-          <div class="upd">
-            <button class="btn btn-accent" disabled>Downloading…</button>
-          </div>
-        {/if}
-      </section>
-    {:else if activeTab === 'shortcuts'}
-      <section class="group">
-        <h2>Keyboard shortcuts</h2>
-        <p class="muted hint">Press <kbd class="key">?</kbd> anywhere to bring this list up.</p>
-        <div class="shortcuts">
-          <ShortcutList />
-        </div>
-      </section>
-    {:else if activeTab === 'about'}
-      <section class="group">
-        <h2>About</h2>
-        <p class="about muted">Acy <span class="mono">v{appVersion || '…'}</span></p>
-        <p class="about muted">License: <span class="mono">MIT</span></p>
-        <p class="about">
-          <a class="link" href="https://github.com/0x89-y" target="_blank" rel="noreferrer noopener">
-            GitHub
-          </a>
-        </p>
-      </section>
-
-      <section class="group">
-        <h2>What's new</h2>
-        <div class="log">
+        <section class="group" aria-labelledby="h-new">
+          <h2 id="h-new">What's new</h2>
           {#each CHANGELOG.slice(0, 1) as rel (rel.version)}
-            <div class="rel">
+            <div class="panel release">
               <div class="rel-head">
-                <span class="mono rel-ver">v{rel.version}</span>
+                <ScrollText size={18} aria-hidden="true" />
+                <span class="rel-ver">Version {rel.version}</span>
                 <span class="mono muted rel-date">{rel.date}</span>
               </div>
               <ul class="rel-list">
@@ -807,354 +760,151 @@
                   <li>{c}</li>
                 {/each}
               </ul>
+              <a class="btn btn-ghost small" href="/changelog">View full changelog</a>
             </div>
           {/each}
-        </div>
-        <a class="btn btn-ghost" href="/changelog">View full changelog</a>
-      </section>
-
-    {/if}
+        </section>
+      {/if}
+    </div>
   </div>
 </div>
 
 <style>
-  .about {
-    font-size: 0.9rem;
-    padding: 0 var(--settings-pad);
-  }
-  .about .link {
-    color: var(--accent);
-    text-decoration: none;
-  }
-  .about .link:hover {
-    text-decoration: underline;
-  }
-  .settings-layout {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    align-items: stretch;
-    overflow: hidden;
-    background: var(--surface);
-  }
-  .side {
-    flex: 0 0 190px;
+  .page {
+    max-width: 880px;
+    padding: 0 24px 32px;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    border-right: 1px solid var(--border);
-    background: var(--surface-2);
+    gap: 22px;
   }
-  .rail-head {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border);
-  }
-  .rail-title {
-    font-size: 0.95rem;
-    font-weight: 600;
-  }
-  .back-btn {
-    flex-shrink: 0;
-    width: 30px;
-    height: 30px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm);
-    background: var(--surface);
-    color: var(--text-muted);
-    line-height: 0;
-  }
-  .back-btn:hover {
-    background: var(--surface-hover);
-    color: var(--text);
-    border-color: var(--accent);
-  }
-  .rail-links {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-  }
-  .side-link {
-    text-align: left;
-    padding: 10px 14px;
-    border: none;
-    border-top: 1px solid var(--border);
-    border-left: 2px solid transparent;
-    background: transparent;
-    color: var(--text-muted);
-    border-radius: 0;
-    font-size: 0.92rem;
-    font-weight: 500;
-  }
-  .side-link:first-child {
-    border-top: none;
-  }
-  .side-link:hover {
-    background: var(--surface-hover);
-    color: var(--text);
-  }
-  .side-link.active {
-    background: var(--surface);
-    color: var(--text);
-    border-left-color: var(--accent);
-  }
-  .panes {
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-    overflow-y: auto;
-    --settings-pad: 20px;
-    display: flex;
-    flex-direction: column;
-    padding: 24px 0;
-  }
-
   .group {
-    margin: 0;
-  }
-  .group + .group {
-    border-top: 1px solid var(--border);
-    padding-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
   }
   .group h2 {
-    font-size: 1.05rem;
+    margin: 0 0 6px;
+    font-size: var(--fs-base);
     font-weight: 600;
-    margin: 0;
-    padding: 0 var(--settings-pad) 10px;
   }
-  .group-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 0 var(--settings-pad) 10px;
+  .note {
+    margin: 0 0 8px;
+    font-size: var(--fs-sm);
   }
-  .group-head h2 {
-    padding: 0;
+  .nowrap {
+    white-space: nowrap;
   }
-  .head-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
+  .path {
+    font-size: var(--fs-xs);
+    color: var(--text);
+    overflow-wrap: anywhere;
   }
-  .head-ver {
-    font-size: 0.86rem;
+  .small {
+    padding: 5px 11px;
+    font-size: var(--fs-sm);
   }
-  .head-status {
-    font-size: 0.86rem;
-    font-weight: 500;
+  .small-text {
+    font-size: var(--fs-sm);
   }
-  .head-status.ok {
-    color: var(--success);
-  }
-  .head-status.accent {
-    color: var(--accent);
-  }
-  .head-status.err {
+  .err-text {
     color: var(--danger);
   }
-  .icon-btn {
-    display: grid;
-    place-items: center;
-    width: 30px;
-    height: 30px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--text-muted);
-    cursor: pointer;
+  .sub-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    margin-left: -11px;
   }
-  .icon-btn:hover:not(:disabled) {
+  .sub-actions .btn-ghost {
     color: var(--text);
-    border-color: var(--accent);
   }
-  .icon-btn:disabled {
-    opacity: 0.5;
-    cursor: default;
+  .danger-outline {
+    color: var(--danger);
+    border-color: color-mix(in srgb, var(--danger) 45%, var(--border-strong));
   }
-  :global(.icon-spin) {
-    animation: icon-spin 0.8s linear infinite;
+  .danger-outline:hover:not(:disabled) {
+    background: var(--danger-fill);
+    border-color: var(--danger-fill);
+    color: #fff;
   }
-  @keyframes icon-spin {
-    to {
-      transform: rotate(360deg);
-    }
+  .key-input {
+    width: 220px;
   }
-  .hint {
-    margin: 0;
-    padding: 0 var(--settings-pad) 12px;
-    max-width: 520px;
-    font-size: 0.86rem;
-  }
-  .shortcuts {
-    padding: 0 var(--settings-pad);
-    max-width: 560px;
-  }
-  .key {
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-    color: var(--text);
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 1px 6px;
+  .select {
+    width: auto;
+    min-width: 180px;
   }
 
+  /* Status pill (package managers, Acy update) */
+  .pill {
+    display: inline-block;
+    margin-right: 6px;
+    padding: 0 8px;
+    border-radius: var(--radius-pill);
+    font-size: var(--fs-2xs);
+    font-weight: 600;
+    line-height: 1.7;
+    vertical-align: 1px;
+  }
+  .pill.ok {
+    color: var(--success);
+    background: color-mix(in srgb, var(--success) 14%, transparent);
+  }
+  .pill.warn {
+    color: var(--warning);
+    background: color-mix(in srgb, var(--warning) 16%, transparent);
+  }
+  .pill.off {
+    color: var(--text-muted);
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+  }
+
+  /* Segmented control */
   .seg {
     display: inline-flex;
-    align-items: stretch;
     gap: 2px;
     padding: 2px;
-    background: var(--surface-2);
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    width: fit-content;
   }
   .seg-btn {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    padding: 8px 16px;
+    gap: 6px;
+    padding: 6px 12px;
     border: none;
+    border-radius: var(--radius-sm);
     background: transparent;
     color: var(--text-muted);
-    border-radius: var(--radius-sm);
-    font-size: 0.9rem;
+    font-size: var(--fs-md);
     font-weight: 500;
+    white-space: nowrap;
   }
   .seg-btn:hover {
     color: var(--text);
+    background: var(--surface-hover);
   }
   .seg-btn.on {
     background: var(--accent-fill);
     color: var(--accent-contrast);
   }
 
-  .field {
-    padding: 12px var(--settings-pad);
-    border-top: 1px solid var(--border);
-  }
-  .field-label {
-    display: block;
-    font-size: 0.82rem;
-    color: var(--text-muted);
-    margin-bottom: 8px;
-  }
-  .pref {
-    display: grid;
-    grid-template-columns: 124px minmax(0, 1fr);
-    align-items: center;
-    gap: 6px 12px;
-  }
-  .pref .field-label {
-    margin: 0;
-  }
-  .pref-select {
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm);
-    color: var(--text);
-    padding: 8px 12px;
-    font-size: 0.9rem;
-  }
-  .mgr-list {
-    display: flex;
-    flex-direction: column;
-  }
-  .mgr-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px var(--settings-pad);
-    border-top: 1px solid var(--border);
-  }
-  .mgr-row.is-on {
-    background: var(--surface-2);
-  }
-  .mgr-meta {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    min-width: 0;
-    flex: 1;
-  }
-  .mgr-name {
-    font-size: 0.84rem;
-    font-weight: 600;
-    color: var(--text);
-  }
-  .mgr-desc {
-    font-size: 0.76rem;
-  }
-  .mgr-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-shrink: 0;
-  }
-  .mgr-state {
-    font-size: 0.74rem;
-  }
-  .mgr-state.ok {
-    color: var(--success);
-  }
-  .mgr-state.off {
-    color: var(--text-muted);
-  }
-  .mgr-btn {
-    font-size: 0.8rem;
-    padding: 5px 12px;
-    flex-shrink: 0;
-  }
-  .icon-actions,
-  .reset-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    padding: 12px var(--settings-pad);
-    border-top: 1px solid var(--border);
-  }
-  .upd {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 12px var(--settings-pad);
-    border-top: 1px solid var(--border);
-  }
-  .icon-msg {
-    font-size: 0.85rem;
-  }
-  .accent-msg {
-    color: var(--accent);
-    font-weight: 500;
-  }
+  /* Accent swatches */
   .accents {
     display: flex;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 10px;
   }
   .swatch {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
     border-radius: 50%;
     background: var(--sw);
-    border: none;
     cursor: pointer;
-    padding: 0;
-    transition: opacity 0.12s;
-  }
-  .swatch:hover {
-    opacity: 0.8;
   }
   .swatch.aurora {
     background: var(--aurora-gradient);
@@ -1181,18 +931,28 @@
   }
   .swatch.on {
     box-shadow:
-      0 0 0 2px var(--bg),
+      0 0 0 2px var(--surface-solid),
       0 0 0 4px var(--sw);
   }
+  .swatch.aurora.on {
+    box-shadow:
+      0 0 0 2px var(--surface-solid),
+      0 0 0 4px #9b7bd0;
+  }
 
+  /*
+   * Toggle switch, Windows style: an outlined track when off (a white knob on
+   * light grey fell short of 3:1), accent-filled when on.
+   */
   .switch {
     position: relative;
     display: inline-block;
     width: 40px;
-    height: 22px;
+    height: 20px;
     flex-shrink: 0;
   }
   .switch input {
+    position: absolute;
     opacity: 0;
     width: 0;
     height: 0;
@@ -1201,185 +961,183 @@
     position: absolute;
     inset: 0;
     cursor: pointer;
-    background: var(--border-strong);
+    border: 1.5px solid var(--text-muted);
     border-radius: var(--radius-pill);
-    transition: background 0.15s;
+    transition: background 0.15s, border-color 0.15s;
   }
   .slider::before {
     content: '';
     position: absolute;
-    height: 16px;
-    width: 16px;
-    left: 3px;
-    top: 3px;
-    background: #fff;
+    width: 12px;
+    height: 12px;
+    left: 2.5px;
+    top: 2.5px;
     border-radius: 50%;
-    transition: transform 0.15s;
+    background: var(--text-muted);
+    transition: transform 0.15s, background 0.15s;
   }
   .switch input:checked + .slider {
     background: var(--accent-fill);
+    border-color: transparent;
   }
   .switch input:checked + .slider::before {
-    transform: translateX(18px);
+    transform: translateX(20px);
+    background: var(--accent-contrast);
+  }
+  .switch input:focus-visible + .slider {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 
-  .opt-list {
-    display: flex;
-    flex-direction: column;
-  }
-  .opt-list > * {
-    padding: 12px var(--settings-pad);
-    border-top: 1px solid var(--border);
-  }
-  .opt-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    cursor: pointer;
-  }
-  .opt-label {
-    font-size: 0.9rem;
-    font-weight: 500;
-    min-width: 0;
-  }
-  .opt-meta {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-  .opt-desc {
-    font-size: 0.76rem;
-  }
-  .key-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-  }
-  .key-head {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-  .key-hint {
-    font-size: 0.78rem;
-  }
-  .key-input {
-    flex: 0 0 200px;
-    max-width: 200px;
-    padding: 6px 9px;
-    font-size: 0.82rem;
-    color: var(--text);
-    background: var(--surface-2);
+  /* Expander card (custom catalog) */
+  .setting-expander {
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius);
+    background: var(--surface-2);
   }
-  .key-input:focus {
-    outline: none;
-    border-color: var(--accent);
+  .setting-expander summary {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-height: 64px;
+    padding: 12px 16px;
+    cursor: pointer;
+    list-style: none;
+    border-radius: var(--radius);
   }
-
-  .custom-cat {
+  .setting-expander summary::-webkit-details-marker {
+    display: none;
+  }
+  .setting-expander summary:hover {
+    background: var(--surface-hover);
+  }
+  .setting-expander .ic {
+    display: inline-flex;
+    flex-shrink: 0;
+  }
+  .setting-expander .text {
+    flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 12px var(--settings-pad);
+    gap: 2px;
+  }
+  .setting-expander .title {
+    font-size: var(--fs-base);
+    font-weight: 500;
+  }
+  .setting-expander .desc {
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+  }
+  .setting-expander :global(.chev) {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    transition: transform 0.15s;
+  }
+  .setting-expander[open] :global(.chev) {
+    transform: rotate(180deg);
+  }
+  .expander-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 16px 14px 52px;
     border-top: 1px solid var(--border);
   }
-  .custom-active {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-  .custom-src {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    color: var(--text);
-  }
-  .custom-path {
-    font-size: 0.82rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 380px;
-  }
-  .custom-meta {
-    font-size: 0.8rem;
-    flex-shrink: 0;
+  .expander-body p {
+    margin: 0;
   }
   .custom-row {
     display: flex;
     align-items: center;
-    gap: 8px;
     flex-wrap: wrap;
+    gap: 8px;
   }
-  .custom-input {
-    flex: 1 1 220px;
-    max-width: 320px;
+  .custom-row .text-input {
+    flex: 1;
+    min-width: 200px;
+  }
+  .custom-src {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
   }
 
-  .log {
-    text-align: left;
-    padding: 4px var(--settings-pad) 12px;
+  /* Plain panels (shortcuts, release notes) */
+  .panel {
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+  }
+  .key {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    padding: 1px 6px;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
   }
 
-  .rel {
-    padding: 4px 0 10px;
-    border-bottom: 1px solid var(--border);
+  /* About */
+  .identity {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
   }
-  .rel:last-child {
-    border-bottom: none;
+  .identity img {
+    border-radius: 12px;
+  }
+  .identity-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: var(--fs-sm);
+  }
+  .identity-name {
+    font-size: var(--fs-xl);
+    font-weight: 600;
+  }
+  .release {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
   }
   .rel-head {
     display: flex;
-    align-items: baseline;
-    gap: 10px;
-    margin-bottom: 6px;
+    align-items: center;
+    gap: 8px;
   }
   .rel-ver {
     font-weight: 600;
-    font-size: 0.9rem;
   }
   .rel-date {
-    font-size: 0.74rem;
+    font-size: var(--fs-xs);
   }
   .rel-list {
     margin: 0;
-    padding-left: 18px;
-    font-size: 0.86rem;
+    padding-left: 20px;
+    font-size: var(--fs-md);
     color: var(--text-muted);
+    line-height: 1.55;
   }
-  .rel-list li {
-    margin-bottom: 3px;
+  .rel-list li + li {
+    margin-top: 3px;
   }
 
-  @media (max-width: 720px) {
-    .settings-layout {
-      flex-direction: column;
-    }
-    .side {
-      flex: none;
-      border-right: none;
-      border-bottom: 1px solid var(--border);
-    }
-    .rail-links {
-      flex-direction: row;
-      flex-wrap: wrap;
-      overflow: visible;
-    }
-    .side-link {
-      border-top: none;
-      border-left: none;
-    }
-    .pref {
-      grid-template-columns: 1fr;
+  :global(.icon-spin) {
+    animation: icon-spin 0.9s linear infinite;
+  }
+  @keyframes icon-spin {
+    to {
+      transform: rotate(360deg);
     }
   }
 </style>

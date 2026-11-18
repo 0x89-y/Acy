@@ -171,7 +171,7 @@
   }
   .btn {
     flex-shrink: 0;
-    font-size: 0.82rem;
+    font-size: var(--fs-sm);
     padding: 5px 10px;
   }
   .icon-btn {
@@ -193,7 +193,7 @@
     cursor: default;
   }
   .status {
-    font-size: 0.74rem;
+    font-size: var(--fs-xs);
     color: var(--text-muted);
     min-width: 0;
     overflow: hidden;

@@ -109,7 +109,7 @@
   }
   .confirm-pop p {
     margin: 0 0 10px;
-    font-size: 0.86rem;
+    font-size: var(--fs-md);
     color: var(--text);
   }
   .actions {
@@ -119,15 +119,15 @@
   }
   .compact {
     padding: 5px 10px;
-    font-size: 0.82rem;
+    font-size: var(--fs-sm);
   }
   .danger {
     color: #fff;
-    background: var(--danger);
-    border-color: var(--danger);
+    background: var(--danger-fill);
+    border-color: var(--danger-fill);
   }
   .danger:hover:not(:disabled) {
-    background: var(--danger);
-    filter: brightness(1.08);
+    background: var(--danger-fill-hover);
+    border-color: var(--danger-fill-hover);
   }
 </style>

@@ -15,7 +15,6 @@
   import { managers, loadManagers } from '$lib/stores/managers';
   import { catalog, downloadCatalog, loadCatalogStatus } from '$lib/stores/curated';
   import { enqueue } from '$lib/stores/ops';
-  import WindowControls from './WindowControls.svelte';
   import * as api from '$lib/api';
   import type { Source, Manager } from '$lib/types';
 
@@ -67,11 +66,6 @@
 </script>
 
 <div class="shell">
-  <div class="titlebar" data-tauri-drag-region>
-    <div class="spacer" data-tauri-drag-region></div>
-    <WindowControls />
-  </div>
-
   <div class="browse-panel">
     <aside class="side">
       <div class="ident">
@@ -220,21 +214,6 @@
     flex-direction: column;
     background: var(--surface);
   }
-  .titlebar {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    height: 32px;
-    padding: 0 4px 0 14px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-  }
-  .titlebar .spacer {
-    flex: 1;
-    align-self: stretch;
-  }
-
   .browse-panel {
     flex: 1;
     min-height: 0;
@@ -269,12 +248,12 @@
   }
   .lede {
     margin: 0;
-    font-size: 0.98rem;
+    font-size: var(--fs-body);
     font-weight: 500;
   }
   .sub {
     margin: 0;
-    font-size: 0.86rem;
+    font-size: var(--fs-md);
     line-height: 1.45;
   }
   .grow {
@@ -285,7 +264,7 @@
     width: 100%;
     justify-content: center;
     padding: 11px 16px;
-    font-size: 0.95rem;
+    font-size: var(--fs-body);
     font-weight: 600;
   }
 
@@ -298,7 +277,8 @@
     display: flex;
     flex-direction: column;
     padding: 24px 0;
-    background: var(--surface);
+    /* The content panel (+layout) already paints the surface. */
+    background: transparent;
   }
 
   .group {
@@ -309,7 +289,7 @@
     padding-top: 20px;
   }
   .group h2 {
-    font-size: 1.05rem;
+    font-size: var(--fs-lg);
     font-weight: 600;
     margin: 0;
     padding: 0 var(--settings-pad) 10px;
@@ -331,7 +311,7 @@
     cursor: pointer;
   }
   .opt-label {
-    font-size: 0.9rem;
+    font-size: var(--fs-base);
     font-weight: 500;
     min-width: 0;
   }
@@ -342,7 +322,7 @@
     min-width: 0;
   }
   .opt-desc {
-    font-size: 0.76rem;
+    font-size: var(--fs-xs);
   }
   .retry-row {
     display: flex;
@@ -368,7 +348,7 @@
     background: transparent;
     color: var(--text-muted);
     border-radius: var(--radius-sm);
-    font-size: 0.9rem;
+    font-size: var(--fs-base);
     font-weight: 500;
   }
   .seg-btn:hover {
@@ -428,12 +408,12 @@
     flex: 1;
   }
   .mgr-name {
-    font-size: 0.84rem;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text);
   }
   .mgr-desc {
-    font-size: 0.76rem;
+    font-size: var(--fs-xs);
   }
   .mgr-actions {
     display: flex;
@@ -442,7 +422,7 @@
     flex-shrink: 0;
   }
   .mgr-state {
-    font-size: 0.74rem;
+    font-size: var(--fs-xs);
   }
   .mgr-state.ok {
     color: var(--success);
@@ -451,7 +431,7 @@
     color: var(--text-muted);
   }
   .mgr-btn {
-    font-size: 0.8rem;
+    font-size: var(--fs-sm);
     padding: 5px 12px;
     flex-shrink: 0;
   }

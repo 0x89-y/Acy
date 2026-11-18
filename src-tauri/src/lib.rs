@@ -7,6 +7,7 @@ mod net;
 mod runner;
 mod sources;
 mod tray;
+mod window_style;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -34,7 +35,15 @@ pub fn run() {
 
     #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_window_state::Builder::default().build());
+        // Restore size/position, but never decorations: tauri.conf.json decides
+        // those, and a state saved by an older build (custom title bar,
+        // decorations off) would otherwise hide the native title bar.
+        use tauri_plugin_window_state::StateFlags;
+        builder = builder.plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(StateFlags::all() & !StateFlags::DECORATIONS)
+                .build(),
+        );
     }
 
     builder
@@ -83,6 +92,7 @@ pub fn run() {
             commands::winget_update_sources,
             commands::scoop_update,
             commands::scoop_cleanup,
+            window_style::set_window_style,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

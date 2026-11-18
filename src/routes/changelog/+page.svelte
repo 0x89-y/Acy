@@ -69,7 +69,8 @@
     display: flex;
     align-items: stretch;
     overflow: hidden;
-    background: var(--surface);
+    /* The content panel (+layout) already paints the surface. */
+    background: transparent;
   }
   .browse-rail {
     flex: 0 0 190px;
@@ -88,7 +89,7 @@
     border-bottom: 1px solid var(--border);
   }
   .rail-title {
-    font-size: 0.95rem;
+    font-size: var(--fs-body);
     font-weight: 600;
   }
   .back-btn {
@@ -130,7 +131,7 @@
     border-radius: 0;
     background: transparent;
     color: var(--text-muted);
-    font-size: 0.9rem;
+    font-size: var(--fs-base);
     font-weight: 500;
   }
   .rail-link:first-child {
@@ -146,7 +147,7 @@
     border-left-color: var(--accent);
   }
   .rail-count {
-    font-size: 0.72rem;
+    font-size: var(--fs-2xs);
     color: var(--text-muted);
   }
   .rail-link.active .rail-count {
@@ -170,7 +171,7 @@
     border-bottom: 1px solid var(--border);
   }
   .pane-title {
-    font-size: 0.95rem;
+    font-size: var(--fs-body);
     font-weight: 600;
   }
   .pane-scroll {
@@ -200,14 +201,14 @@
     font-size: 1rem;
   }
   .release time {
-    font-size: 0.74rem;
+    font-size: var(--fs-xs);
   }
   .release ul {
     margin: 0;
     padding-left: 20px;
     max-width: 78ch;
     color: var(--text-muted);
-    font-size: 0.88rem;
+    font-size: var(--fs-md);
   }
   .release li + li {
     margin-top: 5px;

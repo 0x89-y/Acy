@@ -1,15 +1,13 @@
 <script module lang="ts">
   const shortcuts: { keys: string[]; desc: string }[] = [
     { keys: ['Ctrl', 'K'], desc: 'Focus search (or /)' },
-    { keys: ['Enter'], desc: 'Search package managers (in the search box)' },
+    { keys: ['Enter'], desc: 'Search package managers now (in the search box)' },
     { keys: ['Ctrl', '1'], desc: 'Go to Discover' },
-    { keys: ['Ctrl', '2'], desc: 'Go to Library (installed & updates)' },
-    { keys: ['Ctrl', '3'], desc: 'Go to Settings' },
-    { keys: ['↑', '↓', '←', '→'], desc: 'Move between search results' },
-    { keys: ['Enter'], desc: 'Open or install the focused result' },
-    { keys: ['Ctrl', 'Click'], desc: 'Select an app' },
-    { keys: ['Shift', 'Click'], desc: 'Select a range of apps' },
-    { keys: ['Esc'], desc: 'Clear search or selection, go back, or close a dialog' },
+    { keys: ['Ctrl', '2'], desc: 'Go to Installed' },
+    { keys: ['Ctrl', '3'], desc: 'Go to Updates' },
+    { keys: ['Ctrl', '4'], desc: 'Go to Activity' },
+    { keys: ['Ctrl', ','], desc: 'Go to Settings' },
+    { keys: ['Esc'], desc: 'Clear search, close a dialog, or go back from an app' },
     { keys: ['Right-click'], desc: 'App actions menu (cards and installed rows)' },
     { keys: ['?'], desc: 'Show keyboard shortcuts' }
   ];
@@ -53,7 +51,7 @@
   }
   kbd {
     font-family: var(--font-mono);
-    font-size: 0.72rem;
+    font-size: var(--fs-2xs);
     color: var(--text);
     background: var(--surface-2);
     border: 1px solid var(--border);
@@ -63,7 +61,7 @@
   }
   .desc {
     flex: 1;
-    font-size: 0.88rem;
+    font-size: var(--fs-md);
     color: var(--text-muted);
   }
 </style>

@@ -15,15 +15,33 @@ export type AccentName =
 
 export type SettingsTab = 'general' | 'appearance' | 'sources' | 'updates' | 'shortcuts' | 'about';
 
+export type Backdrop = 'off' | 'mica' | 'mica-alt' | 'acrylic';
+
+export const BACKDROPS: { value: Backdrop; label: string }[] = [
+  { value: 'off', label: 'Off' },
+  { value: 'mica', label: 'Mica' },
+  { value: 'mica-alt', label: 'Mica Alt' },
+  { value: 'acrylic', label: 'Acrylic' }
+];
+
+export const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
+  { id: 'general', label: 'General' },
+  { id: 'appearance', label: 'Appearance' },
+  { id: 'sources', label: 'Sources' },
+  { id: 'updates', label: 'Updates' },
+  { id: 'shortcuts', label: 'Shortcuts' },
+  { id: 'about', label: 'About' }
+];
+
 export type ViewMode = 'grid' | 'list';
 
 export const ACCENTS: { name: AccentName; label: string; color: string }[] = [
   { name: 'purple', label: 'Purple', color: '#7c3aed' },
   { name: 'blue', label: 'Blue', color: '#2563eb' },
-  { name: 'green', label: 'Green', color: '#059669' },
-  { name: 'pink', label: 'Pink', color: '#db2777' },
-  { name: 'orange', label: 'Orange', color: '#ea580c' },
-  { name: 'teal', label: 'Teal', color: '#0d9488' },
+  { name: 'green', label: 'Green', color: '#047857' },
+  { name: 'pink', label: 'Pink', color: '#be185d' },
+  { name: 'orange', label: 'Orange', color: '#c2410c' },
+  { name: 'teal', label: 'Teal', color: '#0f766e' },
   { name: 'aurora', label: 'Aurora', color: '#9540b8' }
 ];
 
@@ -50,6 +68,8 @@ export interface Settings {
   hiddenApps: string[];
   settingsTab: SettingsTab;
   discoverView: ViewMode;
+  /** Window backdrop behind the title bar + sidebar (Windows 11 only). */
+  backdrop: Backdrop;
 }
 
 const KEY = 'acy-settings';
@@ -75,7 +95,8 @@ const DEFAULTS: Settings = {
   showCuratedApps: true,
   hiddenApps: [],
   settingsTab: 'general',
-  discoverView: 'grid'
+  discoverView: 'grid',
+  backdrop: 'mica'
 };
 
 function load(): Settings {
@@ -91,6 +112,9 @@ function load(): Settings {
         // The `local` source was removed.
         delete parsed.managers?.local;
         if (parsed.preferredSource === 'local') parsed.preferredSource = null;
+        // The Mica on/off switch became a backdrop choice.
+        if (parsed.backdrop === undefined && parsed.mica === false) parsed.backdrop = 'off';
+        delete parsed.mica;
         return {
           ...DEFAULTS,
           ...parsed,
@@ -191,6 +215,10 @@ export function hideApp(key: string) {
 
 export function unhideApp(key: string) {
   settings.update((s) => ({ ...s, hiddenApps: s.hiddenApps.filter((k) => k !== key) }));
+}
+
+export function setBackdrop(value: Backdrop) {
+  settings.update((s) => ({ ...s, backdrop: value }));
 }
 
 export function setSettingsTab(value: SettingsTab) {

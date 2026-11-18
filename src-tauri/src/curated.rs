@@ -44,10 +44,24 @@ pub struct CuratedCategory {
     pub apps: Vec<CuratedApp>,
 }
 
+/// A hand-picked set of apps shown on the Discover home ("New PC essentials"),
+/// installable in one go. Apps are referenced by their catalog source/id.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CuratedCollection {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    pub apps: Vec<CuratedVariant>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CuratedFile {
     pub version: u32,
     pub categories: Vec<CuratedCategory>,
+    /// Only read from the downloaded/base catalog; `merge` keeps the base's.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub collections: Vec<CuratedCollection>,
 }
 
 const CATALOG_URL: &str = "https://raw.githubusercontent.com/0x89-y/Acy/main/curated.json";
@@ -132,6 +146,7 @@ fn empty() -> CuratedFile {
     CuratedFile {
         version: 0,
         categories: Vec::new(),
+        collections: Vec::new(),
     }
 }
 
@@ -593,5 +608,25 @@ mod tests {
         );
         let merged = merge(base, &saved);
         assert!(ids(&merged, "browsers").is_empty());
+    }
+    #[test]
+    fn collections_are_optional_and_come_from_the_base() {
+        let old = parse(r#"{"version":1,"categories":[]}"#);
+        assert!(old.collections.is_empty());
+
+        let base = parse(
+            r#"{"version":2,"categories":[],"collections":[
+                {"id":"essentials","title":"Essentials","apps":[{"source":"winget","id":"A.A"}]}
+            ]}"#,
+        );
+        let saved = parse(
+            r#"{"version":2,"categories":[],"collections":[
+                {"id":"stale","title":"Stale","apps":[]}
+            ]}"#,
+        );
+        let merged = merge(base, &saved);
+        assert_eq!(merged.collections.len(), 1);
+        assert_eq!(merged.collections[0].id, "essentials");
+        assert_eq!(merged.collections[0].apps[0].id, "A.A");
     }
 }

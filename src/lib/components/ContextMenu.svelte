@@ -91,7 +91,7 @@
     color: var(--text);
     padding: 8px 10px;
     border-radius: var(--radius-sm);
-    font-size: 0.86rem;
+    font-size: var(--fs-md);
   }
   .ctx-item:hover:not(:disabled) {
     background: var(--surface-hover);

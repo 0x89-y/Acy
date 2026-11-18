@@ -2,17 +2,37 @@
   --font-sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Code', monospace;
 
+  /* Type scale. Nothing smaller than --fs-2xs (~11.5px). */
+  --fs-2xs: 0.72rem;
+  --fs-xs: 0.76rem;
+  --fs-sm: 0.82rem;
+  --fs-md: 0.86rem;
+  --fs-base: 0.9rem;
+  --fs-body: 0.95rem;
+  --fs-lg: 1.05rem;
+  --fs-xl: 1.1rem;
+
   --radius: 10px;
   --radius-sm: 7px;
   --radius-dialog: 12px;
   --radius-pill: 999px;
 
+  /*
+   * Accent tokens - every pair below is checked for WCAG AA (4.5:1):
+   *   --accent           text, borders and indicators on --surface / --surface-hover
+   *   --accent-fill      button and chip backgrounds, under --accent-contrast text
+   *   --accent-hover     hover background for --accent-fill
+   * In light mode the fill is the accent itself; dark mode uses a lighter
+   * --accent for text on the dark surface and a deeper fill for white text.
+   */
   --bg: #f4f4f5;
-  --surface: #ffffff;
+  /* Opaque; --surface turns translucent on a backdrop, floating layers keep this. */
+  --surface-solid: #ffffff;
+  --surface: var(--surface-solid);
   --surface-2: #f7f7f8;
   --surface-hover: #f0f0f2;
   --text: #18181b;
-  --text-muted: #71717a;
+  --text-muted: #6b6b74;
   --border: #e4e4e7;
   --border-strong: #d4d4d8;
   --accent: #7c3aed;
@@ -21,14 +41,31 @@
   --accent-contrast: #ffffff;
   --aurora-gradient: linear-gradient(135deg, #d98cae, #9b7bd0, #6f9bd6);
   --aurora-fill: linear-gradient(135deg, #f0d3e0, #e0d6f2, #d6e4f7);
-  --danger: #dc2626;
-  --success: #16a34a;
-  --warning: #d97706;
-  --shadow: none;
+  --danger: #b91c1c;
+  /* Background for destructive buttons (white text). */
+  --danger-fill: #dc2626;
+  --danger-fill-hover: #b91c1c;
+  --success: #15803d;
+  --warning: #b45309;
+  /*
+   * The shell is the native title bar + sidebar; pages sit on a raised
+   * --surface panel beside it. With a backdrop (html[data-backdrop]: Mica, Acrylic…) the shell is
+   * transparent, so hover/active states are translucent overlays.
+   */
+  --shell: var(--bg);
+  --shell-hover: color-mix(in srgb, var(--text) 6%, transparent);
+  --shell-active: color-mix(in srgb, var(--text) 9%, transparent);
+  --sidebar-w: 232px;
+  /* The raised panel pages sit on (see +layout); see html[data-backdrop]. */
+  --panel: var(--surface);
+  --panel-border: var(--border);
+
+  /* Floating layers only (menus, popovers, toasts); cards stay flat. */
+  --shadow: 0 10px 28px -8px rgba(24, 24, 27, 0.2), 0 2px 6px rgba(24, 24, 27, 0.06);
   --card-shadow: none;
 
   --winget: #2563eb;
-  --scoop: #16a34a;
+  --scoop: #15803d;
   --choco: #92531f;
   --msstore: #7c3aed;
   --local: #64748b;
@@ -40,21 +77,23 @@
 
 [data-theme='dark'] {
   --bg: #161619;
-  --surface: #202024;
+  --surface-solid: #202024;
   --surface-2: #27272c;
   --surface-hover: #2e2e34;
   --text: #f4f4f5;
   --text-muted: #a8a8b2;
   --border: #313139;
   --border-strong: #43434d;
-  --accent: #8b5cf6;
-  --accent-hover: color-mix(in srgb, var(--accent) 84%, #ffffff);
+  --accent: #a78bfa;
+  --accent-fill: #7c3aed;
+  --accent-hover: #6d28d9;
   --accent-contrast: #ffffff;
-  --accent-fill: var(--accent);
   --danger: #f87171;
+  --danger-fill: #dc2626;
+  --danger-fill-hover: #b91c1c;
   --success: #4ade80;
   --warning: #fbbf24;
-  --shadow: none;
+  --shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.35);
   --card-shadow: none;
 
   --winget: #6aa3fb;
@@ -77,20 +116,20 @@
   --accent-hover: #1d4ed8;
 }
 [data-accent='green'] {
-  --accent: #059669;
-  --accent-hover: #047857;
+  --accent: #047857;
+  --accent-hover: #065f46;
 }
 [data-accent='pink'] {
-  --accent: #db2777;
-  --accent-hover: #be185d;
+  --accent: #be185d;
+  --accent-hover: #9d174d;
 }
 [data-accent='orange'] {
-  --accent: #ea580c;
-  --accent-hover: #c2410c;
+  --accent: #c2410c;
+  --accent-hover: #9a3412;
 }
 [data-accent='teal'] {
-  --accent: #0d9488;
-  --accent-hover: #0f766e;
+  --accent: #0f766e;
+  --accent-hover: #115e59;
 }
 [data-accent='aurora'] {
   --accent: #9540b8;
@@ -101,33 +140,43 @@
 }
 
 [data-theme='dark'][data-accent='purple'] {
-  --accent: #8b5cf6;
-  --accent-hover: #a78bfa;
+  --accent: #a78bfa;
+  --accent-fill: #7c3aed;
+  --accent-hover: #6d28d9;
 }
 [data-theme='dark'][data-accent='blue'] {
-  --accent: #3b82f6;
-  --accent-hover: #60a5fa;
+  --accent: #60a5fa;
+  --accent-fill: #2563eb;
+  --accent-hover: #1d4ed8;
 }
 [data-theme='dark'][data-accent='green'] {
-  --accent: #10b981;
-  --accent-hover: #34d399;
+  --accent: #34d399;
+  --accent-fill: #047857;
+  --accent-hover: #065f46;
 }
 [data-theme='dark'][data-accent='pink'] {
-  --accent: #ec4899;
-  --accent-hover: #f472b6;
+  --accent: #f472b6;
+  --accent-fill: #be185d;
+  --accent-hover: #9d174d;
 }
 [data-theme='dark'][data-accent='orange'] {
-  --accent: #f97316;
-  --accent-hover: #fb923c;
+  --accent: #fb923c;
+  --accent-fill: #c2410c;
+  --accent-hover: #9a3412;
 }
 [data-theme='dark'][data-accent='teal'] {
-  --accent: #14b8a6;
-  --accent-hover: #2dd4bf;
+  --accent: #2dd4bf;
+  --accent-fill: #0f766e;
+  --accent-hover: #115e59;
 }
 [data-theme='dark'][data-accent='aurora'] {
-  --accent: #b46fce;
+  --accent: #c68ad9;
   --accent-fill: var(--aurora-gradient);
+  /* White fails on the pastel gradient stops; dark text clears 5:1 on all. */
+  --accent-contrast: #1a1320;
 }
+/* Custom accent: theme.ts sets --accent (text-safe), --accent-fill and
+ * --accent-contrast inline, so they beat every rule above. */
 
 * {
   box-sizing: border-box;
@@ -147,13 +196,41 @@
 html,
 body {
   margin: 0;
+  background-color: var(--shell);
+}
+
+html[data-backdrop] {
+  --shell: transparent;
+  /*
+   * The whole window is one surface over the backdrop: the content panel and
+   * the controls on it are translucent layers (as in WinUI), and grey fills
+   * become overlays. Floating layers (.card: menus, dialogs, toasts) stay on
+   * --surface-solid so they read over whatever is under them.
+   */
+  --surface: color-mix(in srgb, var(--surface-solid) 62%, transparent);
+  --surface-2: color-mix(in srgb, var(--text) 5%, transparent);
+  --surface-hover: color-mix(in srgb, var(--text) 8%, transparent);
+  /* The content panel dissolves into the backdrop: one even surface, as in the
+     Windows 11 Settings app, with cards as the only layers. */
+  --panel: transparent;
+  --panel-border: transparent;
+  /* Grey text sits straight on the backdrop, so it needs more weight. */
+  --text-muted: color-mix(in srgb, var(--text) 78%, transparent);
+}
+/* Acrylic shows the desktop itself (Mica is already tinted by Windows), so a
+   busy wallpaper sits right behind the sidebar text: tint it a little. */
+html[data-backdrop='acrylic'] {
+  --shell: color-mix(in srgb, var(--bg) 35%, transparent);
+}
+/* Beats the first-paint colour in app.html. */
+html[data-backdrop][data-theme] {
+  background-color: transparent;
 }
 
 body {
   min-height: 100vh;
   font-family: var(--font-sans);
   color: var(--text);
-  background-color: var(--bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
@@ -209,8 +286,9 @@ button {
 
 ::-webkit-scrollbar-thumb {
   background: var(--border-strong);
+  background-clip: padding-box;
   border-radius: var(--radius-pill);
-  border: 2px solid var(--bg);
+  border: 2px solid transparent;
 }
 
 .btn {
@@ -223,7 +301,7 @@ button {
   color: var(--text);
   padding: 8px 14px;
   border-radius: var(--radius);
-  font-size: 0.9rem;
+  font-size: var(--fs-base);
   font-weight: 500;
   transition: background 0.15s, border-color 0.15s, opacity 0.15s;
 }
@@ -295,7 +373,7 @@ button {
   border: none;
   color: var(--accent-contrast);
   padding: 8px 14px;
-  font-size: 0.9rem;
+  font-size: var(--fs-base);
   font-weight: 500;
   font-family: inherit;
   text-decoration: none;
@@ -316,7 +394,7 @@ button {
 }
 
 .card {
-  background: var(--surface);
+  background: var(--surface-solid);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--card-shadow);
@@ -348,6 +426,133 @@ button {
 }
 
 .switch input:focus-visible + .slider {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Visually hidden, still read by screen readers. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Page scaffolding shared by the top-level views. */
+.view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.view-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  padding: 18px 24px 14px;
+}
+/* The title (or the block holding title + subtitle) pushes actions right. */
+.view-head > :first-child {
+  margin-right: auto;
+}
+.view-sub {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-base);
+}
+.view-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Square icon button (toolbars, row menus). */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  line-height: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.icon-button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.icon-button[aria-pressed='true'] {
+  color: var(--accent);
+}
+
+.text-input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-base);
+}
+.text-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* Checkbox, Windows 11 style: rounded and outlined, accent-filled when checked. */
+.check-box {
+  appearance: none;
+  flex-shrink: 0;
+  display: inline-grid;
+  place-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1px solid var(--text-muted);
+  border-radius: 5px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.check-box:hover {
+  border-color: var(--text);
+}
+.check-box:checked,
+.check-box:indeterminate {
+  background: var(--accent-fill);
+  border-color: transparent;
+}
+.check-box::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  background: var(--accent-contrast);
+  clip-path: polygon(14% 44%, 0 65%, 40% 100%, 100% 22%, 84% 6%, 38% 68%);
+  transform: scale(0);
+  transition: transform 0.12s;
+}
+.check-box:checked::before {
+  transform: scale(1);
+}
+.check-box:indeterminate::before {
+  height: 2px;
+  clip-path: none;
+  transform: scale(1);
+}
+.check-box:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }

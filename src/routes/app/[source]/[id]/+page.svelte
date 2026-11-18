@@ -50,7 +50,7 @@
   let backHref = $derived.by(() => {
     const requested = $page.url.searchParams.get('back');
     if (requested?.startsWith('/') && !requested.startsWith('//')) return requested;
-    return $page.url.searchParams.get('from') === 'installed' ? '/?view=library' : '/';
+    return $page.url.searchParams.get('from') === 'installed' ? '/installed' : '/';
   });
 
   let curatedHit = $derived.by(() => {
@@ -105,7 +105,11 @@
   let donate = $derived(curatedApp?.donate ?? null);
   let releaseNotesUrl = $derived(curatedApp?.releaseNotes ?? info?.releaseNotesUrl ?? null);
   let releaseNotes = $derived(info?.releaseNotes ?? null);
-  let publisher = $derived(info?.publisher ?? installedPkg?.publisher ?? null);
+  // winget's fast list reports the source ("winget") as publisher; that's not one.
+  let publisher = $derived.by(() => {
+    const p = info?.publisher ?? installedPkg?.publisher ?? null;
+    return p && p.toLowerCase() !== source ? p : null;
+  });
   let latestVersion = $derived(updatePkg?.availableVersion ?? info?.version ?? null);
   let isInstalled = $derived(!!installedPkg);
   let updatable = $derived(!!updatePkg);
@@ -190,9 +194,12 @@
   }
 </script>
 
+<!-- Capture phase: runs before any overlay's own Escape handler has closed it,
+     so an open dialog/menu is still in the DOM and Escape only dismisses it. -->
 <svelte:window
-  onkeydown={(e) => {
-    if (e.key !== 'Escape') return;
+  onkeydowncapture={(e) => {
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]')) return;
     if (editing) editing = false;
     else goto(backHref);
   }}
@@ -393,7 +400,8 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    background: var(--surface);
+    /* The content panel (+layout) already paints the surface. */
+    background: transparent;
   }
   .topbar {
     flex-shrink: 0;
@@ -479,7 +487,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
-    font-size: 0.9rem;
+    font-size: var(--fs-base);
   }
   .dot {
     opacity: 0.6;
@@ -496,7 +504,7 @@
     margin-top: 6px;
   }
   .tag {
-    font-size: 0.72rem;
+    font-size: var(--fs-2xs);
     color: var(--text-muted);
     background: var(--surface-2);
     border: 1px solid var(--border);
@@ -515,12 +523,16 @@
     gap: 8px;
     min-width: 150px;
   }
+  /* Uninstall sits in ConfirmAction's wrapper; let it fill the column like Update. */
+  .hero-action :global(.confirm-wrap > .btn) {
+    flex: 1;
+  }
   .status {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 4px;
-    font-size: 0.8rem;
+    font-size: var(--fs-sm);
   }
   .status :global(svg) {
     color: var(--success);
@@ -539,7 +551,7 @@
     border-top: 1px solid var(--border);
   }
   section h2 {
-    font-size: 1.02rem;
+    font-size: var(--fs-lg);
     margin: 0 0 12px;
   }
   .prose {
@@ -549,7 +561,7 @@
     white-space: pre-line;
   }
   .notes {
-    font-size: 0.9rem;
+    font-size: var(--fs-base);
     color: var(--text-muted);
   }
   .more {
@@ -566,17 +578,17 @@
     min-width: 0;
   }
   .facts dt {
-    font-size: 0.78rem;
+    font-size: var(--fs-xs);
     color: var(--text-muted);
     margin-bottom: 2px;
   }
   .facts dd {
     margin: 0;
-    font-size: 0.92rem;
+    font-size: var(--fs-base);
     overflow-wrap: anywhere;
   }
   .url {
-    font-size: 0.82rem;
+    font-size: var(--fs-sm);
   }
 
   .packages {
@@ -598,13 +610,13 @@
   .pkg-id {
     flex: 1;
     min-width: 0;
-    font-size: 0.82rem;
+    font-size: var(--fs-sm);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .cmd {
-    font-size: 0.8rem;
+    font-size: var(--fs-sm);
     padding: 5px 10px;
   }
 
@@ -633,13 +645,13 @@
   }
   .rel-name {
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: var(--fs-base);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .rel-desc {
-    font-size: 0.78rem;
+    font-size: var(--fs-xs);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -658,7 +670,7 @@
     text-decoration: underline;
   }
   .small {
-    font-size: 0.85rem;
+    font-size: var(--fs-md);
     margin-top: 24px;
   }
 

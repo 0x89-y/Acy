@@ -46,12 +46,19 @@
 {#if $confirmRequest}
   <div class="backdrop">
     <button class="backdrop-close" onclick={() => respond(false)} aria-label="Cancel"></button>
-    <div class="dialog card" role="dialog" aria-modal="true" bind:this={dialog}>
-      <h2>{$confirmRequest.title}</h2>
-      {#if $confirmRequest.message}<p class="muted">{$confirmRequest.message}</p>{/if}
+    <div
+      class="dialog card"
+      role={$confirmRequest.alert ? 'alertdialog' : 'dialog'}
+      aria-modal="true"
+      aria-labelledby="confirm-title"
+      aria-describedby={$confirmRequest.message ? 'confirm-message' : undefined}
+      bind:this={dialog}
+    >
+      <h2 id="confirm-title">{$confirmRequest.title}</h2>
+      {#if $confirmRequest.message}<p class="muted" id="confirm-message">{$confirmRequest.message}</p>{/if}
       {#if $confirmRequest.rememberLabel}
         <label class="remember">
-          <input type="checkbox" bind:checked={remember} />
+          <input class="check-box" type="checkbox" bind:checked={remember} />
           {$confirmRequest.rememberLabel}
         </label>
       {/if}
@@ -100,11 +107,11 @@
     border-radius: var(--radius-dialog);
   }
   .dialog h2 {
-    font-size: 1.1rem;
+    font-size: var(--fs-xl);
     margin-bottom: 10px;
   }
   .dialog p {
-    font-size: 0.9rem;
+    font-size: var(--fs-base);
     line-height: 1.5;
     margin: 0 0 18px;
     white-space: pre-line;
@@ -113,15 +120,10 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 0.85rem;
+    font-size: var(--fs-md);
     color: var(--text-muted);
     cursor: pointer;
     margin: 0 0 18px;
-  }
-  .remember input {
-    width: 15px;
-    height: 15px;
-    accent-color: var(--accent);
   }
   .actions {
     display: flex;
@@ -129,8 +131,12 @@
     gap: 10px;
   }
   .actions .danger {
-    background: var(--danger, #dc2626);
-    border-color: var(--danger, #dc2626);
+    background: var(--danger-fill);
+    border-color: var(--danger-fill);
     color: #fff;
+  }
+  .actions .danger:hover:not(:disabled) {
+    background: var(--danger-fill-hover);
+    border-color: var(--danger-fill-hover);
   }
 </style>

@@ -49,7 +49,7 @@
   }
   .title {
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: var(--fs-base);
   }
   .items {
     list-style: none;
@@ -67,7 +67,7 @@
   .name {
     flex: 1;
     min-width: 0;
-    font-size: 0.84rem;
+    font-size: var(--fs-sm);
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
@@ -94,7 +94,7 @@
     border: none;
     background: none;
     color: var(--text-muted);
-    font-size: 0.76rem;
+    font-size: var(--fs-xs);
     border-radius: var(--radius-sm);
   }
   .more:hover {

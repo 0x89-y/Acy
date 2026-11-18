@@ -65,7 +65,7 @@
     <div class="dialog card" role="dialog" aria-modal="true" aria-labelledby="tray-prompt-title" bind:this={dialog}>
       <h2 id="tray-prompt-title">Keep Acy running in the tray?</h2>
       <label class="dontask">
-        <input type="checkbox" bind:checked={dontAsk} />
+        <input class="check-box" type="checkbox" bind:checked={dontAsk} />
         Don't ask again
       </label>
       <div class="actions">
@@ -103,22 +103,17 @@
     border-radius: var(--radius-dialog);
   }
   .dialog h2 {
-    font-size: 1.1rem;
+    font-size: var(--fs-xl);
     margin-bottom: 16px;
   }
   .dontask {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    font-size: 0.86rem;
+    font-size: var(--fs-md);
     color: var(--text-muted);
     cursor: pointer;
     margin-bottom: 18px;
-  }
-  .dontask input {
-    width: 15px;
-    height: 15px;
-    accent-color: var(--accent);
   }
   .actions {
     display: flex;

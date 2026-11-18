@@ -25,17 +25,17 @@
 <style>
   .winget-busy {
     position: fixed;
-    left: 16px;
-    bottom: 16px;
+    left: calc(var(--sidebar-w) + 16px);
+    bottom: calc(var(--tray-h, 0px) + 16px);
     z-index: 40;
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 7px 12px;
-    background: var(--surface);
+    background: var(--surface-solid);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-sm);
-    font-size: 0.8rem;
+    font-size: var(--fs-sm);
     color: var(--text-muted);
     box-shadow: var(--shadow);
   }

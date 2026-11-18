@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { ChevronDown } from '@lucide/svelte';
   import { runOp } from '$lib/install';
   import type { Source, Variant } from '$lib/types';
@@ -26,6 +27,8 @@
   let busy = $state(false);
   let open = $state(false);
   let root = $state<HTMLElement | null>(null);
+  let caret = $state<HTMLButtonElement | null>(null);
+  let menu = $state<HTMLDivElement | null>(null);
 
   let chosen = $derived(
     (preferred && variants.find((v) => v.source === preferred)) || variants[0]
@@ -42,9 +45,37 @@
   function onWindowClick(e: MouseEvent) {
     if (open && root && !root.contains(e.target as Node)) open = false;
   }
+
+  async function toggle() {
+    open = !open;
+    if (open) {
+      await tick();
+      menu?.querySelector<HTMLButtonElement>('button')?.focus();
+    }
+  }
+
+  function onKeydown(e: KeyboardEvent) {
+    if (!open || !menu) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      open = false;
+      caret?.focus();
+      return;
+    }
+    if (e.key === 'Tab') {
+      open = false;
+      return;
+    }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const items = Array.from(menu.querySelectorAll<HTMLButtonElement>('button'));
+    const i = items.indexOf(document.activeElement as HTMLButtonElement);
+    const step = e.key === 'ArrowDown' ? 1 : -1;
+    items[(i + step + items.length) % items.length]?.focus();
+  }
 </script>
 
-<svelte:window onclick={onWindowClick} />
+<svelte:window onclick={onWindowClick} onkeydown={onKeydown} />
 
 <div class="split" bind:this={root}>
   <button class="btn btn-accent main" onclick={() => install(chosen)} disabled={busy}>
@@ -52,18 +83,20 @@
   </button>
   <button
     class="btn btn-accent caret"
-    onclick={() => (open = !open)}
+    bind:this={caret}
+    onclick={toggle}
     disabled={busy}
     aria-label="Choose source"
+    aria-haspopup="menu"
     aria-expanded={open}
   >
     <ChevronDown size={14} />
   </button>
 
   {#if open}
-    <div class="menu card">
+    <div class="menu card" role="menu" aria-label="Install with" bind:this={menu}>
       {#each variants as v (v.source)}
-        <button class="menu-item" onclick={() => install(v)}>
+        <button class="menu-item" role="menuitem" onclick={() => install(v)}>
           <span>{menuLabel(v.source)}</span>
           {#if v.source === chosen.source}<span class="def mono">default</span>{/if}
         </button>
@@ -125,13 +158,13 @@
     text-align: left;
     padding: 8px 10px;
     border-radius: var(--radius-sm);
-    font-size: 0.86rem;
+    font-size: var(--fs-md);
   }
   .menu-item:hover {
     background: var(--surface-hover);
   }
   .def {
-    font-size: 0.66rem;
+    font-size: var(--fs-2xs);
     color: var(--text-muted);
   }
 </style>

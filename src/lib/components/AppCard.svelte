@@ -1,16 +1,16 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { openUrl } from '@tauri-apps/plugin-opener';
-  import { Check, Plus } from '@lucide/svelte';
+  import { Check, Plus, Bookmark, BookmarkCheck } from '@lucide/svelte';
   import AppIcon from './AppIcon.svelte';
-  import SourceBadge from './SourceBadge.svelte';
   import InstallButton from './InstallButton.svelte';
   import { settings } from '$lib/stores/settings';
+  import { queuedKeys, toggleQueued } from '$lib/stores/queue';
   import { copyText } from '$lib/clipboard';
   import { runOp, installCommand } from '$lib/install';
+  import { variantKey } from '$lib/catalog';
   import { openContextMenu, type CtxItem } from '$lib/stores/contextMenu';
-  import type { Source, Variant } from '$lib/types';
-  import type { Snippet } from 'svelte';
+  import type { Variant } from '$lib/types';
 
   let {
     name,
@@ -18,20 +18,12 @@
     variants,
     installed = false,
     homepage = null,
-    gameName = null,
     iconCacheOnly = false,
-    showSources = false,
-    selectable = false,
-    selected = false,
-    selecting = false,
     highlight = '',
     layout = 'grid',
     backTo = null,
     inList = false,
     ctxExtra = [],
-    action,
-    menu = null,
-    onToggleSelect,
     onChanged,
     onAddToList
   }: {
@@ -40,25 +32,15 @@
     variants: Variant[];
     installed?: boolean;
     homepage?: string | null;
-    gameName?: string | null;
     iconCacheOnly?: boolean;
-    /** Show the source/launcher pills (Library). Browsing cards leave the
-     * choice of package manager to the detail page. */
-    showSources?: boolean;
     layout?: 'grid' | 'list';
-    /** Can be ticked (hover checkbox, Ctrl/Shift+click). */
-    selectable?: boolean;
-    selected?: boolean;
-    /** A selection is in progress: a plain click toggles instead of opening. */
-    selecting?: boolean;
     highlight?: string;
     backTo?: string | null;
+    /** Already in the user's catalog (search results from package managers). */
     inList?: boolean;
     ctxExtra?: CtxItem[];
-    action?: Snippet<[{ source: Source; id: string; name: string }]>;
-    menu?: CtxItem[] | null;
-    onToggleSelect?: (e: MouseEvent) => void;
     onChanged?: () => void;
+    /** Shows an "add to my list" button (package-manager search results). */
     onAddToList?: () => void;
   } = $props();
 
@@ -71,6 +53,10 @@
     ($settings.preferredSource && variants.find((v) => v.source === $settings.preferredSource)) ||
       variants[0]
   );
+
+  let key = $derived(variantKey(primary));
+  let queued = $derived($queuedKeys.has(key));
+  const toggleQueue = () => toggleQueued({ key, name, variants });
 
   let nameParts = $derived.by(() => {
     const q = highlight.trim();
@@ -97,20 +83,12 @@
     onChanged?.();
   }
 
-  function onMainClick(e: MouseEvent) {
-    if (!selectable || !(selecting || e.ctrlKey || e.metaKey || e.shiftKey)) return;
-    e.preventDefault();
-    onToggleSelect?.(e);
-  }
-
   function onCtx(e: MouseEvent) {
-    if (selecting) return;
-    if (menu) {
-      openContextMenu(e, [...menu, ...ctxExtra]);
-      return;
-    }
     const items: CtxItem[] = [];
-    if (!installed) items.push({ label: 'Install', onSelect: doInstall });
+    if (!installed) {
+      items.push({ label: 'Install', onSelect: doInstall });
+      items.push({ label: queued ? 'Remove from queue' : 'Add to queue', onSelect: toggleQueue });
+    }
     items.push({ label: 'Open details', onSelect: () => goto(href) });
     const cmd = installCommand(primary.source, primary.id);
     if (cmd) items.push({ label: 'Copy command', onSelect: () => copyText(cmd) });
@@ -123,26 +101,17 @@
 <div
   class="card app-card"
   class:list={layout === 'list'}
-  class:selected={selectable && selected}
-  class:selecting
-  class:has-corner={!!onAddToList || selectable}
+  class:queued
   oncontextmenu={onCtx}
   role="group"
+  aria-label={name}
 >
-  <a
-    class="main"
-    {href}
-    onclick={onMainClick}
-    onmousedown={(e) => {
-      if (selectable && e.shiftKey) e.preventDefault();
-    }}
-  >
+  <a class="main" {href}>
     <AppIcon
       {name}
       source={primary.source}
       id={primary.id}
       {homepage}
-      {gameName}
       cacheOnly={iconCacheOnly}
       size={layout === 'list' ? 34 : 44}
     />
@@ -154,53 +123,31 @@
     </div>
   </a>
   <div class="foot">
-    <div class="badges">
-      {#if showSources}
-        {#each variants as v (v.source)}<SourceBadge source={v.source} id={v.id} />{/each}
-      {/if}
-    </div>
-    <div class="foot-right">
-      {#if selectable}
-        <button
-          class="pick"
-          role="checkbox"
-          aria-checked={selected}
-          aria-label={`Select ${name}`}
-          title={selected ? 'Deselect' : 'Select'}
-          onclick={(e) => onToggleSelect?.(e)}
-          onmousedown={(e) => {
-            if (e.shiftKey) e.preventDefault();
-          }}
-        >
-          <Check size={13} />
+    {#if onAddToList}
+      {#if inList}
+        <span class="icon-button in-list" title="In your list" aria-label="In your list">
+          <BookmarkCheck size={16} />
+        </span>
+      {:else}
+        <button class="icon-button" onclick={onAddToList} title="Add to my list" aria-label={`Add ${name} to my list`}>
+          <Bookmark size={16} />
         </button>
       {/if}
-      {#if onAddToList}
-        {#if inList}
-          <span class="add-corner is-in" title="In your list" aria-label="In your list">
-            <Check size={14} />
-          </span>
-        {:else}
-          <button
-            class="add-corner"
-            onclick={onAddToList}
-            title="Add to my list"
-            aria-label="Add to my list"
-          >
-            <Plus size={16} />
-          </button>
-        {/if}
-      {/if}
-    <div class="card-action">
-      {#if action}
-        {@render action({ source: primary.source, id: primary.id, name })}
-      {:else if installed}
-        <span class="installed"><Check size={14} /> Installed</span>
-      {:else}
-        <InstallButton source={chosen.source} id={chosen.id} {name} quiet onDone={onChanged} />
-      {/if}
-    </div>
-    </div>
+    {/if}
+    {#if installed}
+      <span class="installed"><Check size={14} /> Installed</span>
+    {:else}
+      <button
+        class="icon-button queue-btn"
+        onclick={toggleQueue}
+        aria-pressed={queued}
+        aria-label={queued ? `Remove ${name} from the install queue` : `Add ${name} to the install queue`}
+        title={queued ? 'In the install queue' : 'Add to install queue'}
+      >
+        {#if queued}<Check size={16} />{:else}<Plus size={16} />{/if}
+      </button>
+      <InstallButton source={chosen.source} id={chosen.id} {name} quiet onDone={onChanged} />
+    {/if}
   </div>
 </div>
 
@@ -220,37 +167,33 @@
     border-radius: 0;
     background: transparent;
   }
-  .app-card:not(.list):hover {
+  .app-card:hover {
     background: var(--surface-hover);
   }
-  .app-card:not(.list).selected {
-    background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  .app-card.queued {
+    background: color-mix(in srgb, var(--accent) 9%, var(--surface));
   }
   .app-card.list {
     flex-direction: row;
     align-items: center;
     gap: 14px;
-    padding: 10px 14px;
+    padding: 10px 16px;
     border: none;
     border-radius: 0;
     border-top: 1px solid var(--border);
     background: transparent;
   }
+  .app-card.list.queued {
+    background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  }
   .app-card.list:first-child {
     border-top: none;
-  }
-  .app-card.list:hover {
-    background: var(--surface-hover);
-  }
-  .app-card.list.selected {
-    background: color-mix(in srgb, var(--accent) 16%, var(--surface));
   }
   .app-card.list .main {
     flex: 1;
     align-items: center;
   }
   .app-card.list .desc {
-    display: -webkit-box;
     -webkit-line-clamp: 1;
     line-clamp: 1;
     margin-top: 2px;
@@ -258,7 +201,6 @@
   .app-card.list .foot {
     margin-top: 0;
     flex-shrink: 0;
-    gap: 12px;
   }
   .main {
     display: flex;
@@ -267,6 +209,9 @@
     text-decoration: none;
     min-width: 0;
     align-items: flex-start;
+  }
+  .main:hover {
+    text-decoration: none;
   }
   .meta {
     min-width: 0;
@@ -286,7 +231,7 @@
     font-weight: 700;
   }
   .desc {
-    font-size: 0.82rem;
+    font-size: var(--fs-sm);
     margin-top: 4px;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -297,107 +242,30 @@
   .foot {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-top: auto;
-  }
-  .badges {
-    display: flex;
-    gap: 5px;
-    flex-wrap: wrap;
-  }
-  .foot-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-  }
-  .add-corner {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    padding: 0;
-    border-radius: var(--radius-sm);
-    flex-shrink: 0;
-  }
-  button.add-corner {
-    border: 1px solid var(--border-strong);
-    background: var(--surface);
-    color: var(--text-muted);
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
-  }
-  button.add-corner:hover {
-    background: var(--surface-hover);
-    color: var(--text);
-    border-color: var(--accent);
-  }
-  .add-corner.is-in {
-    color: var(--success);
-  }
-  .app-card:not(.list) .add-corner {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-  }
-  .app-card:not(.list).has-corner .main {
-    padding-right: 32px;
-  }
-  .card-action {
-    width: 104px;
-    height: 39px;
-    display: flex;
-    align-items: center;
     justify-content: flex-end;
-    flex-shrink: 0;
+    gap: 6px;
+    margin-top: auto;
+    min-height: 37px;
+  }
+  .queue-btn[aria-pressed='true'] {
+    background: var(--accent-fill);
+    color: var(--accent-contrast);
+  }
+  .queue-btn[aria-pressed='true']:hover {
+    background: var(--accent-hover);
+    color: var(--accent-contrast);
+  }
+  .in-list {
+    color: var(--success);
   }
   .installed {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 0.8rem;
+    font-size: var(--fs-sm);
     color: var(--text-muted);
   }
   .installed :global(svg) {
     color: var(--success);
-  }
-  .pick {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    padding: 0;
-    flex-shrink: 0;
-    border: 1.5px solid var(--border-strong);
-    border-radius: 6px;
-    background: var(--surface);
-    color: transparent;
-    opacity: 0;
-    transition: opacity 0.12s, background 0.12s, border-color 0.12s;
-  }
-  .app-card:not(.list) .pick {
-    position: absolute;
-    top: 14px;
-    right: 14px;
-  }
-  .app-card:hover .pick,
-  .app-card:focus-within .pick,
-  .app-card.selecting .pick {
-    opacity: 1;
-  }
-  .pick:hover {
-    border-color: var(--accent);
-  }
-  .pick[aria-checked='true'] {
-    opacity: 1;
-    background: var(--accent-fill);
-    border-color: var(--accent);
-    color: var(--accent-contrast);
-  }
-  .pick:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
   }
 </style>

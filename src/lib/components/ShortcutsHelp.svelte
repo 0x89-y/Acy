@@ -93,7 +93,7 @@
     margin-bottom: 12px;
   }
   .head h2 {
-    font-size: 1.1rem;
+    font-size: var(--fs-xl);
   }
   .x {
     display: inline-flex;

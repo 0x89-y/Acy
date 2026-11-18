@@ -131,7 +131,7 @@
         <div class="row">
           <AppIcon name={p.name} size={34} source={p.source} id={p.id} homepage={p.homepage} />
           <div class="info">
-            <a class="name" href={`/app/${p.source}/${encodeURIComponent(p.id)}?back=${encodeURIComponent('/?view=library')}`}>{p.name}</a>
+            <a class="name" href={`/app/${p.source}/${encodeURIComponent(p.id)}?back=${encodeURIComponent('/updates')}`}>{p.name}</a>
             <div class="ver mono">{p.version ?? '?'} → {p.availableVersion ?? '?'}</div>
           </div>
           <SourceBadge source={p.source} />
@@ -204,7 +204,7 @@
     flex: 1;
   }
   .checked {
-    font-size: 0.8rem;
+    font-size: var(--fs-sm);
   }
   .pane-scroll {
     flex: 1;
@@ -217,16 +217,16 @@
     gap: 12px;
     padding: 10px 14px;
     color: var(--text-muted);
-    font-size: 0.82rem;
+    font-size: var(--fs-sm);
   }
   .uptodate {
     color: var(--success);
-    font-size: 0.9rem;
+    font-size: var(--fs-base);
     padding: 16px 14px;
   }
   .count {
     font-family: var(--font-mono);
-    font-size: 0.78rem;
+    font-size: var(--fs-xs);
     background: var(--surface-hover);
     color: var(--text-muted);
     border-radius: var(--radius-sm);
@@ -256,7 +256,7 @@
     border: 0;
     background: transparent;
     color: var(--text-muted);
-    font-size: 0.86rem;
+    font-size: var(--fs-md);
   }
   .ignored-toggle:hover {
     color: var(--text);
@@ -304,7 +304,7 @@
     text-overflow: ellipsis;
   }
   .ver {
-    font-size: 0.74rem;
+    font-size: var(--fs-xs);
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;

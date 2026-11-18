@@ -171,7 +171,8 @@
     display: flex;
     align-items: stretch;
     overflow: hidden;
-    background: var(--surface);
+    /* The content panel (+layout) already paints the surface. */
+    background: transparent;
   }
   .browse-rail {
     flex: 0 0 190px;
@@ -190,7 +191,7 @@
     border-bottom: 1px solid var(--border);
   }
   .rail-title {
-    font-size: 0.95rem;
+    font-size: var(--fs-body);
     font-weight: 600;
   }
   .back-btn {
@@ -232,7 +233,7 @@
     border-radius: 0;
     background: transparent;
     color: var(--text-muted);
-    font-size: 0.9rem;
+    font-size: var(--fs-base);
     font-weight: 500;
   }
   .rail-link:first-child {
@@ -248,7 +249,7 @@
     border-left-color: var(--accent);
   }
   .rail-count {
-    font-size: 0.72rem;
+    font-size: var(--fs-2xs);
     color: var(--text-muted);
   }
   .rail-link.active .rail-count {
@@ -272,7 +273,7 @@
     border-bottom: 1px solid var(--border);
   }
   .pane-title {
-    font-size: 0.95rem;
+    font-size: var(--fs-body);
     font-weight: 600;
   }
   .pane-scroll {
@@ -282,7 +283,7 @@
   }
   .note {
     padding: 20px 16px;
-    font-size: 0.9rem;
+    font-size: var(--fs-base);
   }
   .bucket-list {
     display: flex;
@@ -309,22 +310,22 @@
     flex: 1;
   }
   .bucket-name {
-    font-size: 0.84rem;
+    font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--text);
   }
   .bucket-desc {
-    font-size: 0.76rem;
+    font-size: var(--fs-xs);
   }
   .bucket-state {
-    font-size: 0.76rem;
+    font-size: var(--fs-xs);
     font-weight: 600;
     color: var(--accent);
     flex-shrink: 0;
     padding-right: 4px;
   }
   .bucket-btn {
-    font-size: 0.8rem;
+    font-size: var(--fs-sm);
     padding: 5px 12px;
     flex-shrink: 0;
     min-width: 76px;

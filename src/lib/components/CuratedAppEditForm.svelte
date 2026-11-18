@@ -301,7 +301,7 @@
     border-bottom: 1px solid var(--border);
   }
   .pane-title {
-    font-size: 0.95rem;
+    font-size: var(--fs-body);
     font-weight: 600;
   }
   .spacer {
@@ -320,7 +320,7 @@
     max-width: 640px;
   }
   .note {
-    font-size: 0.82rem;
+    font-size: var(--fs-sm);
     color: var(--text-muted);
     background: var(--surface-2);
     border: 1px solid var(--border);
@@ -334,7 +334,7 @@
     gap: 3px;
   }
   .fl {
-    font-size: 0.72rem;
+    font-size: var(--fs-2xs);
     color: var(--text-muted);
   }
   .more {
@@ -347,7 +347,7 @@
   }
   .more-toggle {
     align-self: flex-start;
-    font-size: 0.82rem;
+    font-size: var(--fs-sm);
   }
   .src-block {
     display: flex;
@@ -368,20 +368,16 @@
     appearance: none;
     justify-self: start;
     font-family: var(--font-mono);
-    font-size: 0.68rem;
+    font-size: var(--fs-2xs);
     line-height: 1.5;
     padding: 1px 7px;
     border-radius: var(--radius-sm);
     border: 1px solid currentColor;
     background: transparent;
     color: var(--local);
-    outline: none;
   }
   .src-pick:hover {
     background: color-mix(in srgb, currentColor 12%, transparent);
-  }
-  .src-pick:focus-visible {
-    box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 35%, transparent);
   }
   .src-pick option {
     background: var(--surface);
@@ -405,7 +401,7 @@
     width: 100%;
     padding: 5px 8px;
     font-family: var(--font-mono);
-    font-size: 0.8rem;
+    font-size: var(--fs-sm);
     color: var(--text);
     background: transparent;
     border: 1px solid transparent;
@@ -418,6 +414,7 @@
   .src-id:focus {
     background: var(--surface);
     border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
   }
   .row-del {
     opacity: 0;
@@ -432,7 +429,7 @@
   }
   .add-src {
     align-self: flex-start;
-    font-size: 0.8rem;
+    font-size: var(--fs-sm);
     padding: 4px 8px;
   }
   .in {
@@ -441,7 +438,7 @@
     border-radius: var(--radius-sm);
     color: var(--text);
     padding: 6px 9px;
-    font-size: 0.86rem;
+    font-size: var(--fs-md);
     outline: none;
     width: 100%;
     min-width: 0;
@@ -452,6 +449,7 @@
   .in:focus {
     background: var(--surface);
     border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
   }
   .in:disabled {
     opacity: 0.6;
@@ -477,7 +475,7 @@
     cursor: default;
   }
   .err {
-    font-size: 0.84rem;
+    font-size: var(--fs-sm);
     color: var(--danger);
     margin: 0;
   }

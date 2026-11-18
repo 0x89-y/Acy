@@ -63,9 +63,19 @@ export interface CuratedCategory {
   apps: CuratedApp[];
 }
 
+/** A hand-picked set of catalog apps, installable together (Discover home). */
+export interface CuratedCollection {
+  id: string;
+  title: string;
+  description?: string | null;
+  apps: Variant[];
+}
+
 export interface CuratedFile {
   version: number;
   categories: CuratedCategory[];
+  /** Absent in catalogs older than v13 and in user-saved files. */
+  collections?: CuratedCollection[];
 }
 
 export interface LogLine {

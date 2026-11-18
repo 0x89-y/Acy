@@ -7,6 +7,20 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.10.0',
+    date: '2026-11-18',
+    changes: [
+      'New sidebar: Discover, Installed, Updates, Activity and Settings are always one click away, with categories and groups listed underneath.',
+      'One search box at the top of the sidebar (Ctrl+K): apps in your catalog show instantly, and each package manager's results appear as soon as it answers.',
+      'Discover home: collections like "New PC essentials" and "Developer setup" that install in one go, plus a row of apps for each category.',
+      'Install queue: add apps with + and install them together from the bar at the bottom, which also shows progress, output and anything that failed.',
+      'Installed is now a clear list with sorting, inline updates and bulk uninstall, and Activity is grouped by day.',
+      'Settings redesigned in the style of Windows 11.',
+      'Native Windows title bar, with an optional Mica, Mica Alt or Acrylic backdrop on Windows 11 (Settings → Appearance).',
+      'Better contrast for text, buttons and accent colours in light and dark mode, clearer keyboard focus, and labels for screen readers throughout.'
+    ]
+  },
+  {
     version: '0.9.7',
     date: '2026-11-15',
     changes: [
