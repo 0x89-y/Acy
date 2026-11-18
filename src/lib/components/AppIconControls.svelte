@@ -12,6 +12,7 @@
     name = '',
     from = null,
     size = 48,
+    side = false,
     children
   }: {
     source: Source;
@@ -19,6 +20,8 @@
     name?: string;
     from?: string | null;
     size?: number;
+    /** Preview on the left, the URL field (children) and actions stacked beside it. */
+    side?: boolean;
     children?: Snippet;
   } = $props();
 
@@ -98,39 +101,59 @@
   }
 </script>
 
-<div class="icon-wrap">
-  {#if children}
-    <div class="extra">{@render children()}</div>
-  {/if}
-  <div class="icon-row">
-    <div class="preview" style="width:{size}px; height:{size}px;">
-      {#if iconUrl}
-        <img src={iconUrl} alt="" />
-      {:else}
-        <span class="ph" style="font-size:{Math.round(size * 0.34)}px;">{initial}</span>
-      {/if}
-    </div>
-    <button
-      class="btn btn-ghost"
-      onclick={download}
-      disabled={!!busy || !ready}
-      title="Fetch from the icon URL, or the homepage"
-    >
-      <Download size={14} />
-      {iconUrl || cached ? 'Re-download' : 'Download'}
-    </button>
-    <button
-      class="icon-btn danger"
-      onclick={remove}
-      disabled={!!busy || !ready || (!iconUrl && !cached)}
-      title="Delete this icon"
-      aria-label="Delete this icon"
-    >
-      <Trash2 size={15} />
-    </button>
-    <span class="status" title={status}>{status}</span>
+{#snippet preview()}
+  <div class="preview" style="width:{size}px; height:{size}px;">
+    {#if iconUrl}
+      <img src={iconUrl} alt="" />
+    {:else}
+      <span class="ph" style="font-size:{Math.round(size * 0.34)}px;">{initial}</span>
+    {/if}
   </div>
-</div>
+{/snippet}
+
+{#snippet actions()}
+  <button
+    class="btn btn-ghost"
+    onclick={download}
+    disabled={!!busy || !ready}
+    title="Fetch from the icon URL, or the homepage"
+  >
+    <Download size={14} />
+    {iconUrl || cached ? 'Re-download' : 'Download'}
+  </button>
+  <button
+    class="icon-btn danger"
+    onclick={remove}
+    disabled={!!busy || !ready || (!iconUrl && !cached)}
+    title="Delete this icon"
+    aria-label="Delete this icon"
+  >
+    <Trash2 size={15} />
+  </button>
+  <span class="status" title={status}>{status}</span>
+{/snippet}
+
+{#if side}
+  <div class="icon-wrap side">
+    {@render preview()}
+    <div class="side-col">
+      {#if children}
+        <div class="extra">{@render children()}</div>
+      {/if}
+      <div class="icon-row">{@render actions()}</div>
+    </div>
+  </div>
+{:else}
+  <div class="icon-wrap">
+    {#if children}
+      <div class="extra">{@render children()}</div>
+    {/if}
+    <div class="icon-row">
+      {@render preview()}
+      {@render actions()}
+    </div>
+  </div>
+{/if}
 
 <style>
   .icon-wrap {
@@ -138,6 +161,21 @@
     flex-direction: column;
     gap: 8px;
     min-width: 0;
+  }
+  .icon-wrap.side {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 14px;
+  }
+  .side-col {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .side .icon-row {
+    margin-left: -10px;
   }
   .extra {
     display: flex;

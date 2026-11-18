@@ -11,7 +11,7 @@
   let hidden = $derived(ops.length - shown.length);
 </script>
 
-<div class="queued card">
+<div class="queued">
   <div class="head">
     <span class="title">{ops.length} waiting</span>
   </div>
@@ -38,11 +38,14 @@
 </div>
 
 <style>
+  /* Docked in the tray's details, styled like the operation cards beside it. */
   .queued {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
   }
   .head {
     padding: 10px 12px 6px;
@@ -75,7 +78,11 @@
   }
   .icon-btn {
     display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
+    min-width: 26px;
+    min-height: 26px;
     padding: 4px;
     border: none;
     background: transparent;

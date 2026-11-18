@@ -26,7 +26,21 @@
     if (!showOps) expanded = false;
   });
 
+  // With the details open, the cards already name each operation, so the bar
+  // sums them up instead of repeating one ("1 working · 2 waiting").
+  let summaryText = $derived(
+    [
+      running ? '1 working' : '',
+      waiting.length ? `${waiting.length} waiting` : '',
+      failed.length ? `${failed.length} failed` : '',
+      done.length ? `${done.length} done` : ''
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  );
+
   let statusText = $derived.by(() => {
+    if (expanded && summaryText) return summaryText;
     if ($batch) return `Installing ${$batch.name}`;
     if (running) return running.title;
     if (waiting.length > 0) return `${waiting.length} waiting`;
@@ -130,10 +144,6 @@
     overflow-y: auto;
     padding: 10px 14px;
     border-bottom: 1px solid var(--border);
-  }
-  /* Toasts float elsewhere; docked in the tray they sit flat. */
-  .details :global(.card) {
-    box-shadow: none;
   }
   .bar {
     position: relative;

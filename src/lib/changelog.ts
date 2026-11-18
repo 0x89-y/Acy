@@ -7,6 +7,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.10.2',
+    date: '2026-11-18',
+    changes: [
+      `Install and update progress in the bottom bar now shows each operation as a card with a clear status, and the bar sums them up when the details are open.`,
+      `Redesigned app catalog editor: a tidy list, and each app opens its own page with grouped settings, a category dropdown, tags you can add and remove, and a Make default button for sources.`,
+      `Catalog changes are saved from a bar that only appears when something changed, and leaving with unsaved changes asks first.`,
+      `The catalog list shows each app's package managers as lettered dots in fixed columns, so gaps are easy to spot.`
+    ]
+  },
+  {
     version: '0.10.1',
     date: '2026-11-18',
     changes: [

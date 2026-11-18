@@ -686,3 +686,10 @@ button {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* Headings get focus programmatically (so screen readers announce a new view);
+   that shouldn't draw a focus ring. */
+h1[tabindex='-1']:focus,
+h2[tabindex='-1']:focus {
+  outline: none;
+}

@@ -3,8 +3,13 @@
   import { dismiss, retry, type Op, type OpState } from '$lib/stores/ops';
   import { settings } from '$lib/stores/settings';
   import { copyText } from '$lib/clipboard';
-  import { X, ChevronDown, ChevronRight, RotateCw, ShieldAlert, Copy, Check } from '@lucide/svelte';
+  import { X, ChevronDown, ChevronRight, RotateCw, ShieldAlert, Copy, Check, CircleAlert } from '@lucide/svelte';
 
+  /**
+   * One operation, docked in the queue tray's details panel: a card like the
+   * Installed/Activity rows. The tray bar shows overall progress, so there's no
+   * per-operation progress bar here.
+   */
   let { op }: { op: Op } = $props();
 
   let copied = $state(false);
@@ -41,60 +46,61 @@
   });
 </script>
 
-<div class="toast card">
-  <div class="head">
-    <span class="title">{op.title}</span>
-    <span class="state {op.state}">{labels[op.state]}</span>
-    <div class="spacer"></div>
-    <button class="icon-btn" onclick={() => dismiss(op.id)} aria-label="Dismiss">
-      <X size={15} />
-    </button>
-  </div>
-
-  {#if op.detail}
-    <div class="detail">{op.detail}</div>
-  {/if}
-
-  <div class="progress {op.state}">
-    <div class="bar"></div>
-  </div>
-
-  <div class="status">
-    <span class="status-text {op.state}">
-      {#if op.state === 'queued'}
-        Waiting…
-      {:else if op.state === 'running'}
-        {lastLine || 'Working…'}
+<div class="op {op.state}">
+  <div class="row">
+    <span class="ic" aria-hidden="true">
+      {#if op.state === 'running' || op.state === 'queued'}
+        <span class="spinner"></span>
       {:else if op.state === 'done'}
-        Completed successfully
+        <Check size={17} />
       {:else}
-        Something went wrong
+        <CircleAlert size={17} />
       {/if}
     </span>
+    <span class="text">
+      <span class="title-line">
+        <span class="title">{op.title}</span>
+        <span class="pill {op.state}">{labels[op.state]}</span>
+      </span>
+      <span class="status" class:mono={op.state === 'running' && !!lastLine}>
+        {#if op.state === 'queued'}
+          Waiting…
+        {:else if op.state === 'running'}
+          {lastLine || 'Starting…'}
+        {:else if op.state === 'done'}
+          Completed successfully
+        {:else}
+          Something went wrong{op.detail ? ` · ${op.detail}` : ''}
+        {/if}
+      </span>
+    </span>
     {#if op.lines.length > 0}
-      <button class="toggle" onclick={copyOutput} title="Copy output">
+      <button class="btn btn-ghost small" onclick={copyOutput}>
         {#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}
         {copied ? 'Copied' : 'Copy'}
       </button>
     {/if}
     {#if op.lines.length > 0 || op.state === 'running'}
-      <button class="toggle" onclick={() => (expanded = !expanded)}>
+      <button class="btn btn-ghost small" onclick={() => (expanded = !expanded)} aria-expanded={expanded}>
         {#if expanded}<ChevronDown size={14} />{:else}<ChevronRight size={14} />{/if}
-        {expanded ? 'Hide' : 'Show'} output
+        {expanded ? 'Hide output' : 'Show output'}
       </button>
     {/if}
+    <button class="icon-button dismiss" onclick={() => dismiss(op.id)} aria-label={`Dismiss ${op.title}`}>
+      <X size={15} />
+    </button>
   </div>
 
   {#if op.state === 'error'}
     <div class="err-actions">
       {#if needsAdmin}
         <span class="admin">
-          <ShieldAlert size={13} /> Needs administrator - relaunch Acy as admin, then retry.
+          <ShieldAlert size={14} aria-hidden="true" /> Needs administrator rights: relaunch Acy as admin, then retry.
         </span>
       {/if}
       <div class="spacer"></div>
-      <button class="retry" onclick={() => retry(op.id)}>
-        <RotateCw size={13} /> Retry
+      <button class="btn small" onclick={() => retry(op.id)}>
+        <RotateCw size={14} /> Retry
       </button>
     </div>
   {/if}
@@ -112,17 +118,62 @@
 </div>
 
 <style>
-  .toast {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    box-shadow: var(--shadow);
+  .op {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
   }
-  .head {
+  .row {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
+    gap: 12px;
+    min-height: 56px;
+    padding: 8px 8px 8px 12px;
+  }
+  .ic {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    color: color-mix(in srgb, var(--accent) 70%, var(--text));
+  }
+  .done .ic {
+    background: color-mix(in srgb, var(--success) 14%, transparent);
+    color: var(--success);
+  }
+  .error .ic {
+    background: color-mix(in srgb, var(--danger) 14%, transparent);
+    color: var(--danger);
+  }
+  .spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  .text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .title-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
   }
   .title {
     font-weight: 600;
@@ -131,170 +182,87 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .state {
-    font-size: var(--fs-2xs);
-    font-family: var(--font-mono);
-    padding: 1px 7px;
-    border-radius: var(--radius-sm);
-    border: 1px solid currentColor;
+  .pill {
     flex-shrink: 0;
-  }
-  .state.queued {
-    color: var(--text-muted);
-  }
-  .state.running {
-    color: var(--warning);
-  }
-  .state.done {
-    color: var(--success);
-  }
-  .state.error {
-    color: var(--danger);
-  }
-  .spacer {
-    flex: 1;
-  }
-  .detail {
-    padding: 0 12px 9px;
-    font-size: var(--fs-xs);
-    color: var(--text-muted);
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-  .icon-btn {
-    display: inline-flex;
-    padding: 4px;
-    border: none;
-    background: transparent;
-    color: var(--text-muted);
-    border-radius: var(--radius-sm);
-    line-height: 0;
-  }
-  .icon-btn:hover {
-    background: var(--surface-hover);
-    color: var(--text);
-  }
-
-  .progress {
-    position: relative;
-    height: 4px;
-    background: var(--surface-hover);
-    overflow: hidden;
-  }
-  .progress .bar {
-    position: absolute;
-    height: 100%;
+    padding: 0 8px;
     border-radius: var(--radius-pill);
+    font-size: var(--fs-2xs);
+    font-weight: 600;
+    line-height: 1.7;
   }
-  .progress.running .bar {
-    width: 35%;
-    background: var(--accent-fill);
-    animation: indeterminate 1.1s ease-in-out infinite;
+  .pill.queued {
+    color: var(--text-muted);
+    background: color-mix(in srgb, var(--text) 8%, transparent);
   }
-  .progress.done .bar {
-    width: 100%;
-    background: var(--success);
+  .pill.running {
+    color: color-mix(in srgb, var(--accent) 70%, var(--text));
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
   }
-  .progress.error .bar {
-    width: 100%;
-    background: var(--danger);
+  .pill.done {
+    color: var(--success);
+    background: color-mix(in srgb, var(--success) 14%, transparent);
   }
-  @keyframes indeterminate {
-    0% {
-      left: -35%;
-    }
-    100% {
-      left: 100%;
-    }
+  .pill.error {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 14%, transparent);
   }
-
   .status {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 9px 12px;
-  }
-  .status-text {
-    flex: 1;
-    min-width: 0;
-    font-family: var(--font-mono);
-    font-size: var(--fs-xs);
+    font-size: var(--fs-sm);
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .status-text.done {
-    color: var(--success);
+  .status.mono {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
   }
-  .status-text.error {
+  .error .status {
     color: var(--danger);
   }
-  .toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    background: none;
-    border: none;
+  .small {
+    flex-shrink: 0;
+    padding: 5px 10px;
+    font-size: var(--fs-sm);
+  }
+  .btn-ghost.small {
     color: var(--text-muted);
-    font-size: var(--fs-xs);
-    padding: 4px 6px;
-    border-radius: var(--radius-sm);
+  }
+  .btn-ghost.small:hover {
+    color: var(--text);
+  }
+  .dismiss {
     flex-shrink: 0;
   }
-  .toggle:hover {
-    color: var(--text);
-    background: var(--surface-hover);
+  .err-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 12px 10px 56px;
   }
-
+  .spacer {
+    flex: 1;
+  }
+  .admin {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: var(--fs-sm);
+    color: var(--warning);
+  }
   .body {
     max-height: 30vh;
     overflow-y: auto;
+    margin: 0 12px 12px 56px;
     padding: 10px 12px;
-    background: var(--surface-2);
-    border-top: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--text) 5%, transparent);
     font-size: var(--fs-xs);
     line-height: 1.45;
   }
   .line {
     white-space: pre-wrap;
     word-break: break-word;
-  }
-
-  .err-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 0 12px 10px;
-  }
-  .err-actions .spacer {
-    flex: 1;
-  }
-  .admin {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: var(--fs-xs);
-    color: var(--warning);
-    min-width: 0;
-  }
-  .retry {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    flex-shrink: 0;
-    border: 1px solid var(--border-strong);
-    background: var(--surface);
-    color: var(--text);
-    padding: 5px 12px;
-    border-radius: var(--radius-sm);
-    font-size: var(--fs-sm);
-    font-weight: 500;
-  }
-  .retry:hover {
-    background: var(--surface-hover);
   }
 </style>

@@ -1,40 +1,83 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
+  import { beforeNavigate, goto } from '$app/navigation';
   import {
-    ArrowLeft,
-    ArrowUp,
-    ArrowDown,
-    Trash2,
+    Search,
+    X,
     Plus,
-    ChevronRight,
-    ChevronDown
+    Trash2,
+    Ellipsis,
+    FolderPlus,
+    ChevronLeft,
+    Type,
+    AlignLeft,
+    Tags,
+    Image,
+    House,
+    ScrollText,
+    Heart,
+    Package,
+    Folder
   } from '@lucide/svelte';
-  import SourceBadge from '$lib/components/SourceBadge.svelte';
+  import AppIcon from '$lib/components/AppIcon.svelte';
   import AppIconControls from '$lib/components/AppIconControls.svelte';
+  import SettingCard from '$lib/components/SettingCard.svelte';
   import * as api from '$lib/api';
   import { settings } from '$lib/stores/settings';
+  import { reloadCurated } from '$lib/stores/curated';
+  import { confirmAction } from '$lib/stores/confirm';
+  import { notice } from '$lib/stores/ops';
+  import { openContextMenuAt, type CtxItem } from '$lib/stores/contextMenu';
   import type { CuratedFile, CuratedApp, CuratedCategory, Source } from '$lib/types';
 
   const sources: Source[] = ['winget', 'scoop', 'choco', 'msstore'];
+  const SOURCE_NAMES: Record<Source, string> = {
+    winget: 'winget',
+    scoop: 'Scoop',
+    choco: 'Chocolatey',
+    msstore: 'Microsoft Store'
+  };
 
   let file = $state<CuratedFile | null>(null);
   let loading = $state(true);
+  let loadError = $state<string | null>(null);
   let saving = $state(false);
-  let status = $state<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+  let saveError = $state<string | null>(null);
+
+  // What was last loaded/saved; anything different is unsaved.
+  let baseline = $state('');
+  let dirty = $derived(file !== null && JSON.stringify(file) !== baseline);
 
   let selectedCat = $state<number | 'all'>('all');
   let activeCat = $derived(
     typeof selectedCat === 'number' ? (file?.categories[selectedCat] ?? null) : null
   );
-  let allApps = $derived.by(() => {
-    const out: { cat: CuratedCategory; ci: number; app: CuratedApp; ai: number }[] = [];
-    file?.categories.forEach((cat, ci) => cat.apps.forEach((app, ai) => out.push({ cat, ci, app, ai })));
-    return out;
-  });
   $effect(() => {
     const n = file?.categories.length ?? 0;
     if (typeof selectedCat === 'number' && selectedCat > n - 1) selectedCat = 'all';
   });
+
+  // The app being edited. Editing is a view inside this page (not a route), so
+  // unsaved changes in the list and the editor are one set of changes.
+  let editing = $state<{ ci: number; ai: number } | null>(null);
+  let editCat = $derived(editing ? (file?.categories[editing.ci] ?? null) : null);
+  let editApp = $derived(editing && editCat ? (editCat.apps[editing.ai] ?? null) : null);
+  let heading = $state<HTMLHeadingElement | null>(null);
+  let scroller = $state<HTMLDivElement | null>(null);
+  let listScroll = 0;
+
+  async function openEditor(ci: number, ai: number) {
+    listScroll = scroller?.scrollTop ?? 0;
+    editing = { ci, ai };
+    await tick();
+    if (scroller) scroller.scrollTop = 0;
+    heading?.focus();
+  }
+  async function closeEditor() {
+    editing = null;
+    await tick();
+    if (scroller) scroller.scrollTop = listScroll;
+  }
 
   let filter = $state('');
   let filtering = $derived(filter.trim().length > 0);
@@ -51,42 +94,68 @@
     if (!q) return true;
     return `${cat.title} ${cat.id}`.toLowerCase().includes(q);
   }
-  const catShown = (cat: CuratedCategory) => catMatches(cat) || cat.apps.some(matchesApp);
-  const appShown = (cat: CuratedCategory, app: CuratedApp) => catMatches(cat) || matchesApp(app);
 
+  // With curated apps turned off, only the user's own apps are listed.
   let hideBuiltins = $derived(!$settings.showCuratedApps);
   const appVisible = (cat: CuratedCategory, app: CuratedApp) =>
-    (!filtering || appShown(cat, app)) && (!hideBuiltins || app.custom);
-  const catVisible = (cat: CuratedCategory) =>
-    (!filtering || catShown(cat)) && (!hideBuiltins || cat.apps.some((a) => a.custom));
+    (!filtering || catMatches(cat) || matchesApp(app)) && (!hideBuiltins || app.custom);
   const shownCount = (cat: CuratedCategory) =>
     hideBuiltins ? cat.apps.filter((a) => a.custom).length : cat.apps.length;
-
-  let openApp = $state<Record<string, boolean>>({});
-  const appOpen = (ci: number, ai: number) => openApp[`${ci}-${ai}`] ?? false;
 
   onMount(async () => {
     try {
       file = await api.getCurated();
+      baseline = JSON.stringify(file);
     } catch (e) {
-      status = { kind: 'err', msg: `Could not load catalog: ${e}` };
+      loadError = `Could not load the catalog: ${e}`;
     } finally {
       loading = false;
     }
   });
 
-  function move<T>(arr: T[], i: number, delta: number) {
+  // Leaving with unsaved edits asks first (sidebar, shortcuts).
+  let leaving = false;
+  beforeNavigate((nav) => {
+    if (!dirty || leaving || !nav.to) return;
+    nav.cancel();
+    const target = nav.to.url;
+    confirmAction({
+      title: 'Discard unsaved changes?',
+      message: 'Your edits to the app catalog haven’t been saved.',
+      confirmLabel: 'Discard',
+      danger: true
+    }).then((ok) => {
+      if (!ok) return;
+      leaving = true;
+      goto(target.pathname + target.search);
+    });
+  });
+
+  function move<T>(arr: T[], i: number, delta: number): boolean {
     const j = i + delta;
-    if (j < 0 || j >= arr.length) return;
+    if (j < 0 || j >= arr.length) return false;
     [arr[i], arr[j]] = [arr[j], arr[i]];
+    return true;
   }
 
   function addCategory() {
     if (!file) return;
     file.categories.push({ id: '', title: '', apps: [] });
     selectedCat = file.categories.length - 1;
+    editing = null;
   }
-  function removeCategory(ci: number) {
+  async function removeCategory(ci: number) {
+    const cat = file?.categories[ci];
+    if (!cat) return;
+    if (cat.apps.length > 0) {
+      const ok = await confirmAction({
+        title: `Remove “${cat.title || cat.id || 'this category'}”?`,
+        message: `Its ${cat.apps.length} ${cat.apps.length === 1 ? 'app is' : 'apps are'} removed from your list too. Nothing is saved until you press Save.`,
+        confirmLabel: 'Remove',
+        danger: true
+      });
+      if (!ok) return;
+    }
     file?.categories.splice(ci, 1);
   }
   function moveCategory(ci: number, delta: number) {
@@ -108,7 +177,7 @@
       releaseNotes: null,
       custom: true
     });
-    openApp[`${ci}-${cat.apps.length - 1}`] = true;
+    openEditor(ci, cat.apps.length - 1);
   }
   function addAlternate(app: CuratedApp) {
     const used = new Set<Source>([app.source, ...app.alternates.map((v) => v.source)]);
@@ -125,14 +194,94 @@
       app.id = next.id;
     }
   }
-  function removeApp(cat: CuratedCategory, ai: number) {
-    cat.apps.splice(ai, 1);
+  // The default source swaps places with an alternate.
+  function makeDefault(app: CuratedApp, k: number) {
+    const alt = app.alternates[k];
+    app.alternates[k] = { source: app.source, id: app.id };
+    app.source = alt.source;
+    app.id = alt.id;
+  }
+  function addTag(app: CuratedApp, raw: string) {
+    const have = new Set(app.tags ?? []);
+    const fresh = raw
+      .split(',')
+      .map((t) => t.trim())
+      .filter((t) => t && !have.has(t) && have.add(t));
+    if (fresh.length) app.tags = [...(app.tags ?? []), ...fresh];
+  }
+  function removeTag(app: CuratedApp, k: number) {
+    app.tags = (app.tags ?? []).filter((_, i) => i !== k);
+  }
+  function onTagKey(e: KeyboardEvent & { currentTarget: HTMLInputElement }, app: CuratedApp) {
+    const input = e.currentTarget;
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addTag(app, input.value);
+      input.value = '';
+    } else if (e.key === 'Backspace' && !input.value && (app.tags ?? []).length) {
+      removeTag(app, (app.tags ?? []).length - 1);
+    }
+  }
+
+  // The editor's Category dropdown: the app goes to the end of the new category
+  // and the editor follows it.
+  function changeCategory(to: number) {
+    if (!file || !editing || to === editing.ci) return;
+    const [app] = file.categories[editing.ci].apps.splice(editing.ai, 1);
+    file.categories[to].apps.push(app);
+    editing = { ci: to, ai: file.categories[to].apps.length - 1 };
+  }
+
+  // Menu actions keep the editor pointing at the same app as it moves.
+  function appMenuItems(ci: number, ai: number, withMoveTo = true): CtxItem[] {
+    const cat = file!.categories[ci];
+    const follow = (to: { ci: number; ai: number }) => {
+      if (editing && editing.ci === ci && editing.ai === ai) editing = to;
+    };
+    const items: CtxItem[] = [
+      { label: 'Move up', disabled: ai === 0, onSelect: () => move(cat.apps, ai, -1) && follow({ ci, ai: ai - 1 }) },
+      {
+        label: 'Move down',
+        disabled: ai === cat.apps.length - 1,
+        onSelect: () => move(cat.apps, ai, 1) && follow({ ci, ai: ai + 1 })
+      }
+    ];
+    for (const [to, c] of file!.categories.entries()) {
+      if (to === ci || !withMoveTo) continue;
+      items.push({
+        label: `Move to ${c.title || c.id || 'Untitled'}`,
+        onSelect: () => {
+          const [app] = cat.apps.splice(ai, 1);
+          c.apps.push(app);
+          follow({ ci: to, ai: c.apps.length - 1 });
+        }
+      });
+    }
+    items.push({
+      label: 'Remove from list',
+      danger: true,
+      onSelect: () => {
+        const wasOpen = editing?.ci === ci && editing?.ai === ai;
+        cat.apps.splice(ai, 1);
+        if (wasOpen) closeEditor();
+      }
+    });
+    return items;
+  }
+
+  function categoryMenu(e: MouseEvent & { currentTarget: HTMLElement }, ci: number) {
+    const last = (file?.categories.length ?? 1) - 1;
+    openContextMenuAt(e.currentTarget, [
+      { label: 'Move up', disabled: ci === 0, onSelect: () => moveCategory(ci, -1) },
+      { label: 'Move down', disabled: ci === last, onSelect: () => moveCategory(ci, 1) },
+      { label: 'Remove category…', danger: true, onSelect: () => removeCategory(ci) }
+    ]);
   }
 
   function clean(file: CuratedFile): CuratedFile {
     const blank = (v: string | null) => (v && v.trim() ? v.trim() : null);
     return {
-      version: file.version,
+      ...file,
       categories: file.categories.map((c) => ({
         id: c.id.trim(),
         title: c.title.trim(),
@@ -162,9 +311,9 @@
 
   function validate(f: CuratedFile): string | null {
     for (const c of f.categories) {
-      if (!c.id || !c.title) return 'Every category needs an id and a title.';
+      if (!c.id || !c.title) return 'Every category needs a title and an id.';
       for (const a of c.apps) {
-        if (!a.id) return `An app in "${c.title}" is missing its package id.`;
+        if (!a.id) return `An app in “${c.title}” is missing its package id.`;
       }
     }
     return null;
@@ -175,672 +324,686 @@
     const cleaned = clean(file);
     const err = validate(cleaned);
     if (err) {
-      status = { kind: 'err', msg: err };
+      saveError = err;
       return;
     }
     saving = true;
-    status = null;
+    saveError = null;
     try {
       await api.saveCurated(cleaned);
       file = cleaned;
-      status = { kind: 'ok', msg: 'Saved. Changes appear on the Discover page.' };
+      baseline = JSON.stringify(cleaned);
+      await reloadCurated();
+      notice('Saved. Your changes show on Discover.', 'ok');
     } catch (e) {
-      status = { kind: 'err', msg: `Save failed: ${e}` };
+      saveError = `Save failed: ${e}`;
     } finally {
       saving = false;
     }
   }
 
+  function discard() {
+    if (!baseline) return;
+    file = JSON.parse(baseline);
+    saveError = null;
+    editing = null;
+  }
+
   let appCount = $derived(file?.categories.reduce((n, c) => n + shownCount(c), 0) ?? 0);
+  let listed = $derived.by(() => {
+    const out: { cat: CuratedCategory; ci: number; app: CuratedApp; ai: number }[] = [];
+    file?.categories.forEach((cat, ci) => {
+      if (typeof selectedCat === 'number' && ci !== selectedCat) return;
+      cat.apps.forEach((app, ai) => out.push({ cat, ci, app, ai }));
+    });
+    return out.filter((e) => appVisible(e.cat, e.app));
+  });
+
+  const SOURCE_LETTERS: Record<Source, string> = { winget: 'W', scoop: 'S', choco: 'C', msstore: 'M' };
+  const appSources = (app: CuratedApp): Source[] => [app.source, ...app.alternates.map((a) => a.source)];
+  const sourceLabel = (app: CuratedApp) =>
+    'Available from ' +
+    appSources(app)
+      .map((s, i) => SOURCE_NAMES[s] + (i === 0 && app.alternates.length ? ' (default)' : ''))
+      .join(', ');
 </script>
 
-{#snippet appRow(cat: CuratedCategory, ci: number, app: CuratedApp, ai: number, showCat: boolean)}
-  <div class="app" class:open={appOpen(ci, ai)}>
-    <div class="app-row">
-      <button class="disclose" onclick={() => (openApp[`${ci}-${ai}`] = !appOpen(ci, ai))} aria-label="Toggle app">
-        {#if appOpen(ci, ai)}<ChevronDown size={15} />{:else}<ChevronRight size={15} />{/if}
-      </button>
-      <button class="app-name" onclick={() => (openApp[`${ci}-${ai}`] = !appOpen(ci, ai))}>
-        {app.name || app.id || 'Untitled app'}
-      </button>
-      {#if showCat}<span class="app-cat">{cat.title || cat.id || '-'}</span>{/if}
-      {#if app.custom}<span class="tag">custom</span>{/if}
-      <div class="app-sources">
-        {#if app.id || app.alternates.length}<SourceBadge source={app.source} />{/if}
-        {#each app.alternates as alt, k (k)}<SourceBadge source={alt.source} />{/each}
-      </div>
-      <div class="row-actions">
-        <button class="icon-btn" title="Move up" onclick={() => move(cat.apps, ai, -1)}>
-          <ArrowUp size={14} />
-        </button>
-        <button class="icon-btn" title="Move down" onclick={() => move(cat.apps, ai, 1)}>
-          <ArrowDown size={14} />
-        </button>
-        <button class="icon-btn danger" title="Remove app" onclick={() => removeApp(cat, ai)}>
-          <Trash2 size={14} />
-        </button>
-      </div>
-    </div>
-
-    {#if appOpen(ci, ai)}
-      <div class="app-edit">
-        <div class="edit-list">
-          <div class="edit-row">
-            <span class="fl">Icon</span>
-            <AppIconControls
-              source={app.source}
-              id={app.id}
-              name={app.name ?? ''}
-              from={app.icon || app.homepage || null}
-              size={40}
-            >
-              <input
-                class="in"
-                placeholder="image or page URL - defaults to the homepage"
-                bind:value={app.icon}
-              />
-            </AppIconControls>
-          </div>
-          <label class="edit-row">
-            <span class="fl">Name</span>
-            <input class="in" placeholder="optional" bind:value={app.name} />
-          </label>
-          <label class="edit-row">
-            <span class="fl">Description</span>
-            <input class="in" placeholder="optional" bind:value={app.description} />
-          </label>
-          <label class="edit-row">
-            <span class="fl">Tags</span>
-            <input
-              class="in"
-              placeholder="open source, free, chromium"
-              value={(app.tags ?? []).join(', ')}
-              onchange={(e) => (app.tags = e.currentTarget.value.split(',').map((t) => t.trim()).filter(Boolean))}
-            />
-          </label>
-          <label class="edit-row">
-            <span class="fl">Homepage</span>
-            <input class="in" placeholder="optional" bind:value={app.homepage} />
-          </label>
-          <label class="edit-row">
-            <span class="fl">Donate</span>
-            <input class="in" placeholder="optional" bind:value={app.donate} />
-          </label>
-          <label class="edit-row">
-            <span class="fl">Release notes</span>
-            <input class="in" placeholder="optional" bind:value={app.releaseNotes} />
-          </label>
-
-          <div class="edit-row srcs">
-            <span class="fl">Sources</span>
-            <div class="src-list">
-              <div class="src-row">
-                <select class="src-pick {app.source}" bind:value={app.source} title="Package manager">
-                  {#each sources as s (s)}<option value={s}>{s}</option>{/each}
-                </select>
-                <input class="src-id mono" placeholder="package id" bind:value={app.id} />
-                <button
-                  class="icon-btn danger row-del"
-                  title="Remove source"
-                  aria-label="Remove source"
-                  disabled={app.alternates.length === 0}
-                  onclick={() => removePrimary(app)}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-              {#each app.alternates as alt, k (k)}
-                <div class="src-row">
-                  <select class="src-pick {alt.source}" bind:value={alt.source} title="Package manager">
-                    {#each sources as s (s)}<option value={s}>{s}</option>{/each}
-                  </select>
-                  <input class="src-id mono" placeholder="package id" bind:value={alt.id} />
-                  <button class="icon-btn danger row-del" title="Remove source" aria-label="Remove source" onclick={() => removeAlternate(app, k)}>
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              {/each}
-              <button class="btn btn-ghost add-src" onclick={() => addAlternate(app)}>
-                <Plus size={14} /> Add source
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    {/if}
-  </div>
+<!-- Fixed slots (W S C M) so the letters line up in columns down the list; a
+     missing manager leaves its slot empty. The default is the filled dot.
+     Letters keep them readable without telling the colours apart. -->
+{#snippet sourceBadges(app: CuratedApp)}
+  {@const have = new Set(appSources(app))}
+  <span class="src-dots" role="img" aria-label={sourceLabel(app)} title={sourceLabel(app)}>
+    {#each sources as s (s)}
+      {#if have.has(s) && (app.id || app.alternates.length)}
+        <span class="sd {s}" class:default={s === app.source} aria-hidden="true">{SOURCE_LETTERS[s]}</span>
+      {:else}
+        <span class="sd-empty" aria-hidden="true"></span>
+      {/if}
+    {/each}
+  </span>
 {/snippet}
 
-<div class="screen">
-  {#if loading}
-    <p class="pane-msg muted">Loading…</p>
-  {:else if file}
-    <div class="browse-panel">
-      <div class="browse-rail">
-        <div class="rail-head">
-          <a class="back-btn" href="/settings" title="Back" aria-label="Back"><ArrowLeft size={17} /></a>
-          <span class="rail-title">Curated catalog</span>
-        </div>
-        <div class="rail-tools">
-          <input class="head-filter" placeholder="Search apps…" bind:value={filter} />
-          <button class="btn btn-accent save-btn" onclick={save} disabled={saving || !file}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-        {#if status}
-          <p class="status" class:ok={status.kind === 'ok'} class:err={status.kind === 'err'}>{status.msg}</p>
-        {/if}
-        <div class="rail-links">
-          <button class="rail-link" class:active={selectedCat === 'all'} onclick={() => (selectedCat = 'all')}>
-            <span>All apps</span><span class="rail-count mono">{appCount}</span>
-          </button>
-          {#each file.categories as cat, ci (ci)}
-            {#if catVisible(cat)}
-              <button class="rail-link" class:active={selectedCat === ci} onclick={() => (selectedCat = ci)}>
-                <span>{cat.title || cat.id || 'Untitled'}</span>
-                <span class="rail-count mono">{shownCount(cat)}</span>
-              </button>
-            {/if}
-          {/each}
-          <button class="rail-link add-rail" onclick={addCategory}>
-            <Plus size={15} /> Add category
-          </button>
+<div class="view">
+  {#if editing && editApp && editCat}
+    {@const app = editApp}
+    {@const ci = editing.ci}
+    {@const ai = editing.ai}
+    <header class="view-head">
+      <div>
+        <button class="crumb" onclick={closeEditor}><ChevronLeft size={14} /> App catalog</button>
+        <div class="title-row">
+          <AppIcon name={app.name || app.id || '?'} size={40} source={app.source} id={app.id} homepage={app.icon || app.homepage} />
+          <div>
+            <h1 tabindex="-1" bind:this={heading}>{app.name || app.id || 'New app'}</h1>
+            <p class="view-sub">{editCat.title || editCat.id || 'Untitled category'}{app.custom ? ' · Added by you' : ''}</p>
+          </div>
         </div>
       </div>
+      <button
+        class="btn"
+        aria-haspopup="menu"
+        onclick={(e) => {
+          e.stopPropagation();
+          openContextMenuAt(e.currentTarget, appMenuItems(ci, ai, false));
+        }}
+      >
+        <Ellipsis size={16} /> More
+      </button>
+    </header>
 
-      <div class="browse-main">
-        {#if selectedCat === 'all'}
-          <div class="pane-head">
-            <span class="pane-title">All apps</span>
-            <span class="rail-count mono">{appCount}</span>
-          </div>
-          <div class="pane-scroll">
-            <div class="apps">
-              {#each allApps as e (e.ci + '-' + e.ai)}
-                {#if appVisible(e.cat, e.app)}
-                  {@render appRow(e.cat, e.ci, e.app, e.ai, true)}
-                {/if}
+    <div class="view-body" bind:this={scroller}>
+      <div class="page">
+        <section class="group" aria-labelledby="ed-listing">
+          <h2 id="ed-listing">Listing</h2>
+          <SettingCard icon={Type} title="Name" description="Shown on Discover and on the app's page.">
+            {#snippet control()}
+              <input class="text-input field" placeholder={app.id || 'App name'} aria-label="Name" bind:value={app.name} />
+            {/snippet}
+          </SettingCard>
+          <SettingCard icon={AlignLeft} title="Description" description="One short sentence under the name.">
+            {#snippet control()}
+              <input class="text-input field" placeholder="What the app does" aria-label="Description" bind:value={app.description} />
+            {/snippet}
+          </SettingCard>
+          <SettingCard icon={Folder} title="Category" titleId="ed-cat" description="Which Discover section the app is listed in.">
+            {#snippet control()}
+              <select class="text-input field" aria-labelledby="ed-cat" value={ci} onchange={(e) => changeCategory(Number(e.currentTarget.value))}>
+                {#each file?.categories ?? [] as c, k (k)}
+                  <option value={k}>{c.title || c.id || 'Untitled'}</option>
+                {/each}
+              </select>
+            {/snippet}
+          </SettingCard>
+          <SettingCard icon={Tags} title="Tags" description="Used by the tag filter. Press Enter or comma to add one.">
+            {#snippet control()}
+              <div class="chips-input field" role="group" aria-label="Tags">
+                {#each app.tags ?? [] as t, k (k)}
+                  <span class="chip">
+                    {t}
+                    <button class="chip-x" onclick={() => removeTag(app, k)} aria-label={`Remove tag ${t}`}><X size={12} /></button>
+                  </span>
+                {/each}
+                <input
+                  placeholder={(app.tags ?? []).length ? 'Add' : 'open source, free…'}
+                  aria-label="Add a tag"
+                  onkeydown={(e) => onTagKey(e, app)}
+                  onblur={(e) => {
+                    addTag(app, e.currentTarget.value);
+                    e.currentTarget.value = '';
+                  }}
+                />
+              </div>
+            {/snippet}
+          </SettingCard>
+          <SettingCard icon={Image} title="Icon" description="An image or page URL. Leave empty to use the homepage's icon.">
+            {#snippet control()}
+              <input class="text-input field" placeholder="https://…" aria-label="Icon URL" bind:value={app.icon} />
+            {/snippet}
+            <AppIconControls source={app.source} id={app.id} name={app.name ?? ''} from={app.icon || app.homepage || null} size={40} />
+          </SettingCard>
+        </section>
+
+        <section class="group" aria-labelledby="ed-sources">
+          <h2 id="ed-sources">Install from</h2>
+          <SettingCard
+            icon={Package}
+            title="Package managers"
+            description="Install uses the default. The others are offered on the app's page."
+          >
+            <ul class="src-list">
+              <li class="src-row">
+                <select class="text-input" bind:value={app.source} aria-label="Package manager">
+                  {#each sources as s (s)}<option value={s}>{SOURCE_NAMES[s]}</option>{/each}
+                </select>
+                <input class="text-input mono" placeholder="Package id" aria-label="Package id" bind:value={app.id} />
+                <span class="default-tag">Default</span>
+                <button class="icon-button" title="Remove" aria-label="Remove this source" disabled={app.alternates.length === 0} onclick={() => removePrimary(app)}>
+                  <Trash2 size={15} />
+                </button>
+              </li>
+              {#each app.alternates as alt, k (k)}
+                <li class="src-row">
+                  <select class="text-input" bind:value={alt.source} aria-label="Package manager">
+                    {#each sources as s (s)}<option value={s}>{SOURCE_NAMES[s]}</option>{/each}
+                  </select>
+                  <input class="text-input mono" placeholder="Package id" aria-label="Package id" bind:value={alt.id} />
+                  <button class="btn btn-ghost small quiet" onclick={() => makeDefault(app, k)}>Make default</button>
+                  <button class="icon-button" title="Remove" aria-label="Remove this source" onclick={() => removeAlternate(app, k)}>
+                    <Trash2 size={15} />
+                  </button>
+                </li>
               {/each}
+            </ul>
+            <button class="btn btn-ghost small add-src" onclick={() => addAlternate(app)} disabled={1 + app.alternates.length >= sources.length}>
+              <Plus size={14} /> Add another source
+            </button>
+          </SettingCard>
+        </section>
+
+        <section class="group" aria-labelledby="ed-links">
+          <h2 id="ed-links">Links</h2>
+          <SettingCard icon={House} title="Homepage" description="Also where the icon comes from when no icon URL is set.">
+            {#snippet control()}
+              <input class="text-input field" placeholder="https://…" aria-label="Homepage" bind:value={app.homepage} />
+            {/snippet}
+          </SettingCard>
+          <SettingCard icon={ScrollText} title="Release notes" description="Linked from the app's page and from Updates.">
+            {#snippet control()}
+              <input class="text-input field" placeholder="https://…" aria-label="Release notes" bind:value={app.releaseNotes} />
+            {/snippet}
+          </SettingCard>
+          <SettingCard icon={Heart} title="Donate" description="Shown as a Donate button on the app's page.">
+            {#snippet control()}
+              <input class="text-input field" placeholder="https://…" aria-label="Donate" bind:value={app.donate} />
+            {/snippet}
+          </SettingCard>
+        </section>
+      </div>
+    </div>
+  {:else}
+    <header class="view-head">
+      <div>
+        <a class="crumb" href="/settings"><ChevronLeft size={14} /> Settings</a>
+        <h1>App catalog</h1>
+        <p class="view-sub">
+          {#if file}
+            {appCount} apps in {file.categories.length} categories. Changes show on Discover once you save.
+          {:else}
+            The apps and categories on Discover.
+          {/if}
+        </p>
+      </div>
+    </header>
+
+    {#if file}
+      <div class="toolbar">
+        <div class="filter">
+          <Search size={15} aria-hidden="true" />
+          <input placeholder="Filter by name, id or tag" aria-label="Filter apps" bind:value={filter} />
+          {#if filter}
+            <button class="icon-button tiny" onclick={() => (filter = '')} aria-label="Clear filter"><X size={14} /></button>
+          {/if}
+        </div>
+        <label class="cat-pick">
+          <span class="muted">Category</span>
+          <select class="text-input" bind:value={selectedCat}>
+            <option value="all">All apps ({appCount})</option>
+            {#each file.categories as cat, ci (ci)}
+              <option value={ci}>{cat.title || cat.id || 'Untitled'} ({shownCount(cat)})</option>
+            {/each}
+          </select>
+        </label>
+        <div class="spacer"></div>
+        {#if activeCat && typeof selectedCat === 'number'}
+          {@const ci = selectedCat}
+          <button class="btn" onclick={() => addApp(activeCat!, ci)}><Plus size={15} /> Add app</button>
+        {/if}
+        <button class="btn" onclick={addCategory}><FolderPlus size={15} /> Add category</button>
+      </div>
+    {/if}
+
+    <div class="view-body" bind:this={scroller}>
+      <div class="page">
+        {#if loading}
+          <p class="muted">Loading…</p>
+        {:else if loadError}
+          <p class="err-text">{loadError}</p>
+        {:else if file}
+          {#if activeCat && typeof selectedCat === 'number'}
+            {@const ci = selectedCat}
+            <div class="cat-card">
+              <label class="cat-field">
+                <span class="label">Category title</span>
+                <input class="text-input" placeholder="e.g. Browsers" bind:value={activeCat.title} />
+              </label>
+              <label class="cat-field">
+                <span class="label">Id</span>
+                <input class="text-input mono" placeholder="e.g. browsers" bind:value={activeCat.id} />
+              </label>
+              <button class="icon-button cat-menu" aria-label="Category actions" aria-haspopup="menu" onclick={(e) => categoryMenu(e, ci)}>
+                <Ellipsis size={16} />
+              </button>
             </div>
-          </div>
-        {:else if activeCat}
-          <div class="pane-head">
-            <input class="in title" placeholder="Category title" bind:value={activeCat.title} />
-            <input class="in id" placeholder="id (slug)" bind:value={activeCat.id} />
-            <div class="spacer"></div>
-            <button class="icon-btn" title="Move up" onclick={() => moveCategory(selectedCat as number, -1)}>
-              <ArrowUp size={15} />
-            </button>
-            <button class="icon-btn" title="Move down" onclick={() => moveCategory(selectedCat as number, 1)}>
-              <ArrowDown size={15} />
-            </button>
-            <button class="icon-btn danger" title="Remove category" onclick={() => removeCategory(selectedCat as number)}>
-              <Trash2 size={15} />
-            </button>
-          </div>
-          <div class="pane-scroll">
-            <div class="apps">
-              {#each activeCat.apps as app, ai (ai)}
-                {#if appVisible(activeCat, app)}
-                  {@render appRow(activeCat, selectedCat as number, app, ai, false)}
-                {/if}
+          {/if}
+
+          {#if listed.length > 0}
+            <ul class="apps">
+              {#each listed as e (e.ci + '-' + e.ai)}
+                <li class="app">
+                  <button class="open" onclick={() => openEditor(e.ci, e.ai)}>
+                    <AppIcon name={e.app.name || e.app.id || '?'} size={32} source={e.app.source} id={e.app.id} homepage={e.app.icon || e.app.homepage} />
+                    <span class="text">
+                      <span class="name">
+                        {e.app.name || e.app.id || 'Untitled app'}
+                        {#if e.app.custom}<span class="pill">Yours</span>{/if}
+                      </span>
+                      <span class="meta">
+                        {[activeCat ? '' : e.cat.title || e.cat.id || 'Untitled', e.app.description ?? ''].filter(Boolean).join(' · ') ||
+                          e.app.id ||
+                          'No package id yet'}
+                      </span>
+                    </span>
+                    {@render sourceBadges(e.app)}
+                  </button>
+                  <button
+                    class="icon-button"
+                    aria-label={`More actions for ${e.app.name || e.app.id || 'this app'}`}
+                    aria-haspopup="menu"
+                    onclick={(ev) => {
+                      ev.stopPropagation();
+                      openContextMenuAt(ev.currentTarget, appMenuItems(e.ci, e.ai));
+                    }}
+                  >
+                    <Ellipsis size={16} />
+                  </button>
+                </li>
               {/each}
-            </div>
-            <button class="btn btn-ghost add" onclick={() => activeCat && addApp(activeCat, selectedCat as number)}>
-              <Plus size={15} /> Add app
-            </button>
-          </div>
-        {:else}
-          <p class="pane-msg muted">No categories yet - add one on the left.</p>
+            </ul>
+          {:else}
+            <p class="empty muted">
+              {filtering ? `Nothing matches “${filter}”.` : activeCat ? 'No apps in this category yet.' : 'No apps yet.'}
+            </p>
+          {/if}
+          {#if !activeCat}
+            <p class="hint">Pick a category above to add apps to it.</p>
+          {/if}
         {/if}
       </div>
+    </div>
+  {/if}
+
+  {#if dirty || saveError}
+    <div class="savebar" role="region" aria-label="Unsaved changes">
+      {#if saveError}
+        <span class="err-text" role="alert">{saveError}</span>
+      {:else}
+        <span class="savebar-text">You have unsaved changes</span>
+      {/if}
+      <div class="spacer"></div>
+      <button class="btn btn-ghost" onclick={discard} disabled={saving}>Discard</button>
+      <button class="btn btn-tinted" onclick={save} disabled={saving || !dirty}>
+        {saving ? 'Saving…' : 'Save'}
+      </button>
     </div>
   {/if}
 </div>
 
 <style>
-  .screen {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
-  .rail-head {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border);
-  }
-  .rail-title {
-    font-size: var(--fs-body);
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .rail-tools {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border);
-  }
-  .head-filter {
-    flex: 1;
-    min-width: 0;
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm);
-    color: var(--text);
-    padding: 6px 10px;
-    font-size: var(--fs-md);
-    outline: none;
-  }
-  .head-filter:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
-  }
-  .save-btn {
-    flex-shrink: 0;
-  }
-  .back-btn {
-    flex-shrink: 0;
-    width: 30px;
-    height: 30px;
+  .crumb {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
+    gap: 2px;
+    margin: 0 0 4px -2px;
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .crumb:hover {
+    color: var(--text);
+    text-decoration: none;
+  }
+  .title-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .toolbar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    max-width: 880px;
+    padding: 0 24px 12px;
+  }
+  .filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 200px;
+    max-width: 320px;
+    height: 36px;
+    padding: 0 6px 0 10px;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-sm);
     background: var(--surface);
     color: var(--text-muted);
-    line-height: 0;
-    text-decoration: none;
   }
-  .back-btn:hover {
-    background: var(--surface-hover);
-    color: var(--text);
+  .filter:focus-within {
     border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  .filter input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: var(--fs-base);
+  }
+  .tiny {
+    width: 24px;
+    height: 24px;
+  }
+  .cat-pick {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--fs-md);
+  }
+  .cat-pick select {
+    width: auto;
+    max-width: 240px;
   }
   .spacer {
     flex: 1;
   }
-  .status {
-    flex-shrink: 0;
-    font-size: var(--fs-xs);
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border);
-  }
-  .status.ok {
-    color: var(--success);
-    background: color-mix(in srgb, var(--success) 12%, transparent);
-  }
-  .status.err {
-    color: var(--danger);
-    background: color-mix(in srgb, var(--danger) 12%, transparent);
-  }
-  .pane-msg {
-    padding: 24px 20px;
-  }
-
-  .browse-panel {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    align-items: stretch;
-    overflow: hidden;
-    /* The content panel (+layout) already paints the surface. */
-    background: transparent;
-  }
-  .browse-rail {
-    flex: 0 0 190px;
+  .page {
+    max-width: 880px;
+    padding: 0 24px 32px;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    border-right: 1px solid var(--border);
-    background: var(--surface-2);
+    gap: 12px;
   }
-  .rail-links {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-  }
-  .rail-link {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    text-align: left;
-    padding: 9px 14px;
-    border: none;
-    border-top: 1px solid var(--border);
-    border-left: 2px solid transparent;
-    border-radius: 0;
-    background: transparent;
+  .hint {
+    margin: 4px 0 0;
+    font-size: var(--fs-sm);
     color: var(--text-muted);
-    font-size: var(--fs-base);
+  }
+  .empty {
+    margin: 12px 0;
+  }
+  .err-text {
+    color: var(--danger);
+    font-size: var(--fs-md);
+  }
+  .label {
+    font-size: var(--fs-sm);
     font-weight: 500;
   }
-  .rail-link:first-child {
-    border-top: none;
+
+  /* Category title/id when one category is picked. */
+  .cat-card {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    padding: 12px 12px 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
   }
-  .rail-link span:first-child {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .rail-link:hover {
-    background: var(--surface-hover);
-    color: var(--text);
-  }
-  .rail-link.active {
-    background: var(--surface);
-    color: var(--text);
-    border-left-color: var(--accent);
-  }
-  .rail-count {
-    font-size: var(--fs-2xs);
-    color: var(--text-muted);
-  }
-  .rail-link.active .rail-count {
-    color: var(--accent);
-  }
-  .add-rail {
-    margin-top: auto;
-    color: var(--accent);
-    gap: 6px;
-    justify-content: flex-start;
-  }
-  .browse-main {
+  .cat-field {
     flex: 1;
-    min-width: 0;
-    min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    gap: 5px;
+    min-width: 0;
   }
-  .pane-head {
+  .cat-menu {
     flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 34px;
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--border);
-  }
-  .pane-scroll {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
+    margin-bottom: 2px;
   }
 
+  /* The list */
   .apps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
     display: flex;
     flex-direction: column;
+    gap: 4px;
   }
   .app {
-    border-top: 1px solid var(--border);
-  }
-  .app:first-child {
-    border-top: none;
-  }
-  .app.open {
-    background: var(--surface-2);
-  }
-  .app-cat {
-    font-size: var(--fs-2xs);
-    color: var(--text-muted);
-    flex-shrink: 0;
-    white-space: nowrap;
-  }
-  .pane-title {
-    font-size: var(--fs-body);
-    font-weight: 600;
-  }
-  .app-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 38px;
-    padding: 4px 14px 4px 4px;
-  }
-  .app-name {
-    flex: 1;
-    min-width: 0;
-    text-align: left;
-    background: none;
-    border: none;
-    color: var(--text);
-    font-size: var(--fs-base);
-    font-weight: 500;
-    padding: 2px 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .app-name:hover {
-    color: var(--accent);
-  }
-  .app-sources {
     display: flex;
     align-items: center;
     gap: 4px;
-    flex-shrink: 0;
+    padding-right: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    transition: background 0.12s;
   }
-  .tag {
-    flex-shrink: 0;
-    font-family: var(--font-mono);
-    font-size: var(--fs-2xs);
-    padding: 1px 7px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    white-space: nowrap;
+  .app:hover {
+    background: var(--surface-hover);
   }
-
-  .app-edit {
-    --field-label: 132px;
-    padding: 2px 0 6px 34px;
-  }
-  .edit-list {
+  .open {
+    flex: 1;
+    min-width: 0;
     display: flex;
-    flex-direction: column;
-    border-top: 1px solid var(--border);
-  }
-  .edit-row {
-    display: grid;
-    grid-template-columns: var(--field-label) minmax(0, 1fr);
     align-items: center;
     gap: 14px;
-    padding: 9px 14px 9px 0;
+    min-height: 58px;
+    padding: 8px 10px 8px 14px;
+    border: none;
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
   }
-  .edit-row + .edit-row {
-    border-top: 1px solid var(--border);
-  }
-  .edit-row.srcs {
-    align-items: start;
-    padding-top: 11px;
-  }
-  .edit-row.srcs .fl {
-    padding-top: 8px;
-  }
-  .fl {
-    font-size: var(--fs-sm);
-    font-weight: 500;
-    color: var(--text-muted);
+  .text {
+    flex: 1;
     min-width: 0;
-  }
-
-  .src-list {
     display: flex;
     flex-direction: column;
-    min-width: 0;
+    gap: 1px;
   }
-  .src-row {
-    display: grid;
-    grid-template-columns: 96px minmax(0, 1fr) auto;
+  .name {
+    display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 5px 0;
+    gap: 8px;
+    font-weight: 500;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
-  .src-row + .src-row {
-    border-top: 1px solid var(--border);
+  .meta {
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
-  .src-pick {
-    appearance: none;
-    justify-self: start;
-    font-family: var(--font-mono);
+  .pill {
+    flex-shrink: 0;
+    padding: 0 7px;
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: color-mix(in srgb, var(--accent) 70%, var(--text));
     font-size: var(--fs-2xs);
-    line-height: 1.5;
-    padding: 1px 7px;
-    border-radius: var(--radius-sm);
-    border: 1px solid currentColor;
-    background: transparent;
-    color: var(--local);
-  }
-  .src-pick:hover {
-    background: color-mix(in srgb, currentColor 12%, transparent);
-  }
-  .src-pick option {
-    background: var(--surface);
-    color: var(--text);
-    font-family: var(--font-sans);
-  }
-  .src-pick.winget {
-    color: var(--winget);
-  }
-  .src-pick.scoop {
-    color: var(--scoop);
-  }
-  .src-pick.choco {
-    color: var(--choco);
-  }
-  .src-pick.msstore {
-    color: var(--msstore);
-  }
-  .src-id {
-    min-width: 0;
-    width: 100%;
-    padding: 5px 8px;
-    font-size: var(--fs-sm);
-    color: var(--text);
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: var(--radius-sm);
-    outline: none;
-  }
-  .src-id:hover {
-    border-color: var(--border);
-  }
-  .src-id:focus {
-    background: var(--surface);
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
-  }
-  .row-del {
-    opacity: 0;
-    transition: opacity 0.12s;
-  }
-  .src-row:hover .row-del,
-  .src-row:focus-within .row-del {
-    opacity: 1;
-  }
-  .row-del:disabled {
-    opacity: 0;
-  }
-  .add-src {
-    align-self: flex-start;
-    font-size: var(--fs-sm);
-    padding: 5px 9px;
-  }
-  .in {
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: var(--radius-sm);
-    color: var(--text);
-    padding: 6px 9px;
-    font-size: var(--fs-md);
-    outline: none;
-    min-width: 0;
-    width: 100%;
-  }
-  .in:hover:not(:disabled) {
-    border-color: var(--border);
-  }
-  .in:focus {
-    background: var(--surface);
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
-  }
-  .pane-head .in {
-    width: auto;
-    background: var(--surface);
-    border-color: var(--border);
-  }
-  .title {
-    flex: 1;
     font-weight: 600;
+    line-height: 1.7;
   }
-  .id {
-    flex: 0 0 150px;
-    font-family: var(--font-mono);
-    font-size: var(--fs-sm);
+  .src-dots {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
-  .mono {
-    font-family: var(--font-mono);
+  .sd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
+    border-radius: 50%;
+    /* Pulled 30% toward --text, like accent text: >= 4.6:1 for every source. */
+    color: color-mix(in srgb, var(--c) 70%, var(--text));
+    font-size: 0.66rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .sd-empty {
+    width: 20px;
+    height: 20px;
+  }
+  .sd.default {
+    border: 1.5px solid var(--c);
+    background: color-mix(in srgb, var(--c) 18%, transparent);
+  }
+  .sd.winget {
+    --c: var(--winget);
+  }
+  .sd.scoop {
+    --c: var(--scoop);
+  }
+  .sd.choco {
+    --c: var(--choco);
+  }
+  .sd.msstore {
+    --c: var(--msstore);
   }
 
-  .disclose {
-    display: inline-flex;
-    padding: 4px;
-    border: none;
-    background: transparent;
-    color: var(--text-muted);
-    border-radius: var(--radius-sm);
-    line-height: 0;
-    flex-shrink: 0;
-  }
-  .disclose:hover {
-    color: var(--text);
-  }
-  .row-actions {
+  /* The editor: Settings-style groups of cards. */
+  .group {
     display: flex;
-    gap: 2px;
-    flex-shrink: 0;
+    flex-direction: column;
+    gap: 4px;
   }
-  .icon-btn {
-    display: inline-flex;
-    padding: 6px;
+  .group + .group {
+    margin-top: 10px;
+  }
+  .group h2 {
+    margin: 0 0 6px;
+    font-size: var(--fs-base);
+    font-weight: 600;
+  }
+  .field {
+    width: 320px;
+    max-width: 100%;
+  }
+  .chips-input {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+    min-height: 37px;
+    padding: 4px 6px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+  }
+  .chips-input:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  .chips-input input {
+    flex: 1;
+    min-width: 70px;
     border: none;
+    outline: none;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: var(--fs-base);
+    padding: 2px 4px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 3px 1px 9px;
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--text) 9%, transparent);
+    font-size: var(--fs-sm);
+  }
+  .chip-x {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
     background: transparent;
     color: var(--text-muted);
-    border-radius: var(--radius-sm);
-    line-height: 0;
   }
-  .icon-btn:hover {
+  .chip-x:hover {
     background: var(--surface-hover);
     color: var(--text);
   }
-  .icon-btn.danger:hover {
-    color: var(--danger);
+  .src-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
-  .icon-btn:disabled {
-    opacity: 0.35;
-    cursor: default;
+  .src-row {
+    display: grid;
+    grid-template-columns: 170px minmax(0, 1fr) 112px auto;
+    align-items: center;
+    gap: 8px;
   }
-  .icon-btn:disabled:hover {
-    background: transparent;
+  .default-tag {
+    justify-self: center;
+    padding: 0 9px;
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: color-mix(in srgb, var(--accent) 70%, var(--text));
+    font-size: var(--fs-2xs);
+    font-weight: 600;
+    line-height: 1.8;
+  }
+  .small {
+    padding: 5px 10px;
+    font-size: var(--fs-sm);
+  }
+  .quiet {
     color: var(--text-muted);
   }
+  .quiet:hover {
+    color: var(--text);
+  }
+  .add-src {
+    align-self: flex-start;
+    margin: 8px 0 0 -10px;
+  }
 
-  .add {
-    margin: 12px 14px;
-    font-size: var(--fs-md);
+  /* Appears only with unsaved changes, like Windows Settings. */
+  .savebar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 24px;
+    border-top: 1px solid var(--border);
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface-2));
+  }
+  .savebar-text {
+    font-weight: 600;
+    font-size: var(--fs-base);
   }
 </style>
