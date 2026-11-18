@@ -1,5 +1,5 @@
 {
-  "version": 12,
+  "version": 13,
   "categories": [
     {
       "id": "browsers",
@@ -417,6 +417,38 @@
         { "id": "IrfanSkiljan.IrfanView", "source": "winget", "name": "IrfanView", "homepage": "https://www.irfanview.com/", "releaseNotes": "https://www.irfanview.com/main_history.htm", "description": "Small, fast image viewer with basic editing and batch tools.", "tags": ["free", "local-first"], "alternates": [{ "source": "scoop", "id": "irfanview" }, { "source": "choco", "id": "IrfanView" }] },
         { "id": "CPUID.HWMonitor", "source": "winget", "name": "HWMonitor", "homepage": "https://www.cpuid.com/softwares/hwmonitor.html", "description": "Monitor temperatures, voltages, fan speeds, and power draw.", "tags": ["free", "local-first"], "alternates": [{ "source": "scoop", "id": "hwmonitor" }, { "source": "choco", "id": "hwmonitor" }] }
       ]
+    }
+  ],
+  "collections": [
+    {
+      "id": "essentials",
+      "title": "New PC essentials",
+      "description": "The apps most people install first on a fresh Windows PC.",
+      "apps": [{ "source": "winget", "id": "Mozilla.Firefox" }, { "source": "winget", "id": "7zip.7zip" }, { "source": "winget", "id": "VideoLAN.VLC" }, { "source": "winget", "id": "Notepad++.Notepad++" }, { "source": "winget", "id": "voidtools.Everything" }, { "source": "winget", "id": "Microsoft.PowerToys" }, { "source": "winget", "id": "ShareX.ShareX" }, { "source": "winget", "id": "KeePassXCTeam.KeePassXC" }]
+    },
+    {
+      "id": "developer",
+      "title": "Developer setup",
+      "description": "Version control, an editor, a modern terminal and a runtime.",
+      "apps": [{ "source": "winget", "id": "Git.Git" }, { "source": "winget", "id": "Microsoft.VisualStudioCode" }, { "source": "winget", "id": "Microsoft.WindowsTerminal" }, { "source": "winget", "id": "Python.Python.3.13" }, { "source": "winget", "id": "GitHub.GitHubDesktop" }, { "source": "winget", "id": "dbeaver.dbeaver" }, { "source": "winget", "id": "Microsoft.PowerToys" }]
+    },
+    {
+      "id": "creative",
+      "title": "Creative studio",
+      "description": "Free tools for images, 3D, video, audio and recording.",
+      "apps": [{ "source": "winget", "id": "GIMP.GIMP" }, { "source": "winget", "id": "KDE.Krita" }, { "source": "winget", "id": "Inkscape.Inkscape" }, { "source": "winget", "id": "BlenderFoundation.Blender" }, { "source": "winget", "id": "darktable.darktable" }, { "source": "winget", "id": "KDE.Kdenlive" }, { "source": "winget", "id": "Audacity.Audacity" }, { "source": "winget", "id": "OBSProject.OBSStudio" }]
+    },
+    {
+      "id": "privacy",
+      "title": "Privacy kit",
+      "description": "Encrypted messaging, password managers, VPN and file encryption.",
+      "apps": [{ "source": "winget", "id": "OpenWhisperSystems.Signal" }, { "source": "winget", "id": "KeePassXCTeam.KeePassXC" }, { "source": "winget", "id": "Bitwarden.Bitwarden" }, { "source": "winget", "id": "LibreWolf.LibreWolf" }, { "source": "winget", "id": "Proton.ProtonVPN" }, { "source": "winget", "id": "Cryptomator.Cryptomator" }, { "source": "winget", "id": "IDRIX.VeraCrypt" }]
+    },
+    {
+      "id": "gaming",
+      "title": "Gaming",
+      "description": "Game launchers, a library manager, chat and streaming.",
+      "apps": [{ "source": "winget", "id": "Valve.Steam" }, { "source": "winget", "id": "GOG.Galaxy" }, { "source": "winget", "id": "EpicGames.EpicGamesLauncher" }, { "source": "winget", "id": "HeroicGamesLauncher.HeroicGamesLauncher" }, { "source": "winget", "id": "Playnite.Playnite" }, { "source": "winget", "id": "Discord.Discord" }, { "source": "winget", "id": "OBSProject.OBSStudio" }]
     }
   ]
 }
