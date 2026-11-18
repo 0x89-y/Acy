@@ -7,6 +7,18 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.10.1',
+    date: '2026-11-18',
+    changes: [
+      `Calmer look on the glass backdrop: buttons are translucent, row buttons like Update are no longer solid, and each page's main action is tinted instead.`,
+      `Switches, selected options and the updates count use the same softer accent tint.`,
+      `Redesigned first-run setup in three short steps, now showing progress when you install a package manager.`,
+      `Aurora is now a solid orchid accent colour, and the accent colours are in rainbow order.`,
+      `The Ctrl+K hint moved from the search box into its tooltip.`,
+      `App icons on collection cards no longer overlap.`
+    ]
+  },
+  {
     version: '0.10.0',
     date: '2026-11-18',
     changes: [

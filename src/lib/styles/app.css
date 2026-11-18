@@ -39,8 +39,6 @@
   --accent-fill: var(--accent);
   --accent-hover: color-mix(in srgb, var(--accent) 82%, #000000);
   --accent-contrast: #ffffff;
-  --aurora-gradient: linear-gradient(135deg, #d98cae, #9b7bd0, #6f9bd6);
-  --aurora-fill: linear-gradient(135deg, #f0d3e0, #e0d6f2, #d6e4f7);
   --danger: #b91c1c;
   /* Background for destructive buttons (white text). */
   --danger-fill: #dc2626;
@@ -59,6 +57,9 @@
   /* The raised panel pages sit on (see +layout); see html[data-backdrop]. */
   --panel: var(--surface);
   --panel-border: var(--border);
+  /* Neutral button fill and outline (see html[data-backdrop]). */
+  --control: var(--surface);
+  --control-border: var(--border-strong);
 
   /* Floating layers only (menus, popovers, toasts); cards stay flat. */
   --shadow: 0 10px 28px -8px rgba(24, 24, 27, 0.2), 0 2px 6px rgba(24, 24, 27, 0.06);
@@ -131,12 +132,10 @@
   --accent: #0f766e;
   --accent-hover: #115e59;
 }
+/* Aurora was a gradient; it's a solid orchid now that fills only show on hover. */
 [data-accent='aurora'] {
   --accent: #9540b8;
-  --accent-fill: var(--aurora-fill);
-}
-[data-theme='light'][data-accent='aurora'] {
-  --accent-contrast: #201a2a;
+  --accent-hover: #7a3396;
 }
 
 [data-theme='dark'][data-accent='purple'] {
@@ -171,9 +170,8 @@
 }
 [data-theme='dark'][data-accent='aurora'] {
   --accent: #c68ad9;
-  --accent-fill: var(--aurora-gradient);
-  /* White fails on the pastel gradient stops; dark text clears 5:1 on all. */
-  --accent-contrast: #1a1320;
+  --accent-fill: #8e3fae;
+  --accent-hover: #7a3396;
 }
 /* Custom accent: theme.ts sets --accent (text-safe), --accent-fill and
  * --accent-contrast inline, so they beat every rule above. */
@@ -214,6 +212,9 @@ html[data-backdrop] {
      Windows 11 Settings app, with cards as the only layers. */
   --panel: transparent;
   --panel-border: transparent;
+  /* Buttons become light overlays on the glass instead of solid blocks. */
+  --control: color-mix(in srgb, var(--text) 6%, transparent);
+  --control-border: color-mix(in srgb, var(--text) 12%, transparent);
   /* Grey text sits straight on the backdrop, so it needs more weight. */
   --text-muted: color-mix(in srgb, var(--text) 78%, transparent);
 }
@@ -296,8 +297,8 @@ button {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
+  border: 1px solid var(--control-border);
+  background: var(--control);
   color: var(--text);
   padding: 8px 14px;
   border-radius: var(--radius);
@@ -326,15 +327,6 @@ button {
   border-color: var(--accent-hover);
 }
 
-[data-accent='aurora'] .btn-accent {
-  border-color: transparent;
-}
-[data-accent='aurora'] .btn-accent:hover:not(:disabled) {
-  background: var(--accent-fill);
-  border-color: transparent;
-  filter: brightness(1.05);
-}
-
 /* Neutral at rest, accent on hover: for actions repeated on every card. */
 .btn-quiet {
   color: var(--accent);
@@ -344,6 +336,24 @@ button {
 .btn-quiet:hover:not(:disabled) {
   background: var(--accent-fill);
   border-color: var(--accent-hover);
+  color: var(--accent-contrast);
+}
+
+/*
+ * Tinted: a page's main action without a solid accent block (an accent wash,
+ * outline and text; fills on hover). The text is the accent pulled 30% toward
+ * --text: plain --accent fell to 3.3:1 on the tint, this keeps >= 5.3:1 for
+ * every preset in both themes.
+ */
+.btn-tinted {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: color-mix(in srgb, var(--accent) 70%, var(--text));
+  font-weight: 600;
+}
+.btn-tinted:hover:not(:disabled) {
+  background: var(--accent-fill);
+  border-color: transparent;
   color: var(--accent-contrast);
 }
 
@@ -425,10 +435,130 @@ button {
   }
 }
 
+/* Segmented control (Settings, Setup) */
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--fs-md);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.seg-btn:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+/* Tinted like .btn-tinted rather than a solid accent block. */
+.seg-btn.on {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+  color: color-mix(in srgb, var(--accent) 70%, var(--text));
+}
+
+/* Accent swatches (Settings, Setup) */
+.accents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.swatch {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--sw);
+  cursor: pointer;
+}
+.swatch.custom {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: #fff;
+}
+.swatch.custom input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.swatch.custom .pip {
+  pointer-events: none;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.65));
+}
+.swatch.on {
+  box-shadow:
+    0 0 0 2px var(--surface-solid),
+    0 0 0 4px var(--sw);
+}
+
+/*
+ * Toggle switch, Windows style: an outlined track when off (a white knob on
+ * light grey fell short of 3:1). On is tinted, not a solid accent block: an
+ * accent-washed track with an accent outline and knob.
+ */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.slider {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  border: 1.5px solid var(--text-muted);
+  border-radius: var(--radius-pill);
+  transition: background 0.15s, border-color 0.15s;
+}
+.slider::before {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  left: 2.5px;
+  top: 2.5px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform 0.15s, background 0.15s;
+}
+.switch input:checked + .slider {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--text));
+}
+.switch input:checked + .slider::before {
+  transform: translateX(20px);
+  background: color-mix(in srgb, var(--accent) 70%, var(--text));
+}
 .switch input:focus-visible + .slider {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
 
 /* Visually hidden, still read by screen readers. */
 .sr-only {

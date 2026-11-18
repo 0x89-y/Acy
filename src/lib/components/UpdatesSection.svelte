@@ -90,7 +90,7 @@
 <div class="pane-head">
   {#if totalUpdateCount > 1}
     <button
-      class="btn btn-accent"
+      class="btn btn-tinted"
       onclick={updateEverything}
       disabled={updatingEverything || updatingAll !== null || $updaterPhase === 'downloading'}
     >
@@ -122,7 +122,7 @@
             <span class="name">Acy</span>
             <div class="ver mono">{acyVersion || '?'} → {$updaterVersion}</div>
           </div>
-          <button class="btn btn-accent" onclick={installUpdate} disabled={$updaterPhase === 'downloading'}>
+          <button class="btn btn-quiet" onclick={installUpdate} disabled={$updaterPhase === 'downloading'}>
             {$updaterPhase === 'downloading' ? 'Installing…' : 'Update Acy'}
           </button>
         </div>
@@ -153,7 +153,7 @@
           >
             <EyeOff size={16} />
           </button>
-          <InstallButton source={p.source} id={p.id} name={p.name} kind="update" onDone={refreshLibrary} />
+          <InstallButton source={p.source} id={p.id} name={p.name} kind="update" quiet onDone={refreshLibrary} />
         </div>
       {/each}
     </div>

@@ -35,14 +35,15 @@ export const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
 
 export type ViewMode = 'grid' | 'list';
 
+// Colour-wheel order (orange → green → teal → blue → purple → aurora → pink).
 export const ACCENTS: { name: AccentName; label: string; color: string }[] = [
-  { name: 'purple', label: 'Purple', color: '#7c3aed' },
-  { name: 'blue', label: 'Blue', color: '#2563eb' },
-  { name: 'green', label: 'Green', color: '#047857' },
-  { name: 'pink', label: 'Pink', color: '#be185d' },
   { name: 'orange', label: 'Orange', color: '#c2410c' },
+  { name: 'green', label: 'Green', color: '#047857' },
   { name: 'teal', label: 'Teal', color: '#0f766e' },
-  { name: 'aurora', label: 'Aurora', color: '#9540b8' }
+  { name: 'blue', label: 'Blue', color: '#2563eb' },
+  { name: 'purple', label: 'Purple', color: '#7c3aed' },
+  { name: 'aurora', label: 'Aurora', color: '#9540b8' },
+  { name: 'pink', label: 'Pink', color: '#be185d' }
 ];
 
 export interface Settings {

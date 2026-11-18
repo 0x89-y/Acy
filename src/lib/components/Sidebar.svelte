@@ -116,7 +116,7 @@
 </script>
 
 <aside class="sidebar">
-  <div class="search" role="search">
+  <div class="search" role="search" title="Search apps (Ctrl+K)">
     <Search size={16} aria-hidden="true" />
     <input
       id="global-search"
@@ -131,8 +131,6 @@
     />
     {#if $searchQuery}
       <button class="clear" onclick={clearSearch} aria-label="Clear search"><X size={14} /></button>
-    {:else}
-      <kbd class="hint" aria-hidden="true">Ctrl K</kbd>
     {/if}
   </div>
 
@@ -264,15 +262,6 @@
   .search input::-webkit-search-cancel-button {
     display: none;
   }
-  .hint {
-    flex-shrink: 0;
-    font-family: var(--font-mono);
-    font-size: var(--fs-2xs);
-    padding: 1px 5px;
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    color: var(--text-muted);
-  }
   .clear {
     display: inline-flex;
     align-items: center;
@@ -372,10 +361,11 @@
     min-width: 20px;
     padding: 0 6px;
     border-radius: var(--radius-pill);
-    background: var(--accent-fill);
-    color: var(--accent-contrast);
+    /* Tinted rather than solid, like the page's main buttons (text >= 4.8:1). */
+    background: color-mix(in srgb, var(--accent) 20%, transparent);
+    color: color-mix(in srgb, var(--accent) 70%, var(--text));
     font-size: var(--fs-2xs);
-    font-weight: 600;
+    font-weight: 700;
     line-height: 1.6;
     text-align: center;
   }
@@ -432,8 +422,5 @@
      and the search box becomes glass instead of a solid block. */
   :global(html[data-backdrop]) .search {
     border-color: color-mix(in srgb, var(--text) 16%, transparent);
-  }
-  :global(html[data-backdrop]) .hint {
-    border-color: color-mix(in srgb, var(--text) 22%, transparent);
   }
 </style>

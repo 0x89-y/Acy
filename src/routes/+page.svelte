@@ -340,7 +340,7 @@
                       {c.apps.length} apps{todo.length < c.apps.length ? ` · ${c.apps.length - todo.length} installed` : ''}
                     </span>
                     {#if todo.length > 0}
-                      <button class="btn btn-accent small" onclick={() => installCollection(c)} disabled={!!$batch}>
+                      <button class="btn btn-tinted small" onclick={() => installCollection(c)} disabled={!!$batch}>
                         Install {todo.length}
                       </button>
                     {:else}
@@ -391,7 +391,7 @@
         {@const todo = currentCollection.apps.filter((a) => !isInstalled(a))}
         {#if todo.length > 0}
           <button class="btn" onclick={() => queueCollection(currentCollection!)}>Add {todo.length} to queue</button>
-          <button class="btn btn-accent" onclick={() => installCollection(currentCollection!)} disabled={!!$batch}>
+          <button class="btn btn-tinted" onclick={() => installCollection(currentCollection!)} disabled={!!$batch}>
             Install {todo.length}
           </button>
         {/if}
@@ -492,15 +492,10 @@
     margin: 0;
     font-size: var(--fs-sm);
   }
+  /* Side by side: icons sit on their own tiles, so overlapping them looked squashed. */
   .icons {
     display: flex;
-  }
-  .icons :global(> *) {
-    box-shadow: 0 0 0 2px var(--surface-2);
-    border-radius: 28%;
-  }
-  .icons :global(> * + *) {
-    margin-left: -8px;
+    gap: 6px;
   }
   .coll-foot {
     display: flex;
