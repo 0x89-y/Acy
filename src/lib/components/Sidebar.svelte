@@ -17,7 +17,7 @@
   import { updaterPhase, updaterVersion } from '$lib/stores/updater';
   import { managers } from '$lib/stores/managers';
   import { ops } from '$lib/stores/ops';
-  import { searchQuery, scheduleManagerSearch, recordRecentSearch } from '$lib/stores/search';
+  import { searchQuery, searchManagers, recordRecentSearch } from '$lib/stores/search';
   import { browseCategories, uniqueApps } from '$lib/catalog';
   import { BUCKETS, bucketKey } from '$lib/installedGroups';
   import type { Source } from '$lib/types';
@@ -83,7 +83,6 @@
       keepFocus: true,
       noScroll: true
     });
-    scheduleManagerSearch($searchQuery);
   }
 
   function onSearchKey(e: KeyboardEvent & { currentTarget: HTMLInputElement }) {
@@ -91,7 +90,7 @@
       const q = $searchQuery.trim();
       if (!q) return;
       if (path !== '/search') goto(`/search?q=${encodeURIComponent(q)}`, { keepFocus: true });
-      scheduleManagerSearch(q, true);
+      searchManagers(q);
       recordRecentSearch(q);
     } else if (e.key === 'Escape') {
       if ($searchQuery) {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { goto } from '$app/navigation';
+  import { goto, afterNavigate } from '$app/navigation';
+  import { get } from 'svelte/store';
   import { Check, CircleAlert } from '@lucide/svelte';
   import AppCard from '$lib/components/AppCard.svelte';
   import type { CuratedApp, SearchHit, Source } from '$lib/types';
@@ -20,7 +21,7 @@
   import {
     searchQuery,
     managerSearch,
-    scheduleManagerSearch,
+    searchManagers,
     loadRecentSearches,
     recordRecentSearch
   } from '$lib/stores/search';
@@ -41,12 +42,16 @@
   let q = $derived(($page.url.searchParams.get('q') ?? '').trim());
   let ql = $derived(q.toLowerCase());
 
-  // Opening /search?q=… directly (or going back to it) fills the box and searches.
-  $effect(() => {
-    const query = q;
-    if (query && $searchQuery.trim() !== query) {
+  // Opening /search?q=… from a link, Back/Forward or on launch fills the box and
+  // searches. Typing navigates with goto() and is skipped: the URL trails the box
+  // by a keystroke, so syncing it back would overwrite what was just typed (and
+  // search the package managers for the first letter).
+  afterNavigate(({ type, to }) => {
+    if (type === 'goto') return;
+    const query = (to?.url.searchParams.get('q') ?? '').trim();
+    if (query && get(searchQuery).trim() !== query) {
       searchQuery.set(query);
-      scheduleManagerSearch(query, true);
+      searchManagers(query);
     }
   });
 
@@ -97,6 +102,8 @@
   function useRecent(r: string) {
     recordRecentSearch(r);
     recent = loadRecentSearches();
+    searchQuery.set(r);
+    searchManagers(r);
     goto(`/search?q=${encodeURIComponent(r)}`);
   }
 
@@ -107,7 +114,7 @@
   <header class="view-head">
     <div>
       <h1>{q ? `Results for “${q}”` : 'Search'}</h1>
-      {#if q}
+      {#if q && started}
         <p class="view-sub sources" aria-live="polite">
           {#each statuses as s (s.source)}
             <span class="src">
@@ -121,7 +128,6 @@
               {NAMES[s.source]}{s.state === 'searching' ? ' searching…' : s.state === 'error' ? ' failed' : ''}
             </span>
           {/each}
-          {#if !started}<span class="muted">Press Enter to search package managers</span>{/if}
         </p>
       {/if}
     </div>
@@ -131,8 +137,8 @@
     {#if !q}
       <div class="intro">
         <p class="muted">
-          Type in the search box to find apps in your catalog. Package managers are searched when you
-          pause typing or press Enter.
+          Type in the search box to find apps in your catalog. Press Enter to search the package
+          managers too.
         </p>
         {#if recent.length > 0}
           <h2 class="sec">Recent searches</h2>
@@ -190,7 +196,9 @@
             {/each}
           </div>
         {:else if stillSearching || !started}
-          <p class="muted msg">{started ? 'Searching…' : 'Waiting for you to finish typing…'}</p>
+          <p class="muted msg">
+            {started ? 'Searching…' : 'Press Enter to search package managers.'}
+          </p>
         {:else}
           <p class="muted msg">
             {catalogMatches.length === 0 ? `No results for “${q}”.` : `No other results from package managers.`}

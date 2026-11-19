@@ -79,7 +79,11 @@ async function runSource(source: Source, query: string) {
   }
 }
 
-/** Searches every enabled package manager; results fill in as each one answers. */
+/**
+ * Searches every enabled package manager; results fill in as each one answers.
+ * Only ever on request (Enter, a recent search, opening a /search link): typing
+ * filters the catalog alone, since a winget search spawns a process per query.
+ */
 export function searchManagers(query: string) {
   const q = query.trim();
   if (!q || q === current) return;
@@ -95,18 +99,6 @@ export function searchManagers(query: string) {
     if (inFlight.has(source)) pending.set(source, q);
     else void runSource(source, q);
   }
-}
-
-const DEBOUNCE_MS = 650;
-let timer: ReturnType<typeof setTimeout> | undefined;
-
-/** Searches once typing pauses (or right away, for Enter). Short queries wait for Enter. */
-export function scheduleManagerSearch(query: string, immediate = false) {
-  clearTimeout(timer);
-  const q = query.trim();
-  if (!q) return;
-  if (immediate) searchManagers(q);
-  else if (q.length >= 3) timer = setTimeout(() => searchManagers(q), DEBOUNCE_MS);
 }
 
 const RECENT_KEY = 'acy-recent-searches';

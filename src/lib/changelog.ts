@@ -7,6 +7,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.10.3',
+    date: '2026-11-19',
+    changes: [
+      `Typing in the search box no longer loses letters or starts a package manager search after the first one.`,
+      `Search now looks in your catalog as you type, and only searches winget and the other package managers when you press Enter.`
+    ]
+  },
+  {
     version: '0.10.2',
     date: '2026-11-18',
     changes: [
